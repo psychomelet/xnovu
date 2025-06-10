@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
-import { welcomeOnboardingEmail } from "../../novu/workflows";
+import { NextRequest, NextResponse } from "next/server";
+import { welcomeOnboardingEmail, yogoEmail } from "../../novu/workflows";
 
-export async function POST() {
+const workflows = {
+  "welcome-onboarding-email": welcomeOnboardingEmail,
+  "yogo-email": yogoEmail,
+};
+
+export async function POST(request: NextRequest) {
   const secretKey = process.env.NOVU_SECRET_KEY;
   const subscriberId = process.env.NEXT_PUBLIC_NOVU_SUBSCRIBER_ID;
-  const applicationIdentifier = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER;
-
 
   // Check for required environment variables
   if (!secretKey) {
@@ -29,15 +32,36 @@ export async function POST() {
   }
 
   try {
+    const body = await request.json();
+    const { workflowId, payload = {} } = body;
 
-    const result = await welcomeOnboardingEmail.trigger({
+    if (!workflowId) {
+      return NextResponse.json(
+        {
+          message: "workflowId is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const workflow = workflows[workflowId as keyof typeof workflows];
+    if (!workflow) {
+      return NextResponse.json(
+        {
+          message: `Workflow '${workflowId}' not found. Available workflows: ${Object.keys(workflows).join(', ')}`,
+        },
+        { status: 404 }
+      );
+    }
+
+    const result = await workflow.trigger({
       to: subscriberId,
-      payload: {},
+      payload,
     });
-
 
     return NextResponse.json({
       message: "Notification triggered successfully",
+      workflowId,
       result: result,
     });
   } catch (error: unknown) {
