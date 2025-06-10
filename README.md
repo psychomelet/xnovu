@@ -1,49 +1,114 @@
-# Novu Bridge App
+# XNovu - Novu Notification Platform
 
-This is a [Novu](https://novu.co/) bridge application bootstrapped with [`npx novu init`](https://www.npmjs.com/package/novu)
+A modern notification system built with Next.js and Novu for email and in-app notifications.
 
-## Getting Started
+## Tech Stack
 
-1.启动网页服务 
+- **Next.js** - React framework with App Router
+- **TypeScript** - Type-safe development
+- **Novu** - Open-source notification infrastructure
+- **React Email** - Build emails with React components
+- **Tailwind CSS** - Utility-first CSS framework
+- **pnpm** - Fast, disk space efficient package manager
 
-To run the development server, run:
+## Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18+
+- pnpm (install with `npm install -g pnpm`)
+- Novu account and API keys
+
+## Environment Variables
+
+Create a `.env.local` file with:
+
+```env
+NOVU_SECRET_KEY=your_novu_secret_key
+NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER=your_app_identifier
+NEXT_PUBLIC_NOVU_SUBSCRIBER_ID=your_subscriber_id
 ```
 
-2.启动novu服务
-````
-npx novu@latest dev
-````
+## Installation
 
+```bash
+# Install dependencies
+pnpm install
+```
 
-### 说明
-````
-在本地可以创建一个 “.env.local”
+## Development
 
-NOVU_SECRET_KEY=4ecfd7c91cbf57e55fe580e506de0444
-NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER=9qx6L0Q4PsCk
-NEXT_PUBLIC_NOVU_SUBSCRIBER_ID=68304373f43b5880d2685acd
+```bash
+# Start Next.js dev server (port 4000)
+pnpm dev
 
-````
+# In another terminal, start Novu dev server
+pnpm dlx novu@latest dev
+```
 
-By default, the [Next.js](https://nextjs.org/) server will start and your state can be synchronized with Novu Cloud via the Bridge Endpoint (default is `/api/novu`). Your server will by default run on [http://localhost:4000](http://localhost:4000).
+Both servers must be running for full functionality.
 
-## Your first workflow
+## Available Scripts
 
-Your first email workflow can be edited in `./app/novu/workflows.ts`. You can adjust your workflow to your liking.
+```bash
+pnpm dev        # Start development server
+pnpm build      # Build for production
+pnpm start      # Start production server
+pnpm lint       # Run ESLint
+```
+
+## Features
+
+- Email notifications with React Email templates
+- In-app notifications with Novu Inbox
+- Two example workflows:
+  - Welcome onboarding email
+  - Yogo email workflow
+- Real-time connection status monitoring
+- Type-safe workflow definitions with Zod
+
+## Project Structure
+
+```
+app/
+├── api/                    # API routes
+│   ├── novu/              # Novu bridge endpoint
+│   ├── trigger/           # Trigger workflows
+│   └── dev-studio-status/ # Connection monitoring
+├── novu/
+│   ├── workflows/         # Notification workflows
+│   └── emails/           # Email templates
+└── components/           # React components
+```
+
+## API Endpoints
+
+- `POST /api/novu` - Novu bridge for workflow sync
+- `POST /api/trigger` - Trigger welcome email
+- `POST /api/triggerYogo` - Trigger Yogo email
+- `GET /api/dev-studio-status` - Check Novu connection
+- `POST /api/events` - Track user events
+
+## Workflows
+
+Each workflow includes:
+- `workflow.ts` - Step definitions and logic
+- `schemas.ts` - Zod validation schemas
+- `types.ts` - TypeScript type definitions
+- `index.ts` - Workflow export
 
 ## Learn More
 
-To learn more about Novu, take a look at the following resources:
+- [Novu Documentation](https://docs.novu.co/)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [React Email](https://react.email/)
 
-- [Novu](https://novu.co/)
+## Contributing
 
-You can check out [Novu GitHub repository](https://github.com/novuhq/novu) - your feedback and contributions are welcome!
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License.

@@ -1,4 +1,6 @@
-export async function GET() {
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -15,16 +17,16 @@ export async function GET() {
     if (response.ok) {
       const data = await response.json();
       if (data.port && data.route) {
-        return Response.json({ connected: true, data });
+        return NextResponse.json({ connected: true, data });
       }
     }
 
-    return Response.json({
+    return NextResponse.json({
       connected: false,
       error: await response.text(),
     });
   } catch (error) {
-    return Response.json({
+    return NextResponse.json({
       connected: false,
       error: error instanceof Error ? error.message : "Unknown error",
     });

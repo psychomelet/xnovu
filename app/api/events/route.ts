@@ -1,4 +1,6 @@
-export async function POST(request: Request) {
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
@@ -16,15 +18,15 @@ export async function POST(request: Request) {
     });
 
     if (response.ok) {
-      return Response.json({ success: true });
+      return NextResponse.json({ success: true });
     }
 
-    return Response.json({
+    return NextResponse.json({
       connected: false,
       error: await response.text(),
     });
   } catch (error) {
-    return Response.json({
+    return NextResponse.json({
       connected: false,
       error: error instanceof Error ? error.message : "Unknown error",
     });

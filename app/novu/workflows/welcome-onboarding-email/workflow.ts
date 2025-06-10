@@ -10,7 +10,7 @@ export const welcomeOnboardingEmail = workflow(
       async (controls) => {
         return {
           subject: controls.subject,
-          body: renderEmail(controls, payload),
+          body: await renderEmail(controls, payload),
         };
       },
       {
