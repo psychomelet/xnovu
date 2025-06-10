@@ -30,7 +30,7 @@ export default function Home() {
         const data = await response.json();
         setIsNovuConnected(data.connected);
 
-        if (!data.connected) {
+        if (!data.connected && process.env.NODE_ENV === 'development') {
           console.log("Novu connection failed:", data.error);
         }
       } catch (error) {
@@ -56,7 +56,9 @@ export default function Home() {
       }
 
       const data = await response.json();
-      console.log("Notification triggered:", data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Notification triggered:", data);
+      }
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
 
@@ -83,7 +85,9 @@ export default function Home() {
       }
 
       const data = await response.json();
-      console.log("Notification triggered:", data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Notification triggered:", data);
+      }
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
 

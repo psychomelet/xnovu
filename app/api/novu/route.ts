@@ -1,8 +1,29 @@
 import { serve } from "@novu/framework/next";
 import { welcomeOnboardingEmail, yogoEmail } from "../../novu/workflows";
+import { NextRequest } from "next/server";
 
 
-// the workflows collection can hold as many workflow definitions as you need
-export const { GET, POST, OPTIONS } = serve({
+// Get the handlers from Novu serve - the framework will use NOVU_API_URL env var automatically
+const { GET: NovuGET, POST: NovuPOST, OPTIONS } = serve({
   workflows: [welcomeOnboardingEmail, yogoEmail],
 });
+
+export async function POST(req: NextRequest, context: any) {
+  try {
+    return await NovuPOST(req, context);
+  } catch (error) {
+    console.error('❌ Novu POST Error:', error);
+    throw error;
+  }
+}
+
+export async function GET(req: NextRequest, context: any) {
+  try {
+    return await NovuGET(req, context);
+  } catch (error) {
+    console.error('❌ Novu GET Error:', error);
+    throw error;
+  }
+}
+
+export { OPTIONS };

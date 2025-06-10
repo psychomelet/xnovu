@@ -3,16 +3,18 @@
 import { Novu } from "@novu/js";
 import { useEffect, useState, useMemo } from "react";
 import { Inbox } from "@novu/nextjs";
-import styles from "./Notifications.module.css"; // You'll need to create this
+import styles from "./Notifications.module.css";
 
 const NotificationToast = () => {
   const novu = useMemo(
-    () =>
-      new Novu({
+    () => {
+      const config: any = {
         subscriberId: process.env.NEXT_PUBLIC_NOVU_SUBSCRIBER_ID || "",
-        applicationIdentifier:
-          process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER || "",
-      }),
+        applicationIdentifier: process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER || "",
+      };
+
+      return new Novu(config);
+    },
     []
   );
 
@@ -20,7 +22,9 @@ const NotificationToast = () => {
 
   useEffect(() => {
     const listener = ({ result: notification }: { result: any }) => {
-      console.log("Received notification:", notification);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Received notification:", notification);
+      }
       setShowToast(true);
 
       setTimeout(() => {
@@ -28,7 +32,9 @@ const NotificationToast = () => {
       }, 2500);
     };
 
-    console.log("Setting up Novu notification listener");
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Setting up Novu notification listener");
+    }
     novu.on("notifications.notification_received", listener);
 
     return () => {
@@ -47,24 +53,27 @@ const NotificationToast = () => {
 
 export default NotificationToast;
 
-const novuConfig = {
-  applicationIdentifier:
-    process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER || "",
-  subscriberId: process.env.NEXT_PUBLIC_NOVU_SUBSCRIBER_ID || "",
-  appearance: {
-    elements: {
-      bellContainer: {
-        width: "30px",
-        height: "30px",
-      },
-      bellIcon: {
-        width: "30px",
-        height: "30px",
-      },
-    },
-  },
-};
-
 export function NovuInbox() {
+  const novuConfig = useMemo(() => {
+    const config: any = {
+      applicationIdentifier: process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER || "",
+      subscriberId: process.env.NEXT_PUBLIC_NOVU_SUBSCRIBER_ID || "",
+      appearance: {
+        elements: {
+          bellContainer: {
+            width: "30px",
+            height: "30px",
+          },
+          bellIcon: {
+            width: "30px",
+            height: "30px",
+          },
+        },
+      },
+    };
+
+    return config;
+  }, []);
+
   return <Inbox {...novuConfig} />;
 }

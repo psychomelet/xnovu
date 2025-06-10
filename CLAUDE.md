@@ -15,7 +15,10 @@ pnpm install
 # Start development server (port 4000)
 pnpm dev
 
-# Start Novu development server (required for notifications)
+# Start Novu development server for self-hosted setup
+npx novu@latest dev -d https://novu-dash.yogo.cloud
+
+# Start Novu development server for cloud (default)
 pnpm dlx novu@latest dev
 
 # Build for production
@@ -45,12 +48,45 @@ Each workflow follows this structure:
 - `types.ts` - TypeScript types
 
 ### Key Integration Points
-1. **Novu Bridge**: The `/api/novu` route serves workflows to Novu cloud
-2. **Environment Variables**: Required for Novu connection
-   - `NOVU_SECRET_KEY`
-   - `NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER`
-   - `NEXT_PUBLIC_NOVU_SUBSCRIBER_ID`
+1. **Novu Bridge**: The `/api/novu` route serves workflows to Novu cloud or self-hosted instance
+2. **Environment Variables**: See Configuration section below
 3. **In-App Notifications**: Uses Novu's Inbox component in `app/components/NotificationToast/`
+4. **Auto-detection**: Code automatically switches between cloud and self-hosted based on environment variables
+
+## Configuration
+
+### Novu Cloud vs Self-hosted Setup
+
+The application automatically switches between Novu Cloud and self-hosted based on environment variables. No code changes needed - just environment variable configuration.
+
+#### Self-hosted Configuration (Current)
+```bash
+# Server-side
+NOVU_API_URL=https://novu-api.yogo.cloud
+NOVU_DASHBOARD_HOST=https://novu-dash.yogo.cloud
+NOVU_SECRET_KEY=your_self_hosted_secret_key
+
+# Client-side
+NEXT_PUBLIC_NOVU_API_URL=https://novu-api.yogo.cloud
+NEXT_PUBLIC_NOVU_WEBSOCKET_URL=https://novu-ws.yogo.cloud
+
+# Application identifiers (required for both)
+NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER=your_app_identifier
+NEXT_PUBLIC_NOVU_SUBSCRIBER_ID=your_subscriber_id
+```
+
+#### Cloud Configuration
+```bash
+# Cloud configuration (comment out all self-hosted vars above)
+NOVU_SECRET_KEY=your_cloud_secret_key
+NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER=your_app_identifier
+NEXT_PUBLIC_NOVU_SUBSCRIBER_ID=your_subscriber_id
+```
+
+### Switching Logic
+- **Self-hosted**: Presence of `NOVU_API_URL` enables self-hosted mode
+- **Cloud**: Absence of `NOVU_API_URL` defaults to cloud mode
+- Code automatically detects configuration and uses appropriate endpoints and secret keys
 
 ## Development Workflow
 
