@@ -11,6 +11,9 @@ importers:
       '@novu/framework':
         specifier: latest
         version: 2.6.7(next@15.3.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(zod-to-json-schema@3.24.5(zod@3.25.56))(zod@3.25.56)
+      '@novu/js':
+        specifier: ^3.5.0
+        version: 3.5.0
       '@novu/nextjs':
         specifier: ^2.6.6
         version: 2.6.6(next@15.3.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -23,6 +26,9 @@ importers:
       next:
         specifier: 15.3.3
         version: 15.3.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      prettier:
+        specifier: ^3.5.3
+        version: 3.5.3
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -428,6 +434,9 @@ packages:
 
   '@novu/js@2.6.6':
     resolution: {integrity: sha512-kX6vSQvrQ1A6gHU5QvgrBMg/xnoCp3y61BjGO73f7hOWl3WD8kC0AkQ91kAA8L6BdpwJff6hTt1yS5sLBYE/mg==}
+
+  '@novu/js@3.5.0':
+    resolution: {integrity: sha512-7m1PG+6xswsQj48nX+oYXtxZCUn6olZquwbYoqru9E4kA6TwFczjeLRcNvOP0iF2Y/UKwxfM/GXeXX+x7xX+zA==}
 
   '@novu/nextjs@2.6.6':
     resolution: {integrity: sha512-xLeOh0Tjyo4llcuex6myOLBbgChx500E/YWNLF8cK52nTgl4JUbTNLbNUoXIud7t1Cb4Vqbx3J1BY/E4m5wFxQ==}
@@ -2643,6 +2652,22 @@ snapshots:
       - encoding
 
   '@novu/js@2.6.6':
+    dependencies:
+      '@floating-ui/dom': 1.7.1
+      class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      mitt: 3.0.1
+      socket.io-client: 4.7.2
+      solid-floating-ui: 0.3.1(@floating-ui/dom@1.7.1)(solid-js@1.9.7)
+      solid-js: 1.9.7
+      solid-motionone: 1.0.4(solid-js@1.9.7)
+      tailwind-merge: 2.6.0
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
+  '@novu/js@3.5.0':
     dependencies:
       '@floating-ui/dom': 1.7.1
       class-variance-authority: 0.7.1
