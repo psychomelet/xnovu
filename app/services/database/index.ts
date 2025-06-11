@@ -1,4 +1,2 @@
-export { NotificationService } from './NotificationService'
-export { WorkflowService } from './WorkflowService'
-export { TemplateService } from './TemplateService'
-export { RuleService } from './RuleService'
+// CRUD services removed - clients use Supabase JS SDK directly
+// Only realtime subscription manager remains for internal use

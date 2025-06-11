@@ -1,12 +1,10 @@
 import { supabase } from '@/lib/supabase/client'
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { NotificationService } from '../database/NotificationService'
-import { WorkflowService } from '../database/WorkflowService'
 import { Novu } from '@novu/node'
 import type { Database } from '@/lib/supabase/types'
 
-type NotificationInsert = Database['public']['Tables']['ent_notification']['Insert']
-type NotificationRow = Database['public']['Tables']['ent_notification']['Row']
+type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert']
+type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
 
 export interface SubscriptionConfig {
   enterpriseId: string
@@ -62,7 +60,7 @@ export class SubscriptionManager {
           'postgres_changes',
           {
             event: 'INSERT',
-            schema: 'public',
+            schema: 'notify',
             table: 'ent_notification',
             filter: `enterprise_id=eq.${this.config.enterpriseId}`,
           },
@@ -111,14 +109,21 @@ export class SubscriptionManager {
       return
     }
 
-    const notificationId = payload.new.id as string
+    const notificationId = payload.new.id as number
 
     try {
       // Fetch the complete notification data
-      const notification = await NotificationService.getNotification(
-        notificationId,
-        this.config.enterpriseId
-      )
+      const { data: notification, error } = await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .select('*')
+        .eq('id', notificationId)
+        .eq('enterprise_id', this.config.enterpriseId)
+        .single()
+
+      if (error) {
+        throw error
+      }
 
       if (!notification) {
         console.error(`SubscriptionManager: Notification ${notificationId} not found`)
@@ -183,38 +188,55 @@ export class SubscriptionManager {
 
     try {
       // Update status to PROCESSING
-      await NotificationService.updateNotificationStatus(
-        notification.id,
-        notification.enterprise_id,
-        'PROCESSING'
-      )
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .update({ 
+          notification_status: 'PROCESSING',
+          processed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', notification.id)
+        .eq('enterprise_id', notification.enterprise_id)
 
       // Get workflow configuration
-      const workflow = await WorkflowService.getWorkflowByKey(
-        notification.workflow_key,
-        notification.enterprise_id
-      )
+      const { data: workflow, error: workflowError } = await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .select('*')
+        .eq('id', notification.notification_workflow_id)
+        .eq('enterprise_id', notification.enterprise_id)
+        .eq('deactivated', false)
+        .single()
+
+      if (workflowError) {
+        throw workflowError
+      }
 
       if (!workflow) {
-        throw new Error(`Workflow ${notification.workflow_key} not found`)
+        throw new Error(`Workflow ${notification.notification_workflow_id} not found`)
       }
 
       // Trigger Novu workflow
-      const result = await this.novu.trigger(notification.workflow_key, {
-        to: {
-          subscriberId: notification.subscriber_id,
-        },
+      const result = await this.novu.trigger(workflow.workflow_key, {
+        to: notification.recipients.map(id => ({ subscriberId: id })),
         payload: notification.payload,
+        overrides: notification.overrides || {},
+        ...(notification.tags && { tags: notification.tags })
       })
 
       // Update status to SENT with transaction ID
-      await NotificationService.updateNotificationStatus(
-        notification.id,
-        notification.enterprise_id,
-        'SENT',
-        undefined,
-        result.data?.transactionId
-      )
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .update({
+          notification_status: 'SENT',
+          transaction_id: result.data?.transactionId,
+          processed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', notification.id)
+        .eq('enterprise_id', notification.enterprise_id)
 
       // Call custom handler if provided
       if (this.config.onNotification) {
@@ -232,12 +254,17 @@ export class SubscriptionManager {
         }, retryDelay * item.attempts)
       } else {
         // Max attempts reached, mark as failed
-        await NotificationService.updateNotificationStatus(
-          notification.id,
-          notification.enterprise_id,
-          'FAILED',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+        await supabase
+          .schema('notify')
+          .from('ent_notification')
+          .update({
+            notification_status: 'FAILED',
+            error_details: { message: error instanceof Error ? error.message : 'Unknown error' },
+            processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', notification.id)
+          .eq('enterprise_id', notification.enterprise_id)
         
         this.handleError(error as Error)
       }
@@ -276,29 +303,35 @@ export class SubscriptionManager {
   async retryFailedNotifications(
     limit: number = 100
   ): Promise<{ processed: number; failed: number }> {
-    const failedNotifications = await NotificationService.getNotifications(
-      this.config.enterpriseId,
-      {
-        status: 'FAILED',
-        limit,
-      }
-    )
+    const { data: failedNotifications } = await supabase
+      .schema('notify')
+      .from('ent_notification')
+      .select('*')
+      .eq('enterprise_id', this.config.enterpriseId)
+      .eq('notification_status', 'FAILED')
+      .limit(limit)
+      .order('created_at', { ascending: false })
 
     let processed = 0
     let failed = 0
 
-    for (const notification of failedNotifications) {
+    for (const notification of failedNotifications || []) {
       try {
         // Reset to pending and add to queue
-        await NotificationService.updateNotificationStatus(
-          notification.id,
-          notification.enterprise_id,
-          'PENDING'
-        )
+        await supabase
+          .schema('notify')
+          .from('ent_notification')
+          .update({
+            notification_status: 'PENDING',
+            error_details: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', notification.id)
+          .eq('enterprise_id', notification.enterprise_id)
         
         this.addToQueue({
           ...notification,
-          status: 'PENDING',
+          notification_status: 'PENDING',
         })
         
         processed++
