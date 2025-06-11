@@ -114,7 +114,7 @@ export async function getRuleEngineStatus() {
   try {
     return await ruleEngineInstance.getStatus();
   } catch (error) {
-    return { initialized: false, error: error.message };
+    return { initialized: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 

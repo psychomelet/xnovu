@@ -7,9 +7,9 @@ import type {
   Notification,
   NotificationInsert,
   NotificationUpdate,
-  TriggerType,
-  RuleEngineError
+  TriggerType
 } from '@/types/rule-engine';
+import { RuleEngineError } from '@/types/rule-engine';
 
 export class RuleService {
   private supabase;

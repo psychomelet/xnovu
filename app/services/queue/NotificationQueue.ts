@@ -158,12 +158,12 @@ export class NotificationQueue {
         overrides: data.overrides || {},
       });
 
-      // Update status to SENT with transaction ID
+      // Update status to SENT with transaction ID (if available)
       await this.ruleService.updateNotificationStatus(
         data.notificationId,
         'SENT',
         undefined,
-        result.transactionId
+        (result as any).transactionId || undefined
       );
 
       console.log(`Successfully processed notification ${data.notificationId}`);
@@ -174,7 +174,7 @@ export class NotificationQueue {
       await this.ruleService.updateNotificationStatus(
         data.notificationId,
         'FAILED',
-        { error: error.message, timestamp: new Date().toISOString() }
+        { error: error instanceof Error ? error.message : 'Unknown error', timestamp: new Date().toISOString() }
       );
 
       throw error;

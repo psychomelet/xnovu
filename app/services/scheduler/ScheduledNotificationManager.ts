@@ -1,8 +1,8 @@
 import type {
   Notification,
-  NotificationJobData,
-  RuleEngineError
+  NotificationJobData
 } from '@/types/rule-engine';
+import { RuleEngineError } from '@/types/rule-engine';
 import { RuleService } from '../database/RuleService';
 import { NotificationQueue } from '../queue/NotificationQueue';
 
@@ -129,17 +129,30 @@ export class ScheduledNotificationManager {
     try {
       console.log(`Processing scheduled notification ${notification.id}`);
 
-      // Validate notification has required workflow info
-      if (!notification.ent_notification_workflow) {
+      // Validate notification has workflow ID
+      if (!notification.notification_workflow_id) {
         throw new RuleEngineError(
-          `Notification ${notification.id} missing workflow information`,
+          `Notification ${notification.id} missing workflow ID`,
           'INVALID_NOTIFICATION',
           undefined,
           notification.enterprise_id!
         );
       }
 
-      const workflow = notification.ent_notification_workflow as any;
+      // Get workflow information
+      const workflow = await this.ruleService.getWorkflow(
+        notification.notification_workflow_id,
+        notification.enterprise_id!
+      );
+      
+      if (!workflow) {
+        throw new RuleEngineError(
+          `Workflow ${notification.notification_workflow_id} not found for notification ${notification.id}`,
+          'INVALID_NOTIFICATION',
+          undefined,
+          notification.enterprise_id!
+        );
+      }
 
       // Create job data for queue processing
       const jobData: NotificationJobData = {
@@ -165,7 +178,7 @@ export class ScheduledNotificationManager {
           notification.id,
           'FAILED',
           {
-            error: error.message,
+            error: error instanceof Error ? error.message : 'Unknown error',
             timestamp: new Date().toISOString(),
             stage: 'scheduled_processing'
           }
@@ -212,11 +225,20 @@ export class ScheduledNotificationManager {
       // For shorter delays, we can add to queue with delay
       if (delayMs <= 24 * 60 * 60 * 1000) { // 24 hours
         // Get notification details to create job
-        const notification = await this.ruleService.getScheduledNotifications();
-        const targetNotification = notification.find(n => n.id === notificationId);
+        const notifications = await this.ruleService.getScheduledNotifications();
+        const targetNotification = notifications.find(n => n.id === notificationId);
 
-        if (targetNotification && targetNotification.ent_notification_workflow) {
-          const workflow = targetNotification.ent_notification_workflow as any;
+        if (targetNotification && targetNotification.notification_workflow_id) {
+          // Get workflow information
+          const workflow = await this.ruleService.getWorkflow(
+            targetNotification.notification_workflow_id,
+            targetNotification.enterprise_id!
+          );
+          
+          if (!workflow) {
+            console.error(`Workflow ${targetNotification.notification_workflow_id} not found for notification ${targetNotification.id}`);
+            return;
+          }
 
           const jobData: NotificationJobData = {
             notificationId: targetNotification.id,

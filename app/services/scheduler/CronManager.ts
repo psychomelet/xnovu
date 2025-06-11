@@ -2,10 +2,9 @@ import * as cron from 'node-cron';
 import type {
   NotificationRule,
   CronTriggerConfig,
-  RuleJobData,
-  CronValidationError,
-  RuleEngineError
+  RuleJobData
 } from '@/types/rule-engine';
+import { CronValidationError, RuleEngineError } from '@/types/rule-engine';
 import { RuleService } from '../database/RuleService';
 import { NotificationQueue } from '../queue/NotificationQueue';
 
@@ -128,7 +127,6 @@ export class CronManager {
 
     try {
       job.task.stop();
-      job.task.destroy();
       this.jobs.delete(jobKey);
 
       console.log(`Unscheduled cron rule ${ruleId}`);
@@ -202,14 +200,12 @@ export class CronManager {
 
         for (const { key, job } of jobsToRemove) {
           job.task.stop();
-          job.task.destroy();
           this.jobs.delete(key);
         }
       } else {
         // Remove all jobs
         for (const job of this.jobs.values()) {
           job.task.stop();
-          job.task.destroy();
         }
         this.jobs.clear();
       }
@@ -249,7 +245,7 @@ export class CronManager {
       cronExpression: job.cronExpression,
       timezone: job.timezone,
       isRunning: job.isRunning,
-      isScheduled: job.task.getStatus() === 'scheduled',
+      isScheduled: true, // Assume scheduled if in jobs map
     }));
   }
 
@@ -267,9 +263,9 @@ export class CronManager {
       try {
         // This is a simplified approach - in production you might want to use a cron parser
         // to calculate the next execution time more accurately
-        if (job.task.getStatus() === 'scheduled') {
-          nextExecution = new Date(Date.now() + 60000); // Placeholder: next minute
-        }
+        // For simplicity, assume next execution is in the next minute
+        // In production, you'd use a proper cron parser to calculate accurate next execution
+        nextExecution = new Date(Date.now() + 60000);
       } catch (error) {
         console.error(`Failed to calculate next execution for rule ${job.ruleId}:`, error);
       }
@@ -291,7 +287,6 @@ export class CronManager {
     for (const job of this.jobs.values()) {
       try {
         job.task.stop();
-        job.task.destroy();
       } catch (error) {
         console.error(`Failed to stop job for rule ${job.ruleId}:`, error);
       }
