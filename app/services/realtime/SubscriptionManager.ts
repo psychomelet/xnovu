@@ -14,12 +14,36 @@ export interface SubscriptionConfig {
     maxConcurrent?: number
     retryAttempts?: number
     retryDelay?: number
+    maxQueueSize?: number
   }
 }
 
 interface QueueItem {
   notification: NotificationRow
   attempts: number
+  addedAt: Date
+}
+
+// Structured logging interface
+interface LogContext {
+  component: string
+  enterpriseId: string
+  notificationId?: number
+  workflowId?: number
+  attempt?: number
+  error?: string
+  remainingQueue?: number
+  activeProcessing?: number
+  queueSize?: number
+  maxQueueSize?: number
+  transactionId?: string
+  maxAttempts?: number
+  retryDelay?: number
+  attempts?: number
+  payload?: string
+  processed?: number
+  failed?: number
+  clearedCount?: number
 }
 
 export class SubscriptionManager {
@@ -29,19 +53,70 @@ export class SubscriptionManager {
   private processingQueue: QueueItem[] = []
   private activeProcessing: number = 0
   private novu: Novu
+  private isShuttingDown: boolean = false
+  private queueWorkerRunning: boolean = false
 
   constructor(config: SubscriptionConfig) {
+    // Validate required environment variables
+    const novuSecretKey = process.env.NOVU_SECRET_KEY
+    if (!novuSecretKey) {
+      throw new Error('NOVU_SECRET_KEY environment variable is required')
+    }
+
     this.config = {
       queueConfig: {
         maxConcurrent: 5,
         retryAttempts: 3,
         retryDelay: 1000,
+        maxQueueSize: 1000,
         ...config.queueConfig,
       },
       ...config,
     }
     
-    this.novu = new Novu(process.env.NOVU_SECRET_KEY!)
+    this.novu = new Novu(novuSecretKey)
+  }
+
+  /**
+   * Structured logging method
+   */
+  private log(level: 'info' | 'warn' | 'error', message: string, context: Partial<LogContext> = {}) {
+    const logData = {
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+      component: 'SubscriptionManager',
+      enterpriseId: this.config.enterpriseId,
+      ...context,
+    }
+    
+    // In production, this would use a proper logging library like Winston
+    if (level === 'error') {
+      console.error(JSON.stringify(logData))
+    } else if (level === 'warn') {
+      console.warn(JSON.stringify(logData))
+    } else {
+      console.log(JSON.stringify(logData))
+    }
+  }
+
+  /**
+   * Validate and convert UUID string to proper format for Novu
+   */
+  private validateAndConvertRecipients(recipients: string[]): string[] {
+    return recipients.map(recipient => {
+      if (typeof recipient !== 'string') {
+        throw new Error(`Invalid recipient type: expected string, got ${typeof recipient}`)
+      }
+      
+      // Basic UUID validation
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      if (!uuidRegex.test(recipient)) {
+        throw new Error(`Invalid UUID format for recipient: ${recipient}`)
+      }
+      
+      return recipient
+    })
   }
 
   /**
@@ -49,7 +124,7 @@ export class SubscriptionManager {
    */
   async start(): Promise<void> {
     if (this.isActive) {
-      console.warn('SubscriptionManager is already active')
+      this.log('warn', 'SubscriptionManager is already active')
       return
     }
 
@@ -71,31 +146,47 @@ export class SubscriptionManager {
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             this.isActive = true
-            console.log('SubscriptionManager: Successfully subscribed to notifications')
+            this.startQueueWorker()
+            this.log('info', 'Successfully subscribed to notifications')
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('SubscriptionManager: Channel error')
+            this.log('error', 'Subscription channel error')
             this.handleError(new Error('Subscription channel error'))
           } else if (status === 'TIMED_OUT') {
-            console.error('SubscriptionManager: Subscription timed out')
+            this.log('error', 'Subscription timed out')
             this.handleError(new Error('Subscription timed out'))
           }
         })
     } catch (error) {
-      console.error('SubscriptionManager: Failed to start subscription', error)
+      this.log('error', 'Failed to start subscription', { error: (error as Error).message })
       this.handleError(error as Error)
     }
   }
 
   /**
-   * Stop listening to notifications
+   * Stop listening to notifications and cleanup resources
    */
   async stop(): Promise<void> {
+    this.isShuttingDown = true
+    
     if (this.channel) {
       await supabase.removeChannel(this.channel)
       this.channel = null
     }
+    
+    // Wait for active processing to complete (with timeout)
+    const shutdownTimeout = 30000 // 30 seconds
+    const startTime = Date.now()
+    
+    while (this.activeProcessing > 0 && (Date.now() - startTime) < shutdownTimeout) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    
     this.isActive = false
-    console.log('SubscriptionManager: Stopped')
+    this.queueWorkerRunning = false
+    this.log('info', 'SubscriptionManager stopped', { 
+      remainingQueue: this.processingQueue.length,
+      activeProcessing: this.activeProcessing 
+    })
   }
 
   /**
@@ -105,7 +196,7 @@ export class SubscriptionManager {
     payload: RealtimePostgresChangesPayload<NotificationRow>
   ): Promise<void> {
     if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) {
-      console.error('SubscriptionManager: Invalid payload received')
+      this.log('error', 'Invalid payload received', { payload: JSON.stringify(payload) })
       return
     }
 
@@ -126,40 +217,90 @@ export class SubscriptionManager {
       }
 
       if (!notification) {
-        console.error(`SubscriptionManager: Notification ${notificationId} not found`)
+        this.log('error', 'Notification not found', { notificationId })
         return
       }
 
-      // Add to processing queue
+      // Add to processing queue with size limit
       this.addToQueue(notification)
       
-      // Process queue
-      await this.processQueue()
     } catch (error) {
-      console.error(`SubscriptionManager: Error handling notification ${notificationId}`, error)
+      this.log('error', 'Error handling notification insert', { 
+        notificationId, 
+        error: (error as Error).message 
+      })
       this.handleError(error as Error)
     }
   }
 
   /**
-   * Add notification to processing queue
+   * Add notification to processing queue with size limits
    */
   private addToQueue(notification: NotificationRow): void {
+    const maxQueueSize = this.config.queueConfig?.maxQueueSize || 1000
+    
+    if (this.processingQueue.length >= maxQueueSize) {
+      this.log('error', 'Queue size limit reached, dropping notification', {
+        notificationId: notification.id,
+        queueSize: this.processingQueue.length,
+        maxQueueSize
+      })
+      return
+    }
+
     this.processingQueue.push({
       notification,
       attempts: 0,
+      addedAt: new Date(),
+    })
+
+    this.log('info', 'Notification added to queue', {
+      notificationId: notification.id,
+      queueSize: this.processingQueue.length
     })
   }
 
   /**
-   * Process notifications in queue
+   * Start the queue worker loop (non-recursive)
    */
-  private async processQueue(): Promise<void> {
+  private startQueueWorker(): void {
+    if (this.queueWorkerRunning) {
+      return
+    }
+
+    this.queueWorkerRunning = true
+    
+    // Use setImmediate to avoid blocking and prevent recursion
+    const processLoop = () => {
+      if (this.isShuttingDown || !this.queueWorkerRunning) {
+        return
+      }
+
+      this.processQueueBatch()
+        .catch(error => {
+          this.log('error', 'Error in queue worker', { error: error.message })
+        })
+        .finally(() => {
+          if (this.queueWorkerRunning) {
+            // Schedule next iteration with a small delay to prevent tight loop
+            setTimeout(processLoop, 100)
+          }
+        })
+    }
+
+    setImmediate(processLoop)
+  }
+
+  /**
+   * Process a batch of notifications from the queue
+   */
+  private async processQueueBatch(): Promise<void> {
     const maxConcurrent = this.config.queueConfig?.maxConcurrent || 5
 
     while (
       this.processingQueue.length > 0 &&
-      this.activeProcessing < maxConcurrent
+      this.activeProcessing < maxConcurrent &&
+      !this.isShuttingDown
     ) {
       const item = this.processingQueue.shift()
       if (!item) break
@@ -169,12 +310,13 @@ export class SubscriptionManager {
       // Process asynchronously without blocking
       this.processNotification(item)
         .catch((error) => {
-          console.error('SubscriptionManager: Error processing notification', error)
+          this.log('error', 'Error processing notification', { 
+            notificationId: item.notification.id,
+            error: error.message 
+          })
         })
         .finally(() => {
           this.activeProcessing--
-          // Try to process more items
-          this.processQueue().catch(console.error)
         })
     }
   }
@@ -217,9 +359,12 @@ export class SubscriptionManager {
         throw new Error(`Workflow ${notification.notification_workflow_id} not found`)
       }
 
-      // Trigger Novu workflow
+      // Validate and convert recipients
+      const validatedRecipients = this.validateAndConvertRecipients(notification.recipients)
+
+      // Trigger Novu workflow with proper type safety
       const result = await this.novu.trigger(workflow.workflow_key, {
-        to: notification.recipients.map(id => ({ subscriberId: id })),
+        to: validatedRecipients.map(id => ({ subscriberId: id })),
         payload: notification.payload,
         overrides: notification.overrides || {},
         ...(notification.tags && { tags: notification.tags })
@@ -238,36 +383,76 @@ export class SubscriptionManager {
         .eq('id', notification.id)
         .eq('enterprise_id', notification.enterprise_id)
 
+      this.log('info', 'Notification processed successfully', {
+        notificationId: notification.id,
+        workflowId: workflow.id,
+        transactionId: result.data?.transactionId
+      })
+
       // Call custom handler if provided
       if (this.config.onNotification) {
         await this.config.onNotification(notification)
       }
     } catch (error) {
-      item.attempts++
-      
-      if (item.attempts < maxAttempts) {
-        // Retry after delay
-        const retryDelay = this.config.queueConfig?.retryDelay || 1000
-        setTimeout(() => {
+      await this.handleProcessingError(item, error as Error, maxAttempts)
+    }
+  }
+
+  /**
+   * Handle processing errors with retry logic
+   */
+  private async handleProcessingError(item: QueueItem, error: Error, maxAttempts: number): Promise<void> {
+    item.attempts++
+    
+    this.log('error', 'Notification processing failed', {
+      notificationId: item.notification.id,
+      attempt: item.attempts,
+      maxAttempts,
+      error: error.message
+    })
+    
+    if (item.attempts < maxAttempts) {
+      // Calculate exponential backoff with jitter
+      const baseDelay = this.config.queueConfig?.retryDelay || 1000
+      const exponentialDelay = baseDelay * Math.pow(2, item.attempts - 1)
+      const jitter = Math.random() * 0.1 * exponentialDelay
+      const retryDelay = exponentialDelay + jitter
+
+      // Schedule retry
+      setTimeout(() => {
+        if (!this.isShuttingDown) {
           this.processingQueue.push(item)
-          this.processQueue().catch(console.error)
-        }, retryDelay * item.attempts)
-      } else {
-        // Max attempts reached, mark as failed
-        await supabase
-          .schema('notify')
-          .from('ent_notification')
-          .update({
-            notification_status: 'FAILED',
-            error_details: { message: error instanceof Error ? error.message : 'Unknown error' },
-            processed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+          this.log('info', 'Notification scheduled for retry', {
+            notificationId: item.notification.id,
+            attempt: item.attempts,
+            retryDelay: Math.round(retryDelay)
           })
-          .eq('id', notification.id)
-          .eq('enterprise_id', notification.enterprise_id)
-        
-        this.handleError(error as Error)
-      }
+        }
+      }, retryDelay)
+    } else {
+      // Max attempts reached, mark as failed
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .update({
+          notification_status: 'FAILED',
+          error_details: { 
+            message: error.message,
+            attempts: item.attempts,
+            lastAttempt: new Date().toISOString()
+          },
+          processed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', item.notification.id)
+        .eq('enterprise_id', item.notification.enterprise_id)
+      
+      this.log('error', 'Notification marked as failed after max attempts', {
+        notificationId: item.notification.id,
+        attempts: item.attempts
+      })
+      
+      this.handleError(error)
     }
   }
 
@@ -278,7 +463,7 @@ export class SubscriptionManager {
     if (this.config.onError) {
       this.config.onError(error)
     } else {
-      console.error('SubscriptionManager: Unhandled error', error)
+      this.log('error', 'Unhandled error', { error: error.message })
     }
   }
 
@@ -289,12 +474,34 @@ export class SubscriptionManager {
     isActive: boolean
     queueLength: number
     activeProcessing: number
+    isShuttingDown: boolean
   } {
     return {
       isActive: this.isActive,
       queueLength: this.processingQueue.length,
       activeProcessing: this.activeProcessing,
+      isShuttingDown: this.isShuttingDown,
     }
+  }
+
+  /**
+   * Health check method
+   */
+  isHealthy(): boolean {
+    const status = this.getStatus()
+    const maxQueueSize = this.config.queueConfig?.maxQueueSize || 1000
+    
+    // Consider unhealthy if queue is more than 80% full
+    if (status.queueLength > maxQueueSize * 0.8) {
+      return false
+    }
+    
+    // Check if subscription is active when it should be
+    if (!status.isActive && !status.isShuttingDown) {
+      return false
+    }
+    
+    return true
   }
 
   /**
@@ -336,14 +543,15 @@ export class SubscriptionManager {
         
         processed++
       } catch (error) {
-        console.error(`Failed to retry notification ${notification.id}`, error)
+        this.log('error', 'Failed to retry notification', {
+          notificationId: notification.id,
+          error: (error as Error).message
+        })
         failed++
       }
     }
 
-    // Process the queue
-    await this.processQueue()
-
+    this.log('info', 'Failed notifications retry completed', { processed, failed })
     return { processed, failed }
   }
 
@@ -351,6 +559,28 @@ export class SubscriptionManager {
    * Clear the processing queue
    */
   clearQueue(): void {
+    const clearedCount = this.processingQueue.length
     this.processingQueue = []
+    this.log('info', 'Processing queue cleared', { clearedCount })
+  }
+
+  /**
+   * Get queue metrics for monitoring
+   */
+  getMetrics(): {
+    queueLength: number
+    activeProcessing: number
+    isHealthy: boolean
+    oldestQueueItem?: Date
+  } {
+    const oldestItem = this.processingQueue.length > 0 ? 
+      Math.min(...this.processingQueue.map(item => item.addedAt.getTime())) : undefined
+
+    return {
+      queueLength: this.processingQueue.length,
+      activeProcessing: this.activeProcessing,
+      isHealthy: this.isHealthy(),
+      oldestQueueItem: oldestItem ? new Date(oldestItem) : undefined,
+    }
   }
 }

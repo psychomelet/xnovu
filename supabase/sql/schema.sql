@@ -213,3 +213,8 @@ COMMENT on table notify.ent_notification is 'Records individual notification eve
 
 -- Indexes for performance
 create index if not exists idx_ent_notification_created on notify.ent_notification (created_at DESC);
+create index if not exists idx_ent_notification_enterprise_workflow on notify.ent_notification(enterprise_id, notification_workflow_id);
+create index if not exists idx_ent_notification_status on notify.ent_notification(notification_status);
+create index if not exists idx_ent_notification_enterprise_status on notify.ent_notification(enterprise_id, notification_status);
+create index if not exists idx_ent_workflow_enterprise_key on notify.ent_notification_workflow(enterprise_id, workflow_key);
+create index if not exists idx_ent_workflow_enterprise_type on notify.ent_notification_workflow(enterprise_id, workflow_type);
