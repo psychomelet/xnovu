@@ -104,34 +104,6 @@ describe('Supabase Connection', () => {
       }
     }, 15000);
 
-    it('should handle base schema access', async () => {
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.log('Skipping base schema test - credentials not configured');
-        return;
-      }
-
-      const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
-
-      try {
-        // Try to access base schema tables
-        const { data, error } = await supabase
-          .schema('base')
-          .from('ent_enterprise')
-          .select('id')
-          .limit(1);
-
-        if (error) {
-          console.log('⚠️  Base schema access restricted (expected):', error.message);
-          expect(error).toBeDefined();
-        } else {
-          console.log('✅ Base schema accessible');
-          expect(data).toBeDefined();
-        }
-      } catch (error) {
-        console.log('⚠️  Base schema test failed:', error);
-        expect(error).toBeDefined();
-      }
-    }, 15000);
   });
 
   describe('Real-time Capabilities', () => {

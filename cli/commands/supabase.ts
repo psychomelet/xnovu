@@ -37,7 +37,7 @@ export function createSupabaseCommands(program: Command): void {
           'types',
           'typescript',
           `--project-id=${projectId}`,
-          '--schema=notify,base,shared_types'
+          '--schema=notify,shared_types'
         ];
 
         console.log(`🚀 Running: ${command} ${args.join(' ')}`);
