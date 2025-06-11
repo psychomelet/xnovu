@@ -1,17 +1,7 @@
 import { defaultRuleEngineConfig } from '@/app/services/RuleEngineService';
 
-// Mock all dependencies for unit testing
-jest.mock('@supabase/supabase-js');
-jest.mock('@novu/api');
-jest.mock('bullmq');
-jest.mock('ioredis');
-jest.mock('node-cron');
-
-// Mock internal services
-jest.mock('@/app/services/database/RuleService');
-jest.mock('@/app/services/queue/NotificationQueue');
-jest.mock('@/app/services/scheduler/CronManager');
-jest.mock('@/app/services/scheduler/ScheduledNotificationManager');
+// No mocks - use real cloud services
+// Tests will use actual Supabase, Novu, and Redis instances configured in .env.local
 
 describe('RuleEngineService - Unit Tests', () => {
   afterEach(() => {
@@ -22,7 +12,7 @@ describe('RuleEngineService - Unit Tests', () => {
     it('should have default configuration values', () => {
       // Values come from jest.setup.js environment variables
       expect(defaultRuleEngineConfig).toEqual({
-        redisUrl: 'redis://localhost:6380', // From jest.setup.js
+        redisUrl: process.env.REDIS_URL, // From .env.local (cloud Redis)
         defaultTimezone: 'UTC',
         maxConcurrentJobs: 5, // From jest.setup.js
         jobRetryAttempts: 2, // From jest.setup.js
@@ -62,7 +52,7 @@ describe('RuleEngineService - Unit Tests', () => {
 
     it('should have Redis URL format', () => {
       const config = defaultRuleEngineConfig;
-      expect(config.redisUrl).toMatch(/^redis:\/\//);
+      expect(config.redisUrl).toMatch(/^redis(s)?:\/\//);
     });
   });
 });

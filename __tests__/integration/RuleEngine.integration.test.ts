@@ -1,14 +1,14 @@
 /**
- * Integration tests for Rule Engine with real Redis connection
- * These tests run when REDIS_URL is available (CI environment)
+ * Integration tests for Rule Engine with real cloud Redis connection
+ * These tests require real cloud services configured in .env.local
  */
 
 import { RuleEngineService } from '@/app/services/RuleEngineService';
+import { supabase } from '@/lib/supabase/client';
 import type { RuleEngineConfig } from '@/types/rule-engine';
 
-// Skip these tests if Redis is not available
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const SKIP_INTEGRATION_TESTS = !process.env.CI && !process.env.REDIS_URL;
+// Using real cloud Redis from .env.local
+const REDIS_URL = process.env.REDIS_URL!;
 
 const testConfig: RuleEngineConfig = {
   redisUrl: REDIS_URL,
@@ -16,17 +16,58 @@ const testConfig: RuleEngineConfig = {
   maxConcurrentJobs: 2,
   jobRetryAttempts: 2,
   jobRetryDelay: 1000,
+  scheduledNotificationInterval: 10000,
+  scheduledNotificationBatchSize: 10,
 };
 
-describe('Rule Engine Integration Tests', () => {
-  // Skip if Redis is not available
-  beforeAll(() => {
-    if (SKIP_INTEGRATION_TESTS) {
-      console.log('⏭️ Skipping integration tests - Redis not available');
+describe('Rule Engine Integration Tests with Cloud Services', () => {
+  let ruleEngine: RuleEngineService | null = null;
+  let testEnterpriseId: string;
+  let testRuleId: number;
+
+  beforeAll(async () => {
+    testEnterpriseId = 'test-enterprise-' + Date.now();
+
+    // Create test rule in Supabase
+    const { data: rule, error } = await supabase
+      .schema('notify')
+      .from('ent_notification_rule')
+      .insert({
+        name: 'Test Rule',
+        enterprise_id: testEnterpriseId,
+        rule_type: 'SCHEDULE',
+        trigger_config: {
+          schedule: '0 9 * * *', // Daily at 9 AM
+          timezone: 'UTC'
+        },
+        action_config: {
+          workflowId: 'test-workflow',
+          payload: { test: true }
+        },
+        is_active: true,
+        deactivated: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to create test rule:', error);
+      throw error;
     }
+
+    testRuleId = rule.id;
   });
 
-  let ruleEngine: RuleEngineService | null = null;
+  afterAll(async () => {
+    // Clean up test data
+    if (testRuleId) {
+      await supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .delete()
+        .eq('id', testRuleId);
+    }
+  });
 
   afterEach(async () => {
     if (ruleEngine) {
@@ -41,27 +82,28 @@ describe('Rule Engine Integration Tests', () => {
     }
   });
 
-  describe('Redis Integration', () => {
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should connect to Redis and initialize successfully', async () => {
-      // This test only runs in CI or when Redis is explicitly available
+  describe('Cloud Redis Integration', () => {
+    it('should connect to cloud Redis and initialize successfully', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       
       await expect(ruleEngine.initialize()).resolves.not.toThrow();
       
       const status = await ruleEngine.getStatus();
       expect(status.initialized).toBe(true);
-    }, 10000);
+    }, 30000); // Longer timeout for cloud services
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should perform health check with Redis', async () => {
+    it('should perform health check with cloud Redis', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
       const health = await ruleEngine.healthCheck();
       expect(health.status).toBe('healthy');
       expect(health.details.initialized).toBe(true);
-    }, 10000);
+      expect(health.details.notificationQueue).toBeDefined();
+      expect(health.details.cronManager).toBeDefined();
+    }, 30000);
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should handle queue operations with Redis', async () => {
+    it('should handle queue operations with cloud Redis', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
@@ -72,38 +114,63 @@ describe('Rule Engine Integration Tests', () => {
       expect(stats).toHaveProperty('ruleExecution');
       expect(typeof stats.notification).toBe('object');
       expect(typeof stats.ruleExecution).toBe('object');
-    }, 10000);
+      
+      // Check queue properties
+      expect(stats.notification).toHaveProperty('waiting');
+      expect(stats.notification).toHaveProperty('active');
+      expect(stats.notification).toHaveProperty('completed');
+      expect(stats.notification).toHaveProperty('failed');
+    }, 30000);
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should pause and resume with Redis', async () => {
+    it('should pause and resume with cloud Redis', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
       // Test pause
       await expect(ruleEngine.pause()).resolves.not.toThrow();
       
+      // Verify paused state
+      let status = await ruleEngine.getStatus();
+      expect(status.initialized).toBe(true);
+      
       // Test resume
       await expect(ruleEngine.resume()).resolves.not.toThrow();
       
-      const status = await ruleEngine.getStatus();
+      // Verify resumed state
+      status = await ruleEngine.getStatus();
       expect(status.initialized).toBe(true);
-    }, 10000);
+    }, 30000);
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should reload cron rules', async () => {
+    it('should reload cron rules from Supabase', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
-      // Should not throw when reloading rules (even if no rules exist)
+      // Should not throw when reloading rules
       await expect(ruleEngine.reloadCronRules()).resolves.not.toThrow();
-      await expect(ruleEngine.reloadCronRules('test-enterprise')).resolves.not.toThrow();
-    }, 10000);
+      
+      // Should reload rules for specific enterprise
+      await expect(ruleEngine.reloadCronRules(testEnterpriseId)).resolves.not.toThrow();
+      
+      // Check if test rule was loaded
+      const status = await ruleEngine.getStatus();
+      const testRuleJob = status.cronJobs.find(job => 
+        job.name.includes(testRuleId.toString())
+      );
+      
+      expect(testRuleJob).toBeDefined();
+      if (testRuleJob) {
+        expect(testRuleJob.schedule).toBe('0 9 * * *');
+        expect(testRuleJob.running).toBe(true);
+      }
+    }, 30000);
   });
 
-  describe('Error Handling', () => {
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should handle Redis connection errors gracefully', async () => {
+  describe('Error Handling with Cloud Services', () => {
+    it('should handle Redis connection errors gracefully', async () => {
       // Test with invalid Redis URL
       const badConfig = {
         ...testConfig,
-        redisUrl: 'redis://nonexistent:6379',
+        redisUrl: 'redis://invalid-host-that-does-not-exist:6379',
       };
 
       const badRuleEngine = RuleEngineService.getInstance(badConfig);
@@ -113,11 +180,28 @@ describe('Rule Engine Integration Tests', () => {
       
       // Clean up the bad instance
       (RuleEngineService as any).instance = null;
-    }, 15000);
+    }, 30000);
+
+    it('should handle Supabase query errors gracefully', async () => {
+      ruleEngine = RuleEngineService.getInstance(testConfig);
+      await ruleEngine.initialize();
+      
+      // Try to reload rules for non-existent enterprise
+      await expect(
+        ruleEngine.reloadCronRules('non-existent-enterprise')
+      ).resolves.not.toThrow();
+      
+      // Should have no cron jobs for non-existent enterprise
+      const status = await ruleEngine.getStatus();
+      const nonExistentJobs = status.cronJobs.filter(job => 
+        job.name.includes('non-existent-enterprise')
+      );
+      expect(nonExistentJobs).toHaveLength(0);
+    }, 30000);
   });
 
-  describe('Performance', () => {
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should initialize within reasonable time', async () => {
+  describe('Performance with Cloud Services', () => {
+    it('should initialize within reasonable time', async () => {
       const startTime = Date.now();
       
       ruleEngine = RuleEngineService.getInstance(testConfig);
@@ -125,58 +209,38 @@ describe('Rule Engine Integration Tests', () => {
       
       const initTime = Date.now() - startTime;
       
-      // Should initialize within 5 seconds
-      expect(initTime).toBeLessThan(5000);
-    }, 10000);
-  });
-});
+      // Should initialize within 10 seconds (cloud services may be slower)
+      expect(initTime).toBeLessThan(10000);
+      
+      console.log(`Rule Engine initialized in ${initTime}ms`);
+    }, 30000);
 
-// Mock fallback tests for when Redis is not available
-describe('Rule Engine Unit Tests (Mocked)', () => {
-  beforeAll(() => {
-    // Ensure mocks are active for unit tests
-    jest.doMock('@supabase/supabase-js');
-    jest.doMock('@novu/api');
-    jest.doMock('bullmq');
-    jest.doMock('ioredis');
-    jest.doMock('node-cron');
-  });
-
-  let ruleEngine: RuleEngineService;
-
-  beforeEach(() => {
-    // Reset singleton for each test
-    (RuleEngineService as any).instance = null;
-    ruleEngine = RuleEngineService.getInstance(testConfig);
-  });
-
-  afterEach(async () => {
-    try {
-      await ruleEngine.shutdown();
-    } catch (error) {
-      // Ignore cleanup errors in mocked tests
-    }
-    (RuleEngineService as any).instance = null;
-  });
-
-  it('should initialize with mocked dependencies', async () => {
-    await expect(ruleEngine.initialize()).resolves.not.toThrow();
-    
-    const status = await ruleEngine.getStatus();
-    expect(status.initialized).toBe(true);
-  });
-
-  it('should perform mocked health check', async () => {
-    await ruleEngine.initialize();
-    
-    const health = await ruleEngine.healthCheck();
-    expect(health.status).toBe('healthy');
-  });
-
-  it('should handle mocked queue operations', async () => {
-    await ruleEngine.initialize();
-    
-    const stats = await ruleEngine.notificationQueue.getQueueStats();
-    expect(stats).toBeDefined();
+    it('should handle concurrent operations efficiently', async () => {
+      ruleEngine = RuleEngineService.getInstance(testConfig);
+      await ruleEngine.initialize();
+      
+      // Perform multiple operations concurrently
+      const operations = [
+        ruleEngine.getStatus(),
+        ruleEngine.healthCheck(),
+        ruleEngine.notificationQueue.getQueueStats(),
+        ruleEngine.reloadCronRules(testEnterpriseId),
+      ];
+      
+      const startTime = Date.now();
+      const results = await Promise.all(operations);
+      const duration = Date.now() - startTime;
+      
+      // All operations should complete successfully
+      expect(results).toHaveLength(4);
+      expect(results[0]).toHaveProperty('initialized');
+      expect(results[1]).toHaveProperty('status');
+      expect(results[2]).toHaveProperty('notification');
+      
+      // Should complete within reasonable time
+      expect(duration).toBeLessThan(5000);
+      
+      console.log(`Concurrent operations completed in ${duration}ms`);
+    }, 30000);
   });
 });

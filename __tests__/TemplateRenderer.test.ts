@@ -1,35 +1,62 @@
 import { TemplateRenderer } from '../app/services/template/TemplateRenderer';
+import { supabase } from '../lib/supabase/client';
 
-// Create a mock supabase instance
-const mockSupabaseInstance = {
-  schema: jest.fn(() => mockSupabaseInstance),
-  from: jest.fn(() => mockSupabaseInstance),
-  select: jest.fn(() => mockSupabaseInstance),
-  eq: jest.fn(() => mockSupabaseInstance),
-  single: jest.fn()
-};
-
-// Mock Supabase client
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => mockSupabaseInstance)
-}));
+// Using real Supabase cloud service - no mocks
 
 describe('TemplateRenderer', () => {
   let renderer: TemplateRenderer;
-  let mockSupabase: any;
+  let testEnterpriseId: string;
+  let testTemplateKey: string;
+  let testTemplateId: number;
+
+  beforeAll(async () => {
+    testEnterpriseId = 'test-enterprise-' + Date.now();
+    testTemplateKey = 'test-template-' + Date.now();
+
+    // Create a test template in Supabase
+    const { data: template, error } = await supabase
+      .schema('notify')
+      .from('ent_notification_template')
+      .insert({
+        template_key: testTemplateKey,
+        name: 'Test Template',
+        body_template: 'Hello {{ name }}! Welcome to {{ location }}.',
+        channel_type: 'EMAIL',
+        enterprise_id: testEnterpriseId,
+        publish_status: 'PUBLISH',
+        deactivated: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to create test template:', error);
+      throw error;
+    }
+
+    testTemplateId = template.id;
+  });
+
+  afterAll(async () => {
+    // Clean up test template
+    if (testTemplateId) {
+      await supabase
+        .schema('notify')
+        .from('ent_notification_template')
+        .delete()
+        .eq('id', testTemplateId);
+    }
+  });
 
   beforeEach(() => {
-    // Reset all mocks
-    jest.clearAllMocks();
-    
-    // Use the global mock instance
-    mockSupabase = mockSupabaseInstance;
-    
-    renderer = new TemplateRenderer('http://localhost:54321', 'test-key');
+    // Use real Supabase instance
+    renderer = new TemplateRenderer(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
     renderer.clearCache();
   });
 
@@ -186,7 +213,7 @@ describe('TemplateRenderer', () => {
     it('should render template without xnovu_render calls', async () => {
       const template = 'Hello {{ name }}! Welcome to {{ building }}.';
       const context = {
-        enterpriseId: 'test-enterprise',
+        enterpriseId: testEnterpriseId,
         variables: { name: 'John', building: 'Tower A' }
       };
       
@@ -195,94 +222,86 @@ describe('TemplateRenderer', () => {
     });
 
     it('should handle template with xnovu_render calls', async () => {
-      // Mock the database call
-      const mockTemplate = {
-        id: 123,
-        body_template: 'Header: {{ title }}',
-        subject_template: null,
-        variables_description: null,
-        name: 'test-template',
-        description: null,
-        publish_status: 'PUBLISH' as const,
-        deactivated: false,
-        typ_notification_category_id: null,
-        business_id: null,
-        channel_type: 'EMAIL' as const,
-        repr: null,
-        enterprise_id: 'test-enterprise',
-        template_key: 'welcome-header',
-        created_at: new Date().toISOString(),
-        created_by: null,
-        updated_at: new Date().toISOString(),
-        updated_by: null
-      };
-
-      mockSupabase.single.mockResolvedValue({
-        data: mockTemplate,
-        error: null
-      });
-
-      const template = 'Before {{ xnovu_render("welcome-header", { title: "Welcome" }) }} After';
+      const template = `Before {{ xnovu_render("${testTemplateKey}", { name: "Alice", location: "Building B" }) }} After`;
       const context = {
-        enterpriseId: 'test-enterprise',
+        enterpriseId: testEnterpriseId,
         variables: {}
       };
       
       const result = await renderer.render(template, context);
-      expect(result).toBe('Before Header: Welcome After');
+      expect(result).toBe('Before Hello Alice! Welcome to Building B. After');
     });
 
     it('should handle template loading errors gracefully', async () => {
-      // Mock database error
-      mockSupabase.single.mockResolvedValue({
-        data: null,
-        error: new Error('Template not found')
-      });
-
-      const template = 'Before {{ xnovu_render("nonexistent-key", {}) }} After';
+      const template = 'Before {{ xnovu_render("nonexistent-key-' + Date.now() + '", {}) }} After';
       const context = {
-        enterpriseId: 'test-enterprise',
+        enterpriseId: testEnterpriseId,
         variables: {}
       };
       
       const result = await renderer.render(template, context);
-      expect(result).toBe('Before [Template Error: nonexistent-key] After');
+      expect(result).toMatch(/Before \[Template Error: nonexistent-key-\d+\] After/);
+    });
+
+    it('should use real Supabase data', async () => {
+      // Create another test template
+      const dynamicKey = 'dynamic-test-' + Date.now();
+      const { data: dynamicTemplate } = await supabase
+        .schema('notify')
+        .from('ent_notification_template')
+        .insert({
+          template_key: dynamicKey,
+          name: 'Dynamic Test',
+          body_template: 'Status: {{ status }}, Count: {{ count }}',
+          channel_type: 'EMAIL',
+          enterprise_id: testEnterpriseId,
+          publish_status: 'PUBLISH',
+          deactivated: false
+        })
+        .select()
+        .single();
+
+      const template = `Report: {{ xnovu_render("${dynamicKey}", { status: "Active", count: 42 }) }}`;
+      const result = await renderer.render(template, {
+        enterpriseId: testEnterpriseId,
+        variables: {}
+      });
+
+      expect(result).toBe('Report: Status: Active, Count: 42');
+
+      // Clean up
+      if (dynamicTemplate) {
+        await supabase
+          .schema('notify')
+          .from('ent_notification_template')
+          .delete()
+          .eq('id', dynamicTemplate.id);
+      }
     });
   });
 
   describe('validateTemplate', () => {
     it('should validate template with valid syntax', async () => {
-      const template = 'Hello {{ name }}! {{ xnovu_render("valid-template", { key: "value" }) }}';
+      const template = `Hello {{ name }}! {{ xnovu_render("${testTemplateKey}", { name: "Test", location: "Here" }) }}`;
       
-      // Mock successful template loading
-      mockSupabase.single.mockResolvedValue({
-        data: { id: 123, body_template: 'Test', template_key: 'valid-template' },
-        error: null
-      });
-      
-      const result = await renderer.validateTemplate(template, 'test-enterprise');
+      const result = await renderer.validateTemplate(template, testEnterpriseId);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
 
     it('should detect invalid template references', async () => {
-      const template = 'Hello {{ xnovu_render("nonexistent-key", {}) }}';
+      const nonExistentKey = 'nonexistent-key-' + Date.now();
+      const template = `Hello {{ xnovu_render("${nonExistentKey}", {}) }}`;
       
-      // Mock template not found
-      mockSupabase.single.mockResolvedValue({
-        data: null,
-        error: new Error('Not found')
-      });
-      
-      const result = await renderer.validateTemplate(template, 'test-enterprise');
+      const result = await renderer.validateTemplate(template, testEnterpriseId);
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Template not found: nonexistent-key');
+      expect(result.errors).toContain(`Template not found: ${nonExistentKey}`);
     });
 
     it('should detect empty variable placeholders', async () => {
       const template = 'Hello {{ }}!';
       
-      const result = await renderer.validateTemplate(template, 'test-enterprise');
+      const result = await renderer.validateTemplate(template, testEnterpriseId);
       expect(result.valid).toBe(false);
       expect(result.errors.some(error => error.includes('Empty variable placeholder'))).toBe(true);
     });
@@ -290,39 +309,18 @@ describe('TemplateRenderer', () => {
 
   describe('cache management', () => {
     it('should cache loaded templates', async () => {
-      const mockTemplate = {
-        id: 123,
-        body_template: 'Cached template',
-        subject_template: null,
-        variables_description: null,
-        name: 'test',
-        description: null,
-        publish_status: 'PUBLISH' as const,
-        deactivated: false,
-        typ_notification_category_id: null,
-        business_id: null,
-        channel_type: 'EMAIL' as const,
-        repr: null,
-        enterprise_id: 'test-enterprise',
-        template_key: 'cached-template',
-        created_at: new Date().toISOString(),
-        created_by: null,
-        updated_at: new Date().toISOString(),
-        updated_by: null
-      };
-
-      mockSupabase.single.mockResolvedValue({
-        data: mockTemplate,
-        error: null
-      });
-
       // First call should hit database
-      await (renderer as any).loadTemplate('cached-template', 'test-enterprise');
-      expect(mockSupabase.single).toHaveBeenCalledTimes(1);
+      const start1 = Date.now();
+      await (renderer as any).loadTemplate(testTemplateKey, testEnterpriseId);
+      const duration1 = Date.now() - start1;
 
-      // Second call should use cache
-      await (renderer as any).loadTemplate('cached-template', 'test-enterprise');
-      expect(mockSupabase.single).toHaveBeenCalledTimes(1);
+      // Second call should use cache (much faster)
+      const start2 = Date.now();
+      await (renderer as any).loadTemplate(testTemplateKey, testEnterpriseId);
+      const duration2 = Date.now() - start2;
+
+      // Cache access should be significantly faster
+      expect(duration2).toBeLessThan(duration1 / 2);
     });
 
     it('should provide cache statistics', () => {
@@ -334,13 +332,9 @@ describe('TemplateRenderer', () => {
 
     it('should clear cache when requested', async () => {
       // Add something to cache first
-      (renderer as any).cache.set('test-key', {
-        body: 'test',
-        variables: {},
-        compiledAt: new Date()
-      });
-
-      expect(renderer.getCacheStats().totalCached).toBe(1);
+      await (renderer as any).loadTemplate(testTemplateKey, testEnterpriseId);
+      
+      expect(renderer.getCacheStats().totalCached).toBeGreaterThan(0);
       
       renderer.clearCache();
       expect(renderer.getCacheStats().totalCached).toBe(0);

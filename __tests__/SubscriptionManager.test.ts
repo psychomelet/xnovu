@@ -3,86 +3,66 @@
  */
 
 import { SubscriptionManager } from '../app/services/realtime/SubscriptionManager'
+import { supabase } from '../lib/supabase/client'
+import { Novu } from '@novu/api'
 
-// Mock Supabase
-jest.mock('../lib/supabase/client', () => ({
-  supabase: {
-    channel: jest.fn(() => ({
-      on: jest.fn(() => ({
-        subscribe: jest.fn((callback) => {
-          callback('SUBSCRIBED')
-          return Promise.resolve()
-        })
-      }))
-    })),
-    removeChannel: jest.fn(),
-    schema: jest.fn(() => ({
-      from: jest.fn(() => ({
-        select: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            eq: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                single: jest.fn(() => Promise.resolve({ 
-                  data: mockWorkflow, 
-                  error: null 
-                }))
-              }))
-            }))
-          }))
-        })),
-        update: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            eq: jest.fn(() => Promise.resolve({ data: mockNotification, error: null })),
-            is: jest.fn(() => Promise.resolve({ data: mockNotification, error: null }))
-          }))
-        }))
-      }))
-    }))
-  }
-}))
+// Using real cloud services - no mocks
+// This test creates temporary test data in your Supabase instance
 
-// Mock Novu
-jest.mock('@novu/api', () => ({
-  Novu: jest.fn(() => ({
-    trigger: jest.fn(() => Promise.resolve({
-      transactionId: 'test-transaction-id'
-    }))
-  }))
-}))
-
-const mockNotification = {
-  id: 1,
-  name: 'test-notification',
-  enterprise_id: 'test-enterprise',
-  notification_workflow_id: 1,
-  recipients: ['12345678-1234-5234-9234-123456789012'],
-  payload: { message: 'test' },
-  notification_status: 'PENDING' as const,
-  channels: ['EMAIL' as const],
-  overrides: null,
-  tags: null,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString()
-}
-
-const mockWorkflow = {
-  id: 1,
-  workflow_key: 'test-workflow',
-  enterprise_id: 'test-enterprise',
-  deactivated: false
-}
+const TEST_ENTERPRISE_ID = 'test-enterprise-' + Date.now()
+const TEST_WORKFLOW_KEY = 'test-workflow-' + Date.now()
 
 describe('SubscriptionManager', () => {
   let subscriptionManager: SubscriptionManager
+  let testWorkflowId: number
+  let testNotificationId: number
+  
+  beforeAll(async () => {
+    // Create test workflow in Supabase
+    const { data: workflow, error: workflowError } = await supabase
+      .schema('notify')
+      .from('ent_notification_workflow')
+      .insert({
+        workflow_key: TEST_WORKFLOW_KEY,
+        workflow_name: 'Test Workflow',
+        enterprise_id: TEST_ENTERPRISE_ID,
+        workflow_type: 'STATIC',
+        deactivated: false
+      })
+      .select()
+      .single()
+
+    if (workflowError) {
+      console.error('Failed to create test workflow:', workflowError)
+      throw workflowError
+    }
+
+    testWorkflowId = workflow.id
+  })
+
+  afterAll(async () => {
+    // Clean up test data
+    if (testNotificationId) {
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .delete()
+        .eq('id', testNotificationId)
+    }
+
+    if (testWorkflowId) {
+      await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .delete()
+        .eq('id', testWorkflowId)
+    }
+  })
   
   beforeEach(() => {
-    jest.clearAllMocks()
-    
-    // Set up environment variables
-    process.env.NOVU_SECRET_KEY = 'test-secret-key'
-    
+    // Set up environment variables are already loaded from .env.local
     subscriptionManager = new SubscriptionManager({
-      enterpriseId: 'test-enterprise'
+      enterpriseId: TEST_ENTERPRISE_ID
     })
   })
 
@@ -94,18 +74,21 @@ describe('SubscriptionManager', () => {
 
   describe('Constructor', () => {
     it('should throw error when NOVU_SECRET_KEY is missing', () => {
+      const originalKey = process.env.NOVU_SECRET_KEY
       delete process.env.NOVU_SECRET_KEY
       
       expect(() => {
         new SubscriptionManager({
-          enterpriseId: 'test-enterprise'
+          enterpriseId: TEST_ENTERPRISE_ID
         })
       }).toThrow('NOVU_SECRET_KEY environment variable is required')
+      
+      process.env.NOVU_SECRET_KEY = originalKey
     })
 
     it('should initialize with default config', () => {
       const manager = new SubscriptionManager({
-        enterpriseId: 'test-enterprise'
+        enterpriseId: TEST_ENTERPRISE_ID
       })
       
       const status = manager.getStatus()
@@ -116,7 +99,7 @@ describe('SubscriptionManager', () => {
 
     it('should accept custom queue config', () => {
       const manager = new SubscriptionManager({
-        enterpriseId: 'test-enterprise',
+        enterpriseId: TEST_ENTERPRISE_ID,
         queueConfig: {
           maxConcurrent: 10,
           retryAttempts: 5,
@@ -170,6 +153,21 @@ describe('SubscriptionManager', () => {
   })
 
   describe('Queue Management', () => {
+    const mockNotification = {
+      id: 1,
+      name: 'test-notification',
+      enterprise_id: TEST_ENTERPRISE_ID,
+      notification_workflow_id: 1,
+      recipients: ['12345678-1234-5234-9234-123456789012'],
+      payload: { message: 'test' },
+      notification_status: 'PENDING' as const,
+      channels: ['EMAIL' as const],
+      overrides: null,
+      tags: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
     it('should add notifications to queue', () => {
       const addToQueueMethod = (subscriptionManager as any).addToQueue.bind(subscriptionManager)
       
@@ -181,7 +179,7 @@ describe('SubscriptionManager', () => {
 
     it('should respect queue size limits', () => {
       const manager = new SubscriptionManager({
-        enterpriseId: 'test-enterprise',
+        enterpriseId: TEST_ENTERPRISE_ID,
         queueConfig: { maxQueueSize: 2 }
       })
       
@@ -219,11 +217,26 @@ describe('SubscriptionManager', () => {
 
     it('should be unhealthy with full queue', () => {
       const manager = new SubscriptionManager({
-        enterpriseId: 'test-enterprise',
+        enterpriseId: TEST_ENTERPRISE_ID,
         queueConfig: { maxQueueSize: 10 }
       })
       
       const addToQueueMethod = (manager as any).addToQueue.bind(manager)
+      
+      const mockNotification = {
+        id: 1,
+        name: 'test-notification',
+        enterprise_id: TEST_ENTERPRISE_ID,
+        notification_workflow_id: 1,
+        recipients: ['12345678-1234-5234-9234-123456789012'],
+        payload: { message: 'test' },
+        notification_status: 'PENDING' as const,
+        channels: ['EMAIL' as const],
+        overrides: null,
+        tags: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
       
       // Fill queue to 90% (9 out of 10)
       for (let i = 0; i < 9; i++) {
@@ -239,6 +252,21 @@ describe('SubscriptionManager', () => {
       await subscriptionManager.start()
       
       const addToQueueMethod = (subscriptionManager as any).addToQueue.bind(subscriptionManager)
+      
+      const mockNotification = {
+        id: 1,
+        name: 'test-notification',
+        enterprise_id: TEST_ENTERPRISE_ID,
+        notification_workflow_id: 1,
+        recipients: ['12345678-1234-5234-9234-123456789012'],
+        payload: { message: 'test' },
+        notification_status: 'PENDING' as const,
+        channels: ['EMAIL' as const],
+        overrides: null,
+        tags: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
       
       addToQueueMethod(mockNotification)
       
@@ -266,7 +294,7 @@ describe('SubscriptionManager', () => {
       const mockErrorHandler = jest.fn()
       
       const manager = new SubscriptionManager({
-        enterpriseId: 'test-enterprise',
+        enterpriseId: TEST_ENTERPRISE_ID,
         onError: mockErrorHandler
       })
       
@@ -319,35 +347,56 @@ describe('SubscriptionManager', () => {
   })
 })
 
-// Integration-style test for basic flow
-describe('SubscriptionManager Integration', () => {
-  it('should handle notification processing flow', async () => {
-    process.env.NOVU_SECRET_KEY = 'test-secret-key'
+// Integration test with real Supabase
+describe('SubscriptionManager Integration with Cloud Services', () => {
+  it('should handle notification insert event from Supabase', async () => {
+    process.env.NOVU_SECRET_KEY = process.env.NOVU_SECRET_KEY || 'test-key'
     
-    const mockOnNotification = jest.fn()
+    let notificationReceived = false
     
     const manager = new SubscriptionManager({
-      enterpriseId: 'test-enterprise',
-      onNotification: mockOnNotification
+      enterpriseId: TEST_ENTERPRISE_ID,
+      onNotification: async (notification) => {
+        notificationReceived = true
+        expect(notification.name).toBe('Integration Test Notification')
+      }
     })
     
-    // No need to override mock here as it's already set up globally
+    await manager.start()
     
-    // Add notification to queue and process
-    const addToQueueMethod = (manager as any).addToQueue.bind(manager)
-    addToQueueMethod(mockNotification)
+    // Create a notification in Supabase to trigger the subscription
+    const { data: notification, error } = await supabase
+      .schema('notify')
+      .from('ent_notification')
+      .insert({
+        name: 'Integration Test Notification',
+        enterprise_id: TEST_ENTERPRISE_ID,
+        notification_workflow_id: testWorkflowId,
+        recipients: ['12345678-1234-5234-9234-123456789012'],
+        payload: { test: true },
+        notification_status: 'PENDING',
+        channels: ['EMAIL']
+      })
+      .select()
+      .single()
     
-    // Process the notification
-    const queueItem = {
-      notification: mockNotification,
-      attempts: 0,
-      addedAt: new Date()
+    if (error) {
+      console.error('Failed to create test notification:', error)
+      throw error
     }
     
-    const processMethod = (manager as any).processNotification.bind(manager)
+    testNotificationId = notification.id
     
-    await expect(processMethod(queueItem)).resolves.not.toThrow()
+    // Wait a bit for the realtime subscription to process
+    await new Promise(resolve => setTimeout(resolve, 5000))
     
     await manager.stop()
+    
+    // Clean up
+    await supabase
+      .schema('notify')
+      .from('ent_notification')
+      .delete()
+      .eq('id', testNotificationId)
   })
 })

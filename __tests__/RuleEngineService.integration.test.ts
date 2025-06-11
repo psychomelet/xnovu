@@ -1,15 +1,13 @@
 import { RuleEngineService, defaultRuleEngineConfig } from '@/app/services/RuleEngineService';
 import type { RuleEngineConfig } from '@/types/rule-engine';
 
-// Only mock external APIs - let Redis/BullMQ/cron work normally
-jest.mock('@supabase/supabase-js');
-jest.mock('@novu/api');
+// No mocking - use real cloud services for integration tests
 
 describe('RuleEngineService - Integration Tests', () => {
   let ruleEngine: RuleEngineService;
   const testConfig: RuleEngineConfig = {
     ...defaultRuleEngineConfig,
-    redisUrl: 'redis://localhost:6380', // Use test Redis port
+    redisUrl: process.env.REDIS_URL!, // Use cloud Redis from .env.local
     maxConcurrentJobs: 2, // Reduce for testing
     scheduledNotificationInterval: 10000, // Reduce interval for testing
     scheduledNotificationBatchSize: 10, // Reduce batch size
