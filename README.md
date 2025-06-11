@@ -74,12 +74,15 @@ Both servers must be running for full functionality.
 ## Available Scripts
 
 ```bash
-pnpm dev        # Start development server
-pnpm build      # Build for production
-pnpm start      # Start production server
-pnpm lint       # Run ESLint
-pnpm test       # Run tests
-pnpm xnovu      # CLI commands for utilities
+pnpm dev              # Start development server
+pnpm build            # Build for production
+pnpm start            # Start production server
+pnpm lint             # Run ESLint
+pnpm test             # Run unit tests
+pnpm test:integration # Run integration tests with Docker Redis
+pnpm test:setup       # Start Docker Redis for testing
+pnpm test:teardown    # Stop Docker Redis
+pnpm xnovu            # CLI commands for utilities
 ```
 
 ## Features
@@ -212,6 +215,7 @@ Create rules in your database with the following structure:
 
 - [Rule Engine Implementation Guide](docs/rule-engine-implementation.md)
 - [Rule Engine API Reference](docs/rule-engine-api.md)
+- [Testing Guide](docs/testing-guide.md)
 - [Usage Examples](examples/rule-engine-usage.ts)
 
 ## Learn More
