@@ -262,8 +262,12 @@ export { defaultRuleEngineConfig };
 
 /**
  * Auto-initialize if this module is imported and we're in a server context
+ * Only auto-initialize in production runtime, not during build/dev/test
  */
-if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test') {
+if (typeof window === 'undefined' && 
+    process.env.NODE_ENV === 'production' &&
+    !process.env.NEXT_PHASE && // Skip during Next.js build process
+    !process.env.CI) { // Skip in CI environment
   // Auto-initialize with a delay to ensure all modules are loaded
   setTimeout(() => {
     initializeRuleEngine().catch(error => {

@@ -38,6 +38,11 @@ jobs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
 
+    - name: Install Redis CLI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y redis-tools
+
     - name: Run linter
       run: pnpm lint
 

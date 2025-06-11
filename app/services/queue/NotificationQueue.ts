@@ -20,8 +20,10 @@ export class NotificationQueue {
   private novu: Novu;
 
   constructor(config: RuleEngineConfig) {
-    // Redis connection
-    this.redis = new IORedis(config.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379');
+    // Redis connection with BullMQ-specific configuration
+    this.redis = new IORedis(config.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379', {
+      maxRetriesPerRequest: null, // Required for BullMQ
+    });
     
     // Initialize services
     this.ruleService = new RuleService();
