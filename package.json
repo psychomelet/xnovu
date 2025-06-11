@@ -14,7 +14,7 @@
     "test:setup": "bash scripts/test-setup.sh",
     "test:teardown": "bash scripts/test-teardown.sh",
     "test:only": "jest",
-    "xnovu": "tsx cli.ts"
+    "xnovu": "tsx cli/index.ts"
   },
   "dependencies": {
     "@novu/framework": "latest",

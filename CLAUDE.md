@@ -46,7 +46,45 @@ pnpm start
 
 # Lint code
 pnpm lint
+
+# Docker commands with auto-tagging
+pnpm xnovu docker:build                    # Build with auto-generated tags
+pnpm xnovu docker:build --platform linux/arm64  # Multi-platform build
+pnpm xnovu docker:run -d                   # Run in detached mode
+pnpm xnovu docker:push --dry-run           # Preview what would be pushed
+pnpm xnovu docker:push -r custom-registry  # Push to custom registry
+pnpm xnovu docker:stop                     # Stop and remove container
 ```
+
+## Docker Auto-Tagging System
+
+XNovu uses an intelligent auto-tagging system based on git state:
+
+### Tag Generation
+- **Commit SHA**: Always includes short git commit hash (e.g., `6f826ed`)
+- **Git Tag**: Includes nearest semantic version tag if available (e.g., `v1.2.3`)
+- **Latest**: Always includes `latest` tag
+- **Dirty State**: Appends `-dirty` suffix if working tree has uncommitted changes
+
+### Examples
+```bash
+# Clean working tree with git tag v1.0.0
+Local tag: xnovu:6f826ed
+Remote tags: 6f826ed, v1.0.0, latest
+
+# Dirty working tree (uncommitted changes)
+Local tag: xnovu:6f826ed-dirty
+Remote tags: 6f826ed, latest
+
+# Clean working tree without git tags
+Local tag: xnovu:6f826ed
+Remote tags: 6f826ed, latest
+```
+
+### Registry Configuration
+- **Default Registry**: `registry.cn-shanghai.aliyuncs.com/yogosystem`
+- **Image Name**: `xnovu`
+- **Override Registry**: Use `-r` flag with push command
 
 ## Project Structure
 
