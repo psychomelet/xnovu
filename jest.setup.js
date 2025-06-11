@@ -1,4 +1,13 @@
 import '@testing-library/jest-dom'
+import { config } from 'dotenv'
+import { existsSync } from 'fs'
+import { join } from 'path'
+
+// Load environment variables from .env.local if it exists
+const envLocalPath = join(process.cwd(), '.env.local')
+if (existsSync(envLocalPath)) {
+  config({ path: envLocalPath, override: true })
+}
 
 // Environment variables come from:
 // - GitHub Actions: set via secrets in workflow env section
@@ -14,6 +23,9 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
 }
 if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'your_anon_key_here'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) {
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY = 'your_service_role_key_here'
 }
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres.your-project-id:password@aws-0-region.pooler.supabase.com:6543/postgres'

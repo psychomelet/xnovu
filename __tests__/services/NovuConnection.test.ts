@@ -16,10 +16,11 @@ describe('Novu API Connection', () => {
       const response = await novu.subscribers.search({});
       
       expect(response).toBeDefined();
-      expect(response.data).toBeDefined();
-      expect(Array.isArray(response.data)).toBe(true);
+      expect(response.result).toBeDefined();
+      expect(response.result.data).toBeDefined();
+      expect(Array.isArray(response.result.data)).toBe(true);
       
-      console.log(`✅ Connected to Novu API - found ${response.data.length} subscribers`);
+      console.log(`✅ Connected to Novu API - found ${response.result.data.length} subscribers`);
     }, 15000);
 
     it('should fail gracefully with invalid credentials', async () => {
@@ -45,17 +46,18 @@ describe('Novu API Connection', () => {
       const response = await novu.subscribers.search({});
       
       expect(response).toBeDefined();
-      expect(response.data).toBeDefined();
-      expect(Array.isArray(response.data)).toBe(true);
+      expect(response.result).toBeDefined();
+      expect(response.result.data).toBeDefined();
+      expect(Array.isArray(response.result.data)).toBe(true);
       
-      console.log(`✅ Subscribers search accessible - found ${response.data.length} subscribers`);
+      console.log(`✅ Subscribers search accessible - found ${response.result.data.length} subscribers`);
       
       // If there are subscribers, verify structure
-      if (response.data.length > 0) {
-        const firstSubscriber = response.data[0];
-        expect(firstSubscriber).toHaveProperty('_id');
+      if (response.result.data.length > 0) {
+        const firstSubscriber = response.result.data[0];
+        expect(firstSubscriber).toHaveProperty('id');
         expect(firstSubscriber).toHaveProperty('subscriberId');
-        expect(firstSubscriber).toHaveProperty('_environmentId');
+        expect(firstSubscriber).toHaveProperty('environmentId');
       }
     }, 15000);
   });
