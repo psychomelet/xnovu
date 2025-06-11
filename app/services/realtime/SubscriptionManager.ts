@@ -74,7 +74,7 @@ export class SubscriptionManager {
       ...config,
     }
     
-    this.novu = new Novu(novuSecretKey)
+    this.novu = new Novu({ secretKey: novuSecretKey })
   }
 
   /**
@@ -382,8 +382,9 @@ export class SubscriptionManager {
       const validatedRecipients = this.validateAndConvertRecipients(notification.recipients)
 
       // Trigger Novu workflow with proper type safety
-      const result = await this.novu.trigger(workflow.workflow_key, {
+      const result = await this.novu.trigger({
         to: validatedRecipients.map(id => ({ subscriberId: id })),
+        workflowId: workflow.workflow_key,
         payload: notification.payload as any,
         overrides: notification.overrides as any || {},
         ...(notification.tags && { tags: notification.tags })
