@@ -10,6 +10,17 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
@@ -27,13 +38,30 @@ jobs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
 
+    - name: Install Redis CLI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y redis-tools
+
     - name: Run linter
       run: pnpm lint
 
     - name: Run type check
       run: pnpm build
 
+    - name: Verify Redis connection
+      run: |
+        redis-cli -h localhost -p 6379 ping
+        echo "Redis is ready"
+
     - name: Run tests
       run: pnpm test
       env:
         CI: true
+        REDIS_URL: redis://localhost:6379
+        RULE_ENGINE_ENABLED: true
+        RULE_ENGINE_TIMEZONE: UTC
+        RULE_ENGINE_MAX_CONCURRENT_JOBS: 5
+        RULE_ENGINE_RETRY_ATTEMPTS: 2
+        RULE_ENGINE_RETRY_DELAY: 1000
+        NODE_ENV: test

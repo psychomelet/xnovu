@@ -8,10 +8,7 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  testEnvironment: 'jest-environment-jsdom',
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1',
-  },
+  testEnvironment: 'jest-environment-node', // Use node environment for Redis tests
   testMatch: [
     '**/__tests__/**/*.(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)'
@@ -29,6 +26,16 @@ const customJestConfig = {
       lines: 70,
       statements: 70,
     },
+  },
+  // Transform ES modules from node_modules
+  transformIgnorePatterns: [
+    'node_modules/(?!(@supabase|@novu)/.*)'
+  ],
+  // Module mapping - only mock external APIs, use real Redis/BullMQ
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
+    '^@supabase/supabase-js$': '<rootDir>/__mocks__/@supabase/supabase-js.js',
+    '^@novu/api$': '<rootDir>/__mocks__/@novu/api.js',
   },
 }
 
