@@ -307,10 +307,40 @@ const scheduledStatus = ruleEngine.scheduledNotificationManager.getStatus();
 
 ## Testing
 
+### Unit Tests
 See the test files for comprehensive examples:
-- `__tests__/RuleService.test.ts`
-- `__tests__/CronManager.test.ts`
-- `__tests__/NotificationQueue.test.ts`
+- `__tests__/RuleEngineService.test.ts` - Main service orchestrator tests
+- `__tests__/SubscriptionManager.test.ts` - Realtime subscription tests
+- `__tests__/TemplateRenderer.test.ts` - Template rendering tests
+
+### Integration Tests
+Redis-backed integration tests (run automatically in CI):
+- `__tests__/integration/RuleEngine.integration.test.ts` - Full Redis integration testing
+- Tests real Redis connectivity, queue operations, and error handling
+- Automatically skipped locally unless `REDIS_URL` environment variable is set
+
+### Running Tests
+
+```bash
+# Run all tests (skips integration tests locally)
+pnpm test
+
+# Run unit tests only
+pnpm test __tests__/RuleEngineService.test.ts
+
+# Run integration tests with Redis (requires Redis server)
+REDIS_URL=redis://localhost:6379 pnpm test __tests__/integration/
+
+# Run all tests in CI mode (includes integration tests)
+CI=true REDIS_URL=redis://localhost:6379 pnpm test
+```
+
+### CI/CD Testing
+GitHub Actions automatically:
+- Starts Redis 7 service container
+- Runs full test suite including integration tests
+- Validates Redis connectivity and queue operations
+- Tests error handling and performance scenarios
 
 ## Future Enhancements
 
