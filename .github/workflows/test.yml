@@ -48,6 +48,21 @@ jobs:
 
     - name: Run type check
       run: pnpm build
+      env:
+        # Provide environment variables for Next.js build
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project-id.supabase.co' }}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your_anon_key_here' }}
+        NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER || 'your_app_identifier' }}
+        NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY || 'your_cloud_secret_key' }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://postgres.your-project-id:your-password@aws-0-region.pooler.supabase.com:6543/postgres' }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'your_service_role_key_here' }}
+        # Rule engine settings
+        REDIS_URL: redis://localhost:6379
+        RULE_ENGINE_ENABLED: true
+        RULE_ENGINE_TIMEZONE: UTC
+        RULE_ENGINE_MAX_CONCURRENT_JOBS: 10
+        RULE_ENGINE_RETRY_ATTEMPTS: 3
+        RULE_ENGINE_RETRY_DELAY: 5000
 
     - name: Verify Redis connection
       run: |
