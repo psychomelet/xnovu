@@ -55,9 +55,8 @@ jobs:
         echo "Redis is ready"
 
     - name: Run connection integration tests
-      run: pnpm test __tests__/services/NovuConnection.test.ts __tests__/services/SupabaseConnection.test.ts
+      run: pnpm test -- __tests__/services/
       env:
-        CI: true
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
