@@ -330,7 +330,7 @@ export class SubscriptionManager {
 
     try {
       // Update status to PROCESSING
-      await supabase
+      const updateQuery = supabase
         .schema('notify')
         .from('ent_notification')
         .update({ 
@@ -339,17 +339,36 @@ export class SubscriptionManager {
           updated_at: new Date().toISOString()
         })
         .eq('id', notification.id)
-        .eq('enterprise_id', notification.enterprise_id)
+
+      // Only filter by enterprise_id if it's not null
+      if (notification.enterprise_id !== null) {
+        updateQuery.eq('enterprise_id', notification.enterprise_id)
+      } else {
+        updateQuery.is('enterprise_id', null)
+      }
+
+      await updateQuery
 
       // Get workflow configuration
-      const { data: workflow, error: workflowError } = await supabase
+      if (notification.notification_workflow_id === null) {
+        throw new Error('Notification workflow ID cannot be null')
+      }
+
+      const workflowQuery = supabase
         .schema('notify')
         .from('ent_notification_workflow')
         .select('*')
         .eq('id', notification.notification_workflow_id)
-        .eq('enterprise_id', notification.enterprise_id)
         .eq('deactivated', false)
-        .single()
+
+      // Only filter by enterprise_id if it's not null
+      if (notification.enterprise_id !== null) {
+        workflowQuery.eq('enterprise_id', notification.enterprise_id)
+      } else {
+        workflowQuery.is('enterprise_id', null)
+      }
+
+      const { data: workflow, error: workflowError } = await workflowQuery.single()
 
       if (workflowError) {
         throw workflowError
@@ -371,7 +390,7 @@ export class SubscriptionManager {
       })
 
       // Update status to SENT with transaction ID
-      await supabase
+      const sentUpdateQuery = supabase
         .schema('notify')
         .from('ent_notification')
         .update({
@@ -381,7 +400,15 @@ export class SubscriptionManager {
           updated_at: new Date().toISOString()
         })
         .eq('id', notification.id)
-        .eq('enterprise_id', notification.enterprise_id)
+
+      // Only filter by enterprise_id if it's not null
+      if (notification.enterprise_id !== null) {
+        sentUpdateQuery.eq('enterprise_id', notification.enterprise_id)
+      } else {
+        sentUpdateQuery.is('enterprise_id', null)
+      }
+
+      await sentUpdateQuery
 
       this.log('info', 'Notification processed successfully', {
         notificationId: notification.id,
@@ -431,7 +458,7 @@ export class SubscriptionManager {
       }, retryDelay)
     } else {
       // Max attempts reached, mark as failed
-      await supabase
+      const failedUpdateQuery = supabase
         .schema('notify')
         .from('ent_notification')
         .update({
@@ -445,7 +472,15 @@ export class SubscriptionManager {
           updated_at: new Date().toISOString()
         })
         .eq('id', item.notification.id)
-        .eq('enterprise_id', item.notification.enterprise_id)
+
+      // Only filter by enterprise_id if it's not null
+      if (item.notification.enterprise_id !== null) {
+        failedUpdateQuery.eq('enterprise_id', item.notification.enterprise_id)
+      } else {
+        failedUpdateQuery.is('enterprise_id', null)
+      }
+
+      await failedUpdateQuery
       
       this.log('error', 'Notification marked as failed after max attempts', {
         notificationId: item.notification.id,
@@ -525,7 +560,7 @@ export class SubscriptionManager {
     for (const notification of failedNotifications || []) {
       try {
         // Reset to pending and add to queue
-        await supabase
+        const retryUpdateQuery = supabase
           .schema('notify')
           .from('ent_notification')
           .update({
@@ -534,7 +569,15 @@ export class SubscriptionManager {
             updated_at: new Date().toISOString()
           })
           .eq('id', notification.id)
-          .eq('enterprise_id', notification.enterprise_id)
+
+        // Only filter by enterprise_id if it's not null
+        if (notification.enterprise_id !== null) {
+          retryUpdateQuery.eq('enterprise_id', notification.enterprise_id)
+        } else {
+          retryUpdateQuery.is('enterprise_id', null)
+        }
+
+        await retryUpdateQuery
         
         this.addToQueue({
           ...notification,
