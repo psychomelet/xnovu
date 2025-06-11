@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client'
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { Novu } from '@novu/node'
+import { Novu } from '@novu/api'
 import type { Database } from '@/lib/supabase/database.types'
 
 type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert']
@@ -74,7 +74,7 @@ export class SubscriptionManager {
       ...config,
     }
     
-    this.novu = new Novu(novuSecretKey)
+    this.novu = new Novu({ secretKey: novuSecretKey })
   }
 
   /**
@@ -382,8 +382,9 @@ export class SubscriptionManager {
       const validatedRecipients = this.validateAndConvertRecipients(notification.recipients)
 
       // Trigger Novu workflow with proper type safety
-      const result = await this.novu.trigger(workflow.workflow_key, {
+      const result = await this.novu.trigger({
         to: validatedRecipients.map(id => ({ subscriberId: id })),
+        workflowId: workflow.workflow_key,
         payload: notification.payload as any,
         overrides: notification.overrides as any || {},
         ...(notification.tags && { tags: notification.tags })
@@ -395,7 +396,7 @@ export class SubscriptionManager {
         .from('ent_notification')
         .update({
           notification_status: 'SENT',
-          transaction_id: result.data?.transactionId,
+          transaction_id: (result as any).transactionId || null,
           processed_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
@@ -413,7 +414,7 @@ export class SubscriptionManager {
       this.log('info', 'Notification processed successfully', {
         notificationId: notification.id,
         workflowId: workflow.id,
-        transactionId: result.data?.transactionId
+        transactionId: (result as any).transactionId
       })
 
       // Call custom handler if provided
