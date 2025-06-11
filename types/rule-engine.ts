@@ -64,6 +64,8 @@ export interface RuleEngineConfig {
   maxConcurrentJobs: number;
   jobRetryAttempts: number;
   jobRetryDelay: number;
+  scheduledNotificationInterval: number;
+  scheduledNotificationBatchSize: number;
 }
 
 // Error types

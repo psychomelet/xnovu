@@ -8,14 +8,10 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  testEnvironment: 'jest-environment-jsdom',
+  testEnvironment: 'jest-environment-node', // Use node environment for Redis tests
   testMatch: [
     '**/__tests__/**/*.(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)'
-  ],
-  testPathIgnorePatterns: [
-    // Skip integration tests locally unless Redis is explicitly available
-    ...(process.env.CI || process.env.REDIS_URL ? [] : ['.*\\.integration\\.test\\..*'])
   ],
   collectCoverageFrom: [
     'app/**/*.{ts,tsx}',
@@ -33,16 +29,13 @@ const customJestConfig = {
   },
   // Transform ES modules from node_modules
   transformIgnorePatterns: [
-    'node_modules/(?!(@supabase|@novu|bullmq|ioredis)/.*)'
+    'node_modules/(?!(@supabase|@novu)/.*)'
   ],
-  // Mock problematic modules
+  // Module mapping - only mock external APIs, use real Redis/BullMQ
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^@supabase/supabase-js$': '<rootDir>/__mocks__/@supabase/supabase-js.js',
     '^@novu/api$': '<rootDir>/__mocks__/@novu/api.js',
-    '^bullmq$': '<rootDir>/__mocks__/bullmq.js',
-    '^ioredis$': '<rootDir>/__mocks__/ioredis.js',
-    '^node-cron$': '<rootDir>/__mocks__/node-cron.js',
   },
 }
 

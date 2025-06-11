@@ -228,4 +228,6 @@ export const defaultRuleEngineConfig: RuleEngineConfig = {
   maxConcurrentJobs: parseInt(process.env.RULE_ENGINE_MAX_CONCURRENT_JOBS || '10'),
   jobRetryAttempts: parseInt(process.env.RULE_ENGINE_RETRY_ATTEMPTS || '3'),
   jobRetryDelay: parseInt(process.env.RULE_ENGINE_RETRY_DELAY || '5000'),
+  scheduledNotificationInterval: parseInt(process.env.RULE_ENGINE_SCHEDULED_INTERVAL || '60000'),
+  scheduledNotificationBatchSize: parseInt(process.env.RULE_ENGINE_SCHEDULED_BATCH_SIZE || '100'),
 };
