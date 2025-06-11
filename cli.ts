@@ -6,9 +6,11 @@ import path from 'path';
 import fs from 'fs';
 import { config } from 'dotenv';
 
-// Always load .env and .env.local files
-config();
-config({ path: '.env.local' });
+// Load .env files with proper override precedence
+// Load .env first (base/default values)
+config({ path: '.env' });
+// Load .env.local second with override enabled (overrides .env values)
+config({ path: '.env.local', override: true });
 
 const program = new Command();
 
@@ -225,7 +227,7 @@ program
       console.log('\n📁 Checking required files...');
       const requiredFiles = [
         'lib/supabase/client.ts',
-        'lib/supabase/database.types.ts',
+        'lib/supabase/types.ts',
         'app/novu/workflows/index.ts'
       ];
 
