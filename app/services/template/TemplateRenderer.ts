@@ -116,7 +116,7 @@ export class TemplateRenderer {
    * Syntax: {{ xnovu_render('template_key', { variable: 'value' }) }}
    */
   private parseXNovuRenderSyntax(template: string): XNovuRenderMatch[] {
-    const regex = /\{\{\s*xnovu_render\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*(\{[^}]*\}|\{[^{}]*\{[^}]*\}[^}]*\})\s*\)\s*\}\}/g;
+    const regex = /\{\{\s*xnovu_render\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*(\{(?:[^{}]|\{[^}]*\})*\})\s*\)\s*\}\}/g;
     const matches: XNovuRenderMatch[] = [];
     let match;
 

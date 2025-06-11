@@ -1,22 +1,17 @@
 import { TemplateRenderer } from '../app/services/template/TemplateRenderer';
 
+// Create a mock supabase instance
+const mockSupabaseInstance = {
+  schema: jest.fn(() => mockSupabaseInstance),
+  from: jest.fn(() => mockSupabaseInstance),
+  select: jest.fn(() => mockSupabaseInstance),
+  eq: jest.fn(() => mockSupabaseInstance),
+  single: jest.fn()
+};
+
 // Mock Supabase client
 jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            eq: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                single: jest.fn()
-              }))
-            }))
-          }))
-        }))
-      }))
-    }))
-  }))
+  createClient: jest.fn(() => mockSupabaseInstance)
 }));
 
 describe('TemplateRenderer', () => {
@@ -24,9 +19,11 @@ describe('TemplateRenderer', () => {
   let mockSupabase: any;
 
   beforeEach(() => {
-    // Setup mock Supabase client
-    const { createClient } = require('@supabase/supabase-js');
-    mockSupabase = createClient();
+    // Reset all mocks
+    jest.clearAllMocks();
+    
+    // Use the global mock instance
+    mockSupabase = mockSupabaseInstance;
     
     renderer = new TemplateRenderer('http://localhost:54321', 'test-key');
   });
@@ -46,7 +43,7 @@ describe('TemplateRenderer', () => {
         templateKey: 'welcome-header',
         variables: { name: 'John' },
         startIndex: 6,
-        endIndex: 61
+        endIndex: 60
       });
     });
 
@@ -220,7 +217,7 @@ describe('TemplateRenderer', () => {
         updated_by: null
       };
 
-      mockSupabase.from().select().eq().eq().eq().eq().single.mockResolvedValue({
+      mockSupabase.single.mockResolvedValue({
         data: mockTemplate,
         error: null
       });
@@ -237,7 +234,7 @@ describe('TemplateRenderer', () => {
 
     it('should handle template loading errors gracefully', async () => {
       // Mock database error
-      mockSupabase.from().select().eq().eq().eq().eq().single.mockResolvedValue({
+      mockSupabase.single.mockResolvedValue({
         data: null,
         error: new Error('Template not found')
       });
@@ -258,7 +255,7 @@ describe('TemplateRenderer', () => {
       const template = 'Hello {{ name }}! {{ xnovu_render("valid-template", { key: "value" }) }}';
       
       // Mock successful template loading
-      mockSupabase.from().select().eq().eq().eq().eq().single.mockResolvedValue({
+      mockSupabase.single.mockResolvedValue({
         data: { id: 123, body_template: 'Test', template_key: 'valid-template' },
         error: null
       });
@@ -272,7 +269,7 @@ describe('TemplateRenderer', () => {
       const template = 'Hello {{ xnovu_render("nonexistent-key", {}) }}';
       
       // Mock template not found
-      mockSupabase.from().select().eq().eq().eq().eq().single.mockResolvedValue({
+      mockSupabase.single.mockResolvedValue({
         data: null,
         error: new Error('Not found')
       });
@@ -314,18 +311,18 @@ describe('TemplateRenderer', () => {
         updated_by: null
       };
 
-      mockSupabase.from().select().eq().eq().eq().eq().single.mockResolvedValue({
+      mockSupabase.single.mockResolvedValue({
         data: mockTemplate,
         error: null
       });
 
       // First call should hit database
       await (renderer as any).loadTemplate('cached-template', 'test-enterprise');
-      expect(mockSupabase.from().select().eq().eq().eq().eq().single).toHaveBeenCalledTimes(1);
+      expect(mockSupabase.single).toHaveBeenCalledTimes(1);
 
       // Second call should use cache
       await (renderer as any).loadTemplate('cached-template', 'test-enterprise');
-      expect(mockSupabase.from().select().eq().eq().eq().eq().single).toHaveBeenCalledTimes(1);
+      expect(mockSupabase.single).toHaveBeenCalledTimes(1);
     });
 
     it('should provide cache statistics', () => {

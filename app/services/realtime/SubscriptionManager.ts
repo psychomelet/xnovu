@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client'
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { Novu } from '@novu/node'
+import { Novu } from '@novu/api'
 import type { Database } from '@/lib/supabase/database.types'
 
 type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert']
