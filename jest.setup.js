@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom'
-import { config } from 'dotenv'
 
-// Load environment variables from .env.local for real connection tests
-config({ path: '.env.local' })
+// Environment variables come from:
+// - GitHub Actions: set via secrets in workflow env section
+// - Local development: loaded from .env.local by Next.js or manual export
 
-// Only set fallback mock environment variables if not already set
+// Only set fallback environment variables if not already set
+// These provide graceful fallbacks for missing credentials
 if (!process.env.NOVU_SECRET_KEY) {
   process.env.NOVU_SECRET_KEY = 'test-secret-key'
 }
