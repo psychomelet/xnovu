@@ -13,7 +13,7 @@ A comprehensive notification system built with Next.js and Novu, featuring an ad
 - **Tailwind CSS** - Utility-first CSS framework
 - **pnpm** - Fast, disk space efficient package manager
 
-## ⚡ New: Phase 3 Rule Engine
+## ⚡ New: Rule Engine
 
 The rule engine provides automated notification processing with:
 
@@ -90,7 +90,7 @@ pnpm xnovu      # CLI commands for utilities
 - Real-time connection status monitoring
 - Type-safe workflow definitions with Zod
 
-### Rule Engine (Phase 3)
+### Rule Engine
 - **Cron-based Rules** - Automated notifications using cron expressions
 - **Scheduled Notifications** - Time-specific notification delivery
 - **Enterprise Isolation** - Multi-tenant data separation
