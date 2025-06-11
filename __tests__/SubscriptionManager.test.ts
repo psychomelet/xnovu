@@ -39,10 +39,10 @@ jest.mock('../lib/supabase/client', () => ({
 }))
 
 // Mock Novu
-jest.mock('@novu/node', () => ({
+jest.mock('@novu/api', () => ({
   Novu: jest.fn(() => ({
     trigger: jest.fn(() => Promise.resolve({
-      data: { transactionId: 'test-transaction-id' }
+      transactionId: 'test-transaction-id'
     }))
   }))
 }))

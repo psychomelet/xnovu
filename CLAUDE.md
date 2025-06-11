@@ -712,12 +712,12 @@ await step.email('order-confirmation', async () => ({
 
 #### From Server-Side Code
 ```tsx
-import { Novu } from '@novu/node';
+import { Novu } from '@novu/api';
 
-const novu = new Novu(process.env.NOVU_SECRET_KEY);
+const novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY });
 
 // Basic trigger
-await novu.trigger('workflow-identifier', {
+await novu.trigger({
   to: {
     subscriberId: 'user-123', // Required
     email: 'user@example.com', // Optional subscriber data
@@ -728,6 +728,7 @@ await novu.trigger('workflow-identifier', {
     locale: 'en-US',
     data: { customField: 'value' } // Custom subscriber data
   },
+  workflowId: 'workflow-identifier',
   payload: {
     // Type-safe payload matching your workflow's payloadSchema
     orderId: 'ORD-123',
@@ -764,10 +765,11 @@ await novu.bulkTrigger([
 export async function POST(request: Request) {
   const { workflowId, subscriberId, payload } = await request.json();
 
-  const novu = new Novu(process.env.NOVU_SECRET_KEY);
+  const novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY });
 
-  await novu.trigger(workflowId, {
+  await novu.trigger({
     to: { subscriberId },
+    workflowId,
     payload
   });
 
