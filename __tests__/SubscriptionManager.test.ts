@@ -21,16 +21,19 @@ jest.mock('../lib/supabase/client', () => ({
         select: jest.fn(() => ({
           eq: jest.fn(() => ({
             eq: jest.fn(() => ({
-              single: jest.fn(() => Promise.resolve({ 
-                data: mockNotification, 
-                error: null 
+              eq: jest.fn(() => ({
+                single: jest.fn(() => Promise.resolve({ 
+                  data: mockWorkflow, 
+                  error: null 
+                }))
               }))
             }))
           }))
         })),
         update: jest.fn(() => ({
           eq: jest.fn(() => ({
-            eq: jest.fn(() => Promise.resolve({ data: mockNotification, error: null }))
+            eq: jest.fn(() => Promise.resolve({ data: mockNotification, error: null })),
+            is: jest.fn(() => Promise.resolve({ data: mockNotification, error: null }))
           }))
         }))
       }))
@@ -39,10 +42,10 @@ jest.mock('../lib/supabase/client', () => ({
 }))
 
 // Mock Novu
-jest.mock('@novu/node', () => ({
+jest.mock('@novu/api', () => ({
   Novu: jest.fn(() => ({
     trigger: jest.fn(() => Promise.resolve({
-      data: { transactionId: 'test-transaction-id' }
+      transactionId: 'test-transaction-id'
     }))
   }))
 }))
@@ -52,7 +55,7 @@ const mockNotification = {
   name: 'test-notification',
   enterprise_id: 'test-enterprise',
   notification_workflow_id: 1,
-  recipients: ['12345678-1234-1234-1234-123456789012'],
+  recipients: ['12345678-1234-5234-9234-123456789012'],
   payload: { message: 'test' },
   notification_status: 'PENDING' as const,
   channels: ['EMAIL' as const],
@@ -129,8 +132,8 @@ describe('SubscriptionManager', () => {
   describe('Recipient Validation', () => {
     it('should validate UUID format correctly', async () => {
       const validUUIDs = [
-        '12345678-1234-1234-1234-123456789012',
-        'a1b2c3d4-e5f6-1234-8901-abcdef123456'
+        '12345678-1234-5234-9234-123456789012',
+        'a1b2c3d4-e5f6-5234-9901-abcdef123456'
       ]
       
       // Use reflection to access private method for testing
@@ -208,8 +211,10 @@ describe('SubscriptionManager', () => {
   })
 
   describe('Health Checks', () => {
-    it('should be healthy with normal queue', () => {
+    it('should be healthy with normal queue when active', async () => {
+      await subscriptionManager.start()
       expect(subscriptionManager.isHealthy()).toBe(true)
+      await subscriptionManager.stop()
     })
 
     it('should be unhealthy with full queue', () => {
@@ -230,7 +235,9 @@ describe('SubscriptionManager', () => {
   })
 
   describe('Metrics', () => {
-    it('should provide accurate metrics', () => {
+    it('should provide accurate metrics', async () => {
+      await subscriptionManager.start()
+      
       const addToQueueMethod = (subscriptionManager as any).addToQueue.bind(subscriptionManager)
       
       addToQueueMethod(mockNotification)
@@ -241,6 +248,8 @@ describe('SubscriptionManager', () => {
       expect(metrics.activeProcessing).toBe(0)
       expect(metrics.isHealthy).toBe(true)
       expect(metrics.oldestQueueItem).toBeInstanceOf(Date)
+      
+      await subscriptionManager.stop()
     })
 
     it('should handle empty queue metrics', () => {
@@ -322,12 +331,7 @@ describe('SubscriptionManager Integration', () => {
       onNotification: mockOnNotification
     })
     
-    // Mock successful workflow lookup
-    const supabase = require('../lib/supabase/client').supabase
-    supabase.schema().from().select().eq().eq().eq().single.mockResolvedValueOnce({
-      data: mockWorkflow,
-      error: null
-    })
+    // No need to override mock here as it's already set up globally
     
     // Add notification to queue and process
     const addToQueueMethod = (manager as any).addToQueue.bind(manager)

@@ -6315,7 +6315,15 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ent_notification_rule_notification_workflow_id_fkey"
+            columns: ["notification_workflow_id"]
+            isOneToOne: false
+            referencedRelation: "ent_notification_workflow"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ent_notification_template: {
         Row: {
@@ -6332,6 +6340,7 @@ export type Database = {
           publish_status: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
           repr: string | null
           subject_template: string | null
+          template_key: string | null
           typ_notification_category_id: number | null
           updated_at: string
           updated_by: string | null
@@ -6351,6 +6360,7 @@ export type Database = {
           publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
           repr?: string | null
           subject_template?: string | null
+          template_key?: string | null
           typ_notification_category_id?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -6370,6 +6380,7 @@ export type Database = {
           publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
           repr?: string | null
           subject_template?: string | null
+          template_key?: string | null
           typ_notification_category_id?: number | null
           updated_at?: string
           updated_by?: string | null

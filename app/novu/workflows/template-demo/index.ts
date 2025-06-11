@@ -1,0 +1,1 @@
+export { default as templateDemoWorkflow } from './workflow';
