@@ -31,11 +31,9 @@ const customJestConfig = {
   transformIgnorePatterns: [
     'node_modules/(?!(@supabase|@novu)/.*)'
   ],
-  // Module mapping - only mock external APIs, use real Redis/BullMQ
+  // Module mapping
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    '^@supabase/supabase-js$': '<rootDir>/__mocks__/@supabase/supabase-js.js',
-    '^@novu/api$': '<rootDir>/__mocks__/@novu/api.js',
   },
 }
 
