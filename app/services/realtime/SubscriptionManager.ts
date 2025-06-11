@@ -339,15 +339,15 @@ export class SubscriptionManager {
           updated_at: new Date().toISOString()
         })
         .eq('id', notification.id)
-        .eq('enterprise_id', notification.enterprise_id)
+        .eq('enterprise_id', notification.enterprise_id!)
 
       // Get workflow configuration
       const { data: workflow, error: workflowError } = await supabase
         .schema('notify')
         .from('ent_notification_workflow')
         .select('*')
-        .eq('id', notification.notification_workflow_id)
-        .eq('enterprise_id', notification.enterprise_id)
+        .eq('id', notification.notification_workflow_id!)
+        .eq('enterprise_id', notification.enterprise_id!)
         .eq('deactivated', false)
         .single()
 
@@ -381,7 +381,7 @@ export class SubscriptionManager {
           updated_at: new Date().toISOString()
         })
         .eq('id', notification.id)
-        .eq('enterprise_id', notification.enterprise_id)
+        .eq('enterprise_id', notification.enterprise_id!)
 
       this.log('info', 'Notification processed successfully', {
         notificationId: notification.id,
@@ -445,7 +445,7 @@ export class SubscriptionManager {
           updated_at: new Date().toISOString()
         })
         .eq('id', item.notification.id)
-        .eq('enterprise_id', item.notification.enterprise_id)
+        .eq('enterprise_id', item.notification.enterprise_id!)
       
       this.log('error', 'Notification marked as failed after max attempts', {
         notificationId: item.notification.id,
@@ -534,7 +534,7 @@ export class SubscriptionManager {
             updated_at: new Date().toISOString()
           })
           .eq('id', notification.id)
-          .eq('enterprise_id', notification.enterprise_id)
+          .eq('enterprise_id', notification.enterprise_id!)
         
         this.addToQueue({
           ...notification,

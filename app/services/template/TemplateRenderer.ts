@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../../../lib/supabase/types';
+import type { Database } from '../../../lib/supabase/database.types';
 
 type NotificationTemplate = Database['notify']['Tables']['ent_notification_template']['Row'];
+type ChannelType = Database['shared_types']['Enums']['notification_channel_type'];
 
 interface CompiledTemplate {
   subject?: string;
@@ -17,7 +18,7 @@ interface TemplateContext {
 
 interface XNovuRenderMatch {
   fullMatch: string;
-  templateId: string;
+  templateKey: string;
   variables: Record<string, any>;
   startIndex: number;
   endIndex: number;
@@ -74,7 +75,7 @@ export class TemplateRenderer {
       try {
         // Load template from database
         const dbTemplate = await this.loadTemplate(
-          match.templateId,
+          match.templateKey,
           context.enterpriseId
         );
 
@@ -98,9 +99,9 @@ export class TemplateRenderer {
                  renderedContent + 
                  result.substring(match.endIndex);
       } catch (error) {
-        console.error(`[TemplateRenderer] Failed to process template ${match.templateId}:`, error);
+        console.error(`[TemplateRenderer] Failed to process template ${match.templateKey}:`, error);
         // Replace with error message instead of breaking the entire template
-        const errorMessage = `[Template Error: ${match.templateId}]`;
+        const errorMessage = `[Template Error: ${match.templateKey}]`;
         result = result.substring(0, match.startIndex) + 
                  errorMessage + 
                  result.substring(match.endIndex);
@@ -112,7 +113,7 @@ export class TemplateRenderer {
 
   /**
    * Parse xnovu_render syntax from template string
-   * Syntax: {{ xnovu_render('template_id', { variable: 'value' }) }}
+   * Syntax: {{ xnovu_render('template_key', { variable: 'value' }) }}
    */
   private parseXNovuRenderSyntax(template: string): XNovuRenderMatch[] {
     const regex = /\{\{\s*xnovu_render\s*\(\s*['"`]([^'"`]+)['"`]\s*,\s*(\{[^}]*\}|\{[^{}]*\{[^}]*\}[^}]*\})\s*\)\s*\}\}/g;
@@ -121,12 +122,12 @@ export class TemplateRenderer {
 
     while ((match = regex.exec(template)) !== null) {
       try {
-        const [fullMatch, templateId, variablesJson] = match;
+        const [fullMatch, templateKey, variablesJson] = match;
         const variables = this.parseVariablesJson(variablesJson);
 
         matches.push({
           fullMatch,
-          templateId,
+          templateKey,
           variables,
           startIndex: match.index,
           endIndex: match.index + fullMatch.length
@@ -169,29 +170,30 @@ export class TemplateRenderer {
    * Load template from database with caching
    */
   private async loadTemplate(
-    templateId: string,
+    templateKey: string,
     enterpriseId: string
   ): Promise<NotificationTemplate> {
-    const cacheKey = `${enterpriseId}:${templateId}`;
+    const cacheKey = `${enterpriseId}:${templateKey}`;
     
     // Check cache first
     const cached = this.cache.get(cacheKey);
     if (cached && this.isCacheValid(cached.compiledAt)) {
       return {
-        id: parseInt(templateId),
+        id: 0, // Placeholder since we're using template_key
         body_template: cached.body,
         subject_template: cached.subject || null,
         variables_description: cached.variables,
         // Add other required fields with defaults
         name: '',
         description: null,
-        publish_status: 'PUBLISHED' as const,
+        publish_status: 'PUBLISH' as const,
         deactivated: false,
         typ_notification_category_id: null,
         business_id: null,
-        channel_type: 'EMAIL' as const,
+        channel_type: 'EMAIL' as ChannelType,
         repr: null,
         enterprise_id: enterpriseId,
+        template_key: templateKey,
         created_at: new Date().toISOString(),
         created_by: null,
         updated_at: new Date().toISOString(),
@@ -204,21 +206,21 @@ export class TemplateRenderer {
       .schema('notify')
       .from('ent_notification_template')
       .select('*')
-      .eq('id', parseInt(templateId))
+      .eq('template_key', templateKey)
       .eq('enterprise_id', enterpriseId)
-      .eq('publish_status', 'PUBLISHED')
+      .eq('publish_status', 'PUBLISH')
       .eq('deactivated', false)
       .single();
 
     if (error || !template) {
-      throw new Error(`Template not found: ${templateId} (enterprise: ${enterpriseId})`);
+      throw new Error(`Template not found: ${templateKey} (enterprise: ${enterpriseId})`);
     }
 
     // Cache the template
     this.cache.set(cacheKey, {
       subject: template.subject_template || undefined,
       body: template.body_template,
-      variables: template.variables_description || {},
+      variables: (template.variables_description as Record<string, any>) || {},
       compiledAt: new Date()
     });
 
@@ -305,9 +307,9 @@ export class TemplateRenderer {
       // Validate that referenced templates exist
       for (const match of xnovuMatches) {
         try {
-          await this.loadTemplate(match.templateId, enterpriseId);
+          await this.loadTemplate(match.templateKey, enterpriseId);
         } catch (error) {
-          errors.push(`Template not found: ${match.templateId}`);
+          errors.push(`Template not found: ${match.templateKey}`);
         }
       }
 

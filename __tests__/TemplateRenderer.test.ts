@@ -38,15 +38,15 @@ describe('TemplateRenderer', () => {
 
   describe('parseXNovuRenderSyntax', () => {
     it('should parse simple xnovu_render syntax', () => {
-      const template = 'Hello {{ xnovu_render("123", { name: "John" }) }}!';
+      const template = 'Hello {{ xnovu_render("welcome-header", { name: "John" }) }}!';
       const matches = (renderer as any).parseXNovuRenderSyntax(template);
       
       expect(matches).toHaveLength(1);
       expect(matches[0]).toMatchObject({
-        templateId: '123',
+        templateKey: 'welcome-header',
         variables: { name: 'John' },
         startIndex: 6,
-        endIndex: 47
+        endIndex: 61
       });
     });
 
@@ -59,8 +59,8 @@ describe('TemplateRenderer', () => {
       const matches = (renderer as any).parseXNovuRenderSyntax(template);
       
       expect(matches).toHaveLength(2);
-      expect(matches[0].templateId).toBe('header');
-      expect(matches[1].templateId).toBe('footer');
+      expect(matches[0].templateKey).toBe('header');
+      expect(matches[1].templateKey).toBe('footer');
     });
 
     it('should handle complex nested variables', () => {
@@ -206,13 +206,14 @@ describe('TemplateRenderer', () => {
         variables_description: null,
         name: 'test-template',
         description: null,
-        publish_status: 'PUBLISHED' as const,
+        publish_status: 'PUBLISH' as const,
         deactivated: false,
         typ_notification_category_id: null,
         business_id: null,
         channel_type: 'EMAIL' as const,
         repr: null,
         enterprise_id: 'test-enterprise',
+        template_key: 'welcome-header',
         created_at: new Date().toISOString(),
         created_by: null,
         updated_at: new Date().toISOString(),
@@ -224,7 +225,7 @@ describe('TemplateRenderer', () => {
         error: null
       });
 
-      const template = 'Before {{ xnovu_render("123", { title: "Welcome" }) }} After';
+      const template = 'Before {{ xnovu_render("welcome-header", { title: "Welcome" }) }} After';
       const context = {
         enterpriseId: 'test-enterprise',
         variables: {}
@@ -241,24 +242,24 @@ describe('TemplateRenderer', () => {
         error: new Error('Template not found')
       });
 
-      const template = 'Before {{ xnovu_render("nonexistent", {}) }} After';
+      const template = 'Before {{ xnovu_render("nonexistent-key", {}) }} After';
       const context = {
         enterpriseId: 'test-enterprise',
         variables: {}
       };
       
       const result = await renderer.render(template, context);
-      expect(result).toBe('Before [Template Error: nonexistent] After');
+      expect(result).toBe('Before [Template Error: nonexistent-key] After');
     });
   });
 
   describe('validateTemplate', () => {
     it('should validate template with valid syntax', async () => {
-      const template = 'Hello {{ name }}! {{ xnovu_render("123", { key: "value" }) }}';
+      const template = 'Hello {{ name }}! {{ xnovu_render("valid-template", { key: "value" }) }}';
       
       // Mock successful template loading
       mockSupabase.from().select().eq().eq().eq().eq().single.mockResolvedValue({
-        data: { id: 123, body_template: 'Test' },
+        data: { id: 123, body_template: 'Test', template_key: 'valid-template' },
         error: null
       });
       
@@ -268,7 +269,7 @@ describe('TemplateRenderer', () => {
     });
 
     it('should detect invalid template references', async () => {
-      const template = 'Hello {{ xnovu_render("nonexistent", {}) }}';
+      const template = 'Hello {{ xnovu_render("nonexistent-key", {}) }}';
       
       // Mock template not found
       mockSupabase.from().select().eq().eq().eq().eq().single.mockResolvedValue({
@@ -278,7 +279,7 @@ describe('TemplateRenderer', () => {
       
       const result = await renderer.validateTemplate(template, 'test-enterprise');
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Template not found: nonexistent');
+      expect(result.errors).toContain('Template not found: nonexistent-key');
     });
 
     it('should detect empty variable placeholders', async () => {
@@ -299,13 +300,14 @@ describe('TemplateRenderer', () => {
         variables_description: null,
         name: 'test',
         description: null,
-        publish_status: 'PUBLISHED' as const,
+        publish_status: 'PUBLISH' as const,
         deactivated: false,
         typ_notification_category_id: null,
         business_id: null,
         channel_type: 'EMAIL' as const,
         repr: null,
         enterprise_id: 'test-enterprise',
+        template_key: 'cached-template',
         created_at: new Date().toISOString(),
         created_by: null,
         updated_at: new Date().toISOString(),
@@ -318,11 +320,11 @@ describe('TemplateRenderer', () => {
       });
 
       // First call should hit database
-      await (renderer as any).loadTemplate('123', 'test-enterprise');
+      await (renderer as any).loadTemplate('cached-template', 'test-enterprise');
       expect(mockSupabase.from().select().eq().eq().eq().eq().single).toHaveBeenCalledTimes(1);
 
       // Second call should use cache
-      await (renderer as any).loadTemplate('123', 'test-enterprise');
+      await (renderer as any).loadTemplate('cached-template', 'test-enterprise');
       expect(mockSupabase.from().select().eq().eq().eq().eq().single).toHaveBeenCalledTimes(1);
     });
 

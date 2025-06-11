@@ -1,8 +1,9 @@
 import { renderTemplateForWorkflow } from './TemplateAwareEmail';
 import { getTemplateRenderer } from './TemplateRenderer';
-import type { Database } from '../../../lib/supabase/types';
+import type { Database } from '../../../lib/supabase/database.types';
 
 type NotificationTemplate = Database['notify']['Tables']['ent_notification_template']['Row'];
+type ChannelType = Database['shared_types']['Enums']['notification_channel_type'];
 
 interface WorkflowStepResult {
   subject?: string;
@@ -11,10 +12,10 @@ interface WorkflowStepResult {
 
 interface WorkflowTemplateContext {
   enterpriseId: string;
-  templateId?: string;
+  templateKey?: string;
   fallbackTemplate?: string;
   variables: Record<string, any>;
-  channelType: 'EMAIL' | 'SMS' | 'PUSH' | 'IN_APP' | 'CHAT';
+  channelType: ChannelType;
 }
 
 /**
@@ -25,17 +26,17 @@ export class WorkflowTemplateIntegration {
 
   /**
    * Render template for workflow step
-   * Can use either templateId (database) or fallbackTemplate (inline)
+   * Can use either templateKey (database) or fallbackTemplate (inline)
    */
   async renderForWorkflowStep(
     context: WorkflowTemplateContext
   ): Promise<WorkflowStepResult> {
     let template: string;
 
-    if (context.templateId) {
+    if (context.templateKey) {
       // Load template from database
       const dbTemplate = await this.loadTemplateFromDb(
-        context.templateId,
+        context.templateKey,
         context.enterpriseId,
         context.channelType
       );
@@ -48,7 +49,7 @@ export class WorkflowTemplateIntegration {
       // Use inline template
       template = context.fallbackTemplate;
     } else {
-      throw new Error('Either templateId or fallbackTemplate must be provided');
+      throw new Error('Either templateKey or fallbackTemplate must be provided');
     }
 
     // Render the template
@@ -63,9 +64,9 @@ export class WorkflowTemplateIntegration {
    * Load template from database with enterprise and channel filtering
    */
   private async loadTemplateFromDb(
-    templateId: string,
+    templateKey: string,
     enterpriseId: string,
-    channelType: string
+    channelType: ChannelType
   ): Promise<NotificationTemplate> {
     // This would normally use the TemplateRenderer's database access
     // but for direct workflow integration we'll use a direct query
@@ -84,16 +85,16 @@ export class WorkflowTemplateIntegration {
       .schema('notify')
       .from('ent_notification_template')
       .select('*')
-      .eq('id', parseInt(templateId))
+      .eq('template_key', templateKey)
       .eq('enterprise_id', enterpriseId)
       .eq('channel_type', channelType)
-      .eq('publish_status', 'PUBLISHED')
+      .eq('publish_status', 'PUBLISH')
       .eq('deactivated', false)
       .single();
 
     if (error || !template) {
       throw new Error(
-        `Template not found: ${templateId} (enterprise: ${enterpriseId}, channel: ${channelType})`
+        `Template not found: ${templateKey} (enterprise: ${enterpriseId}, channel: ${channelType})`
       );
     }
 
@@ -104,12 +105,12 @@ export class WorkflowTemplateIntegration {
    * Validate that a template exists and is accessible
    */
   async validateTemplateAccess(
-    templateId: string,
+    templateKey: string,
     enterpriseId: string,
-    channelType: string
+    channelType: ChannelType
   ): Promise<boolean> {
     try {
-      await this.loadTemplateFromDb(templateId, enterpriseId, channelType);
+      await this.loadTemplateFromDb(templateKey, enterpriseId, channelType);
       return true;
     } catch {
       return false;
@@ -186,12 +187,12 @@ export async function renderTemplateForStep(
  */
 export async function renderEmailTemplate(
   enterpriseId: string,
-  templateId: string,
+  templateKey: string,
   variables: Record<string, any>
 ): Promise<{ subject: string; body: string }> {
   const result = await renderTemplateForStep({
     enterpriseId,
-    templateId,
+    templateKey,
     variables,
     channelType: 'EMAIL'
   });
@@ -207,12 +208,12 @@ export async function renderEmailTemplate(
  */
 export async function renderInAppTemplate(
   enterpriseId: string,
-  templateId: string,
+  templateKey: string,
   variables: Record<string, any>
 ): Promise<{ subject?: string; body: string }> {
   return await renderTemplateForStep({
     enterpriseId,
-    templateId,
+    templateKey,
     variables,
     channelType: 'IN_APP'
   });
@@ -223,12 +224,12 @@ export async function renderInAppTemplate(
  */
 export async function renderSmsTemplate(
   enterpriseId: string,
-  templateId: string,
+  templateKey: string,
   variables: Record<string, any>
 ): Promise<{ body: string }> {
   const result = await renderTemplateForStep({
     enterpriseId,
-    templateId,
+    templateKey,
     variables,
     channelType: 'SMS'
   });

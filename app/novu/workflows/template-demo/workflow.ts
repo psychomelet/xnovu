@@ -10,7 +10,7 @@ import {
 const templateDemoPayloadSchema = z.object({
   enterpriseId: z.string(),
   recipientId: z.string(),
-  templateId: z.string().optional(),
+  templateKey: z.string().optional(),
   buildingId: z.string(),
   buildingName: z.string(),
   alertType: z.enum(['MAINTENANCE', 'SECURITY', 'EMERGENCY', 'GENERAL']),
@@ -22,7 +22,7 @@ const templateDemoPayloadSchema = z.object({
 
 const templateDemoControlSchema = z.object({
   useCustomTemplate: z.boolean().default(false),
-  customTemplateId: z.string().optional(),
+  customTemplateKey: z.string().optional(),
   fallbackSubject: z.string().default('Building Alert'),
   fallbackBody: z.string().default('You have received a building notification.'),
 });
@@ -59,19 +59,19 @@ export const templateDemoWorkflow = workflow(
       'template-email',
       async (controls: TemplateDemoControls) => {
         try {
-          if (controls.useCustomTemplate && controls.customTemplateId) {
+          if (controls.useCustomTemplate && controls.customTemplateKey) {
             // Use custom template from database
             const rendered = await renderEmailTemplate(
               payload.enterpriseId,
-              controls.customTemplateId,
+              controls.customTemplateKey,
               templateVariables
             );
             return rendered;
-          } else if (payload.templateId) {
+          } else if (payload.templateKey) {
             // Use template from payload
             const rendered = await renderEmailTemplate(
               payload.enterpriseId,
-              payload.templateId,
+              payload.templateKey,
               templateVariables
             );
             return rendered;
@@ -131,10 +131,10 @@ export const templateDemoWorkflow = workflow(
       'template-in-app',
       async (controls: TemplateDemoControls) => {
         try {
-          if (payload.templateId) {
+          if (payload.templateKey) {
             const rendered = await renderInAppTemplate(
               payload.enterpriseId,
-              payload.templateId,
+              payload.templateKey,
               templateVariables
             );
             return {
