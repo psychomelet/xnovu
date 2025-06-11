@@ -4,6 +4,13 @@ import { Command } from 'commander';
 import { execSync, spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { config } from 'dotenv';
+
+// Load .env files with proper override precedence
+// Load .env first (base/default values)
+config({ path: '.env' });
+// Load .env.local second with override enabled (overrides .env values)
+config({ path: '.env.local', override: true });
 
 const program = new Command();
 
@@ -14,73 +21,68 @@ program
 
 program
   .command('generate-types')
-  .description('Generate TypeScript types from Supabase database schema')
-  .option('--project-id <id>', 'Supabase project ID (if not using local)')
-  .option('--local', 'Generate types from local Supabase instance', false)
-  .action(async (options) => {
-    console.log('🔧 Generating Supabase types...');
+  .description('Generate TypeScript types from Supabase project')
+  .action(async () => {
+    console.log('🔧 Generating Supabase types from remote project...');
     
     try {
       const outputPath = path.join(process.cwd(), 'lib', 'supabase', 'database.types.ts');
+      const projectId = process.env.SUPABASE_PROJECT_ID;
       
+      if (!projectId) {
+        console.error('❌ SUPABASE_PROJECT_ID not found in environment variables');
+        console.log('💡 Make sure your .env file contains SUPABASE_PROJECT_ID');
+        process.exit(1);
+      }
+
       // Ensure the output directory exists
       const outputDir = path.dirname(outputPath);
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
-      let command: string;
-      let args: string[];
-
-      if (options.local) {
-        // Generate types from local Supabase instance
-        command = 'npx';
-        args = [
-          'supabase',
-          'gen',
-          'types',
-          'typescript',
-          '--local',
-          '--schema=notify,base,shared_types',
-          `--file=${outputPath}`
-        ];
-      } else {
-        // Generate types from remote Supabase project
-        const projectId = options.projectId || process.env.SUPABASE_PROJECT_ID;
-        
-        if (!projectId) {
-          console.error('❌ Error: Project ID is required. Provide --project-id or set SUPABASE_PROJECT_ID environment variable.');
-          process.exit(1);
-        }
-
-        command = 'npx';
-        args = [
-          'supabase',
-          'gen',
-          'types',
-          'typescript',
-          '--project-id',
-          projectId,
-          '--schema=notify,base,shared_types',
-          `--file=${outputPath}`
-        ];
-      }
-
+      console.log(`📍 Project ID: ${projectId}`);
       console.log(`📍 Output path: ${outputPath}`);
+
+      // Generate types from remote Supabase project
+      const command = 'npx';
+      const args = [
+        'supabase',
+        'gen',
+        'types',
+        'typescript',
+        `--project-id=${projectId}`,
+        '--schema=notify,base,shared_types'
+      ];
+
       console.log(`🚀 Running: ${command} ${args.join(' ')}`);
 
-      // Use spawn for better real-time output
       const child = spawn(command, args, {
-        stdio: 'inherit',
+        stdio: 'pipe',
         shell: true
+      });
+
+      let output = '';
+      child.stdout?.on('data', (data) => {
+        output += data.toString();
+      });
+
+      child.stderr?.on('data', (data) => {
+        console.error(data.toString());
       });
 
       child.on('close', (code) => {
         if (code === 0) {
+          // Write the output to the file
+          fs.writeFileSync(outputPath, output, 'utf8');
           console.log('✅ Successfully generated Supabase types!');
           console.log(`📁 Types saved to: ${outputPath}`);
         } else {
           console.error(`❌ Command failed with exit code ${code}`);
+          console.log('💡 Make sure you have:');
+          console.log('   1. Supabase CLI installed: npm install -g supabase');
+          console.log('   2. Valid SUPABASE_PROJECT_ID in .env');
+          console.log('   3. Authenticated with Supabase: supabase login');
           process.exit(code || 1);
         }
       });
@@ -151,35 +153,81 @@ program
     console.log('🔍 Checking XNovu system status...');
     
     try {
-      // Check if Next.js app is running
-      console.log('📦 Next.js application status...');
-      try {
-        const response = await fetch('http://localhost:4000/api/dev-studio-status');
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Next.js app is running');
-          console.log('📊 Status:', JSON.stringify(data, null, 2));
-        } else {
-          console.log('⚠️  Next.js app is not responding properly');
-        }
-      } catch {
-        console.log('❌ Next.js app is not running (http://localhost:4000)');
-      }
-
       // Check Supabase connection
-      console.log('\n🗄️  Checking Supabase connection...');
-      if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+      console.log('🗄️  Checking Supabase connection...');
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const databaseUrl = process.env.DATABASE_URL;
+      
+      if (supabaseUrl && supabaseAnonKey) {
         console.log('✅ Supabase environment variables are set');
-        console.log(`📍 URL: ${process.env.SUPABASE_URL}`);
+        console.log(`📍 URL: ${supabaseUrl}`);
+        console.log(`🔑 Anon Key: ${supabaseAnonKey.substring(0, 20)}...`);
+        
+        // Test Supabase connection
+        try {
+          const testResponse = await fetch(`${supabaseUrl}/rest/v1/`, {
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`
+            }
+          });
+          
+          if (testResponse.ok) {
+            console.log('✅ Supabase API connection successful');
+          } else {
+            console.log('⚠️  Supabase API connection failed');
+          }
+        } catch (connError) {
+          console.log('❌ Failed to connect to Supabase API');
+        }
       } else {
         console.log('⚠️  Supabase environment variables not found');
+      }
+
+      // Check PostgreSQL connection
+      if (databaseUrl) {
+        console.log('\n🐘 Checking PostgreSQL connection...');
+        console.log(`📍 Database URL: ${databaseUrl.replace(/:[^:@]*@/, ':***@')}`);
+        
+        try {
+          // Test PostgreSQL connection using psql
+          execSync(`psql "${databaseUrl}" -c "SELECT version();"`, { 
+            stdio: 'pipe',
+            timeout: 5000 
+          });
+          console.log('✅ PostgreSQL connection successful');
+        } catch (pgError) {
+          console.log('❌ PostgreSQL connection failed');
+          console.log('💡 Make sure PostgreSQL client (psql) is installed');
+        }
+      } else {
+        console.log('\n🐘 PostgreSQL connection...');
+        console.log('⚠️  DATABASE_URL not found');
+      }
+
+      // Check Novu configuration
+      console.log('\n🔔 Checking Novu configuration...');
+      const novuSecretKey = process.env.NOVU_SECRET_KEY;
+      const novuAppId = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER;
+      
+      if (novuSecretKey && novuSecretKey !== 'your_cloud_secret_key') {
+        console.log('✅ Novu secret key is configured');
+      } else {
+        console.log('⚠️  Novu secret key not configured (using default)');
+      }
+      
+      if (novuAppId && novuAppId !== 'your_app_identifier') {
+        console.log('✅ Novu application identifier is configured');
+      } else {
+        console.log('⚠️  Novu application identifier not configured (using default)');
       }
 
       // Check for required files
       console.log('\n📁 Checking required files...');
       const requiredFiles = [
         'lib/supabase/client.ts',
-        'lib/supabase/types.ts',
+        'lib/supabase/database.types.ts',
         'app/novu/workflows/index.ts'
       ];
 
@@ -191,6 +239,9 @@ program
           console.log(`❌ ${file} (missing)`);
         }
       });
+
+      console.log('\n💡 To generate missing types, run: pnpm xnovu generate-types');
+
 
     } catch (error) {
       console.error('❌ Error checking status:', error);
