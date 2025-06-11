@@ -31,12 +31,12 @@ const customJestConfig = {
   transformIgnorePatterns: [
     'node_modules/(?!(@supabase|@novu)/.*)'
   ],
-  // Module mapping - only mock external APIs, use real Redis/BullMQ
+  // Module mapping
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    '^@supabase/supabase-js$': '<rootDir>/__mocks__/@supabase/supabase-js.js',
-    '^@novu/api$': '<rootDir>/__mocks__/@novu/api.js',
   },
+  // Ignore Next.js build output to prevent module name collisions during tests
+  modulePathIgnorePatterns: ['<rootDir>/.next/'],
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

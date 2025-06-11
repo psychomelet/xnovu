@@ -1,10 +1,35 @@
 import '@testing-library/jest-dom'
+import { config } from 'dotenv'
+import { existsSync } from 'fs'
+import { join } from 'path'
 
-// Mock environment variables
-process.env.NOVU_SECRET_KEY = 'test-secret-key'
-process.env.SUPABASE_URL = 'https://test.supabase.co'
-process.env.SUPABASE_ANON_KEY = 'test-anon-key'
-process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key'
+// Load environment variables from .env.local if it exists
+const envLocalPath = join(process.cwd(), '.env.local')
+if (existsSync(envLocalPath)) {
+  config({ path: envLocalPath, override: true })
+}
+
+// Environment variables come from:
+// - GitHub Actions: set via secrets in workflow env section
+// - Local development: loaded from .env.local by Next.js or manual export
+
+// Only set fallback environment variables if not already set
+// These provide graceful fallbacks for missing credentials
+if (!process.env.NOVU_SECRET_KEY) {
+  process.env.NOVU_SECRET_KEY = 'test-secret-key'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://your-project-id.supabase.co'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'your_anon_key_here'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) {
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY = 'your_service_role_key_here'
+}
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgresql://postgres.your-project-id:password@aws-0-region.pooler.supabase.com:6543/postgres'
+}
 
 // Configure Redis for tests - use Docker Redis on port 6380
 process.env.REDIS_URL = 'redis://localhost:6380'

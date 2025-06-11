@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    environment: Test
 
     services:
       redis:
@@ -48,137 +49,38 @@ jobs:
 
     - name: Run type check
       run: pnpm build
-      env:
-        # Provide environment variables for Next.js build
-        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project-id.supabase.co' }}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your_anon_key_here' }}
-        NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER || 'your_app_identifier' }}
-        NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY || 'your_cloud_secret_key' }}
-        DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://postgres.your-project-id:your-password@aws-0-region.pooler.supabase.com:6543/postgres' }}
-        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'your_service_role_key_here' }}
-        # Rule engine settings
-        REDIS_URL: redis://localhost:6379
-        RULE_ENGINE_ENABLED: true
-        RULE_ENGINE_TIMEZONE: UTC
-        RULE_ENGINE_MAX_CONCURRENT_JOBS: 10
-        RULE_ENGINE_RETRY_ATTEMPTS: 3
-        RULE_ENGINE_RETRY_DELAY: 5000
 
     - name: Verify Redis connection
       run: |
         redis-cli -h localhost -p 6379 ping
         echo "Redis is ready"
 
-    - name: Verify Novu connection
+    - name: Debug - Check if secrets are configured
       run: |
-        echo "🔔 Testing Novu connection..."
-        if [ -n "$NOVU_SECRET_KEY" ] && [ "$NOVU_SECRET_KEY" != "your_cloud_secret_key" ]; then
-          echo "✅ Novu secret key is configured"
-          
-          # Test actual Novu API connection using credentials
-          echo "🧪 Testing Novu API with credentials..."
-          NOVU_RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/novu_response.json \
-            --connect-timeout 10 \
-            -H "Authorization: ApiKey $NOVU_SECRET_KEY" \
-            -H "Content-Type: application/json" \
-            "https://api.novu.co/v1/environments")
-          
-          HTTP_CODE=$(echo "$NOVU_RESPONSE" | tail -c 4)
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Novu API connection successful"
-            # Check if we can access environments
-            if command -v jq >/dev/null 2>&1; then
-              ENV_COUNT=$(jq '.data | length' /tmp/novu_response.json 2>/dev/null || echo "0")
-              echo "📊 Found $ENV_COUNT Novu environments"
-            fi
-          elif [ "$HTTP_CODE" = "401" ]; then
-            echo "❌ Novu API authentication failed - invalid secret key"
-            exit 1
-          else
-            echo "⚠️  Novu API returned HTTP $HTTP_CODE"
-            cat /tmp/novu_response.json 2>/dev/null || echo "No response body"
-            exit 1
-          fi
-          
-        else
-          echo "⚠️  Novu secret key not configured - using test environment"
-        fi
-        
-        if [ -n "$NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER" ] && [ "$NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER" != "your_app_identifier" ]; then
-          echo "✅ Novu application identifier is configured"
-        else
-          echo "⚠️  Novu application identifier not configured - using test environment"
-        fi
-      env:
-        NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
-        NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
-
-    - name: Verify Supabase connection
-      run: |
-        echo "🗄️  Testing Supabase connection..."
-        if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ] && [ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
-          echo "✅ Supabase environment variables are configured"
-          echo "📍 URL: $NEXT_PUBLIC_SUPABASE_URL"
-          echo "🔑 Anon Key: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:0:20}..."
-          
-          # Test Supabase REST API connection (matching status.ts logic)
-          echo "🧪 Testing Supabase REST API with credentials..."
-          SUPABASE_RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/supabase_response.json \
-            --connect-timeout 10 \
-            -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $NEXT_PUBLIC_SUPABASE_ANON_KEY" \
-            -H "Content-Type: application/json" \
-            "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/")
-          
-          HTTP_CODE=$(echo "$SUPABASE_RESPONSE" | tail -c 4)
-          
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Supabase REST API connection successful"
-          elif [ "$HTTP_CODE" = "401" ]; then
-            echo "❌ Supabase authentication failed - invalid anon key"
-            exit 1
-          elif [ "$HTTP_CODE" = "403" ]; then
-            echo "❌ Supabase access forbidden - check RLS policies"
-            exit 1
-          else
-            echo "⚠️  Supabase API returned HTTP $HTTP_CODE"
-            cat /tmp/supabase_response.json 2>/dev/null || echo "No response body"
-            exit 1
-          fi
-          
-          # Test PostgreSQL connection if DATABASE_URL is provided
-          if [ -n "$DATABASE_URL" ]; then
-            echo "🐘 Testing PostgreSQL connection..."
-            echo "📍 Database URL: $(echo "$DATABASE_URL" | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')"
-            
-            # Install psql if not available
-            if ! command -v psql >/dev/null 2>&1; then
-              echo "📦 Installing PostgreSQL client..."
-              sudo apt-get update -qq
-              sudo apt-get install -y postgresql-client
-            fi
-            
-            # Test PostgreSQL connection with timeout
-            if timeout 10s psql "$DATABASE_URL" -c "SELECT version();" > /tmp/pg_response.txt 2>&1; then
-              echo "✅ PostgreSQL connection successful"
-              PG_VERSION=$(head -1 /tmp/pg_response.txt | cut -d',' -f1)
-              echo "📊 $PG_VERSION"
-            else
-              echo "❌ PostgreSQL connection failed"
-              cat /tmp/pg_response.txt 2>/dev/null
-              exit 1
-            fi
-          else
-            echo "ℹ️  DATABASE_URL not provided - skipping PostgreSQL test"
-          fi
-        else
-          echo "⚠️  Supabase environment variables not configured - tests will use mocked Supabase"
-        fi
+        echo "Checking if GitHub secrets are configured..."
+        echo "NOVU_SECRET_KEY length: ${#NOVU_SECRET_KEY}"
+        echo "NEXT_PUBLIC_SUPABASE_URL length: ${#NEXT_PUBLIC_SUPABASE_URL}"
+        echo "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY length: ${#NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY}"
+        echo ""
+        echo "Note: If lengths are 0, the secrets need to be added to your GitHub repository settings."
+        echo "Go to Settings > Secrets and variables > Actions to add them."
       env:
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+        NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
+
+    - name: Run connection integration tests
+      run: pnpm test -- __tests__/services/
+      env:
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+        NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
 
     - name: Run tests
       run: pnpm test
@@ -194,6 +96,7 @@ jobs:
         # Connection test credentials
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
