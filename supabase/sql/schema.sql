@@ -98,6 +98,7 @@ create table if not exists notify.ent_notification_template (
   id BIGINT generated always as identity primary key,
   name TEXT not null,
   description TEXT,
+  template_key TEXT unique,
   publish_status shared_types.publish_status default 'DRAFT' not null,
   deactivated BOOLEAN default false not null, -- For "Enable Status" or "Template Enable/Disable"
   typ_notification_category_id BIGINT references notify.typ_notification_category (id) on delete set null,
