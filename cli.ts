@@ -147,6 +147,154 @@ program
   });
 
 program
+  .command('docker:build')
+  .description('Build Docker image for XNovu')
+  .option('-t, --tag <tag>', 'Docker image tag', 'xnovu:latest')
+  .option('--platform <platform>', 'Target platform (e.g., linux/amd64,linux/arm64)')
+  .action(async (options) => {
+    console.log('🐳 Building Docker image for XNovu...');
+    
+    try {
+      const args = ['build'];
+      
+      if (options.platform) {
+        args.push('--platform', options.platform);
+      }
+      
+      args.push('-t', options.tag, '.');
+      
+      console.log(`🚀 Running: docker ${args.join(' ')}`);
+      
+      const dockerBuild = spawn('docker', args, {
+        stdio: 'inherit',
+        shell: true
+      });
+      
+      dockerBuild.on('close', (code) => {
+        if (code === 0) {
+          console.log(`✅ Successfully built Docker image: ${options.tag}`);
+          console.log('💡 Run with: pnpm xnovu docker:run');
+        } else {
+          console.error(`❌ Docker build failed with exit code ${code}`);
+          process.exit(code || 1);
+        }
+      });
+      
+      dockerBuild.on('error', (error) => {
+        console.error('❌ Failed to start Docker build:', error.message);
+        process.exit(1);
+      });
+      
+    } catch (error) {
+      console.error('❌ Error building Docker image:', error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('docker:run')
+  .description('Run XNovu Docker container')
+  .option('-p, --port <port>', 'Host port to bind to', '3000')
+  .option('-t, --tag <tag>', 'Docker image tag to run', 'xnovu:latest')
+  .option('-d, --detach', 'Run container in detached mode')
+  .option('--env-file <file>', 'Environment file path', '.env.local')
+  .action(async (options) => {
+    console.log('🐳 Running XNovu Docker container...');
+    
+    try {
+      const args = ['run'];
+      
+      if (options.detach) {
+        args.push('-d');
+      }
+      
+      args.push('-p', `${options.port}:3000`);
+      
+      // Add environment file if it exists
+      if (fs.existsSync(options.envFile)) {
+        args.push('--env-file', options.envFile);
+        console.log(`📁 Using environment file: ${options.envFile}`);
+      } else {
+        console.log(`⚠️  Environment file ${options.envFile} not found, continuing without it`);
+      }
+      
+      args.push('--name', 'xnovu-app');
+      args.push(options.tag);
+      
+      console.log(`🚀 Running: docker ${args.join(' ')}`);
+      
+      const dockerRun = spawn('docker', args, {
+        stdio: 'inherit',
+        shell: true
+      });
+      
+      dockerRun.on('close', (code) => {
+        if (code === 0) {
+          if (options.detach) {
+            console.log(`✅ XNovu container started successfully`);
+            console.log(`🌐 Access at: http://localhost:${options.port}`);
+            console.log('💡 Stop with: docker stop xnovu-app');
+            console.log('💡 View logs with: docker logs xnovu-app');
+          }
+        } else {
+          console.error(`❌ Docker run failed with exit code ${code}`);
+          process.exit(code || 1);
+        }
+      });
+      
+      dockerRun.on('error', (error) => {
+        console.error('❌ Failed to start Docker container:', error.message);
+        process.exit(1);
+      });
+      
+    } catch (error) {
+      console.error('❌ Error running Docker container:', error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('docker:stop')
+  .description('Stop and remove XNovu Docker container')
+  .action(async () => {
+    console.log('🛑 Stopping XNovu Docker container...');
+    
+    try {
+      // Stop the container
+      const stopResult = spawn('docker', ['stop', 'xnovu-app'], {
+        stdio: 'pipe',
+        shell: true
+      });
+      
+      stopResult.on('close', (code) => {
+        if (code === 0) {
+          console.log('✅ Container stopped successfully');
+          
+          // Remove the container
+          const removeResult = spawn('docker', ['rm', 'xnovu-app'], {
+            stdio: 'pipe',
+            shell: true
+          });
+          
+          removeResult.on('close', (removeCode) => {
+            if (removeCode === 0) {
+              console.log('✅ Container removed successfully');
+            } else {
+              console.log('⚠️  Failed to remove container (it may not exist)');
+            }
+          });
+        } else {
+          console.log('⚠️  Failed to stop container (it may not be running)');
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Error stopping Docker container:', error);
+      process.exit(1);
+    }
+  });
+
+program
   .command('status')
   .description('Check XNovu system status and connections')
   .action(async () => {
