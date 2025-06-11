@@ -64,19 +64,51 @@ export function createStatusCommands(program: Command): void {
           console.log('⚠️  DATABASE_URL not found');
         }
 
-        // Check Novu configuration
+        // Check Novu configuration and connection
         console.log('\n🔔 Checking Novu configuration...');
         const novuSecretKey = process.env.NOVU_SECRET_KEY;
         const novuAppId = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER;
+        const novuApiUrl = process.env.NOVU_API_URL || 'https://api.novu.co';
         
         if (novuSecretKey && novuSecretKey !== 'your_cloud_secret_key') {
           console.log('✅ Novu secret key is configured');
+          console.log(`🔑 Secret Key: ${novuSecretKey.substring(0, 8)}...${novuSecretKey.substring(novuSecretKey.length - 4)}`);
+          
+          // Test Novu connection
+          try {
+            console.log(`📍 API URL: ${novuApiUrl}`);
+            const novuResponse = await fetch(`${novuApiUrl}/v1/environments/me`, {
+              headers: {
+                'Authorization': `ApiKey ${novuSecretKey}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (novuResponse.ok) {
+              const data = await novuResponse.json();
+              console.log('✅ Novu API connection successful');
+              console.log(`🏢 Environment: ${data.data?.name || 'Unknown'}`);
+              console.log(`🆔 Environment ID: ${data.data?._id || 'Unknown'}`);
+              console.log(`🏛️  Organization ID: ${data.data?._organizationId || 'Unknown'}`);
+            } else {
+              console.log('❌ Novu API connection failed');
+              console.log(`📊 Status: ${novuResponse.status} ${novuResponse.statusText}`);
+              const errorData = await novuResponse.text();
+              if (errorData) {
+                console.log(`📝 Error: ${errorData}`);
+              }
+            }
+          } catch (novuError) {
+            console.log('❌ Failed to connect to Novu API');
+            console.log(`📝 Error: ${novuError.message}`);
+          }
         } else {
           console.log('⚠️  Novu secret key not configured (using default)');
         }
         
         if (novuAppId && novuAppId !== 'your_app_identifier') {
           console.log('✅ Novu application identifier is configured');
+          console.log(`🆔 App ID: ${novuAppId}`);
         } else {
           console.log('⚠️  Novu application identifier not configured (using default)');
         }
