@@ -13,6 +13,10 @@ const customJestConfig = {
     '**/__tests__/**/*.(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)'
   ],
+  testPathIgnorePatterns: [
+    // Skip integration tests locally unless Redis is explicitly available
+    ...(process.env.CI || process.env.REDIS_URL ? [] : ['.*\\.integration\\.test\\..*'])
+  ],
   collectCoverageFrom: [
     'app/**/*.{ts,tsx}',
     '!app/**/*.d.ts',
