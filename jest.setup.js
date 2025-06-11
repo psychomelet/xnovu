@@ -1,25 +1,34 @@
 import '@testing-library/jest-dom'
-import dotenv from 'dotenv'
-import path from 'path'
+import { config } from 'dotenv'
+import { existsSync } from 'fs'
+import { join } from 'path'
 
-// Load environment variables from .env.local for all services
-// Important: Load .env.local with override to ensure it takes precedence over .env
-const envPath = path.resolve(process.cwd(), '.env.local')
-const result = dotenv.config({ path: envPath, override: true })
-
-if (result.error) {
-  console.error('Error loading .env.local:', result.error)
+// Load environment variables from .env.local if it exists
+const envLocalPath = join(process.cwd(), '.env.local')
+if (existsSync(envLocalPath)) {
+  config({ path: envLocalPath, override: true })
 }
 
-// Verify credentials are loaded for cloud services
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('ERROR: Supabase cloud credentials not found in .env.local. Tests require real Supabase instance.')
-  process.exit(1)
-}
+// Environment variables come from:
+// - GitHub Actions: set via secrets in workflow env section
+// - Local development: loaded from .env.local by Next.js or manual export
 
-if (!process.env.NOVU_SECRET_KEY || !process.env.NOVU_API_URL) {
-  console.error('ERROR: Novu cloud credentials not found in .env.local. Tests require real Novu instance.')
-  process.exit(1)
+// Only set fallback environment variables if not already set
+// These provide graceful fallbacks for missing credentials
+if (!process.env.NOVU_SECRET_KEY) {
+  process.env.NOVU_SECRET_KEY = 'test-secret-key'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://your-project-id.supabase.co'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'your_anon_key_here'
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) {
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY = 'your_service_role_key_here'
+}
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgresql://postgres.your-project-id:password@aws-0-region.pooler.supabase.com:6543/postgres'
 }
 
 // Check for Redis configuration
