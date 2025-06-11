@@ -227,7 +227,7 @@ program
       console.log('\n📁 Checking required files...');
       const requiredFiles = [
         'lib/supabase/client.ts',
-        'lib/supabase/types.ts',
+        'lib/supabase/database.types.ts',
         'app/novu/workflows/index.ts'
       ];
 

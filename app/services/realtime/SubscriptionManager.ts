@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase/client'
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { Novu } from '@novu/node'
-import type { Database } from '@/lib/supabase/types'
+import type { Database } from '@/lib/supabase/database.types'
 
 type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert']
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
@@ -365,8 +365,8 @@ export class SubscriptionManager {
       // Trigger Novu workflow with proper type safety
       const result = await this.novu.trigger(workflow.workflow_key, {
         to: validatedRecipients.map(id => ({ subscriberId: id })),
-        payload: notification.payload,
-        overrides: notification.overrides || {},
+        payload: notification.payload as any,
+        overrides: notification.overrides as any || {},
         ...(notification.tags && { tags: notification.tags })
       })
 

@@ -35,6 +35,9 @@ npx novu@latest dev
 # For self-hosted Novu setup
 # npx novu@latest dev -d https://novu-dash.yogo.cloud
 
+# Generate TypeScript types from Supabase
+pnpm xnovu generate-types
+
 # Build for production
 pnpm build
 
@@ -63,6 +66,87 @@ Each workflow module follows this structure:
 - **Supabase Integration** - Real-time subscription to notification insertions
 - **Novu Bridge** - Serves workflows to Novu instance
 - **In-App Notifications** - Uses Novu's Inbox component (`app/components/NotificationToast/`)
+
+## Database Types and Integration
+
+### Auto-Generated Types
+XNovu uses auto-generated TypeScript types from the Supabase database schema:
+
+```bash
+# Generate latest types from remote Supabase project
+pnpm xnovu generate-types
+```
+
+This creates `lib/supabase/database.types.ts` with comprehensive type definitions for all database schemas:
+- `base` - Core platform entities (enterprises, roles, permissions)
+- `notify` - Notification system tables
+- `shared_types` - Common enums and shared types
+
+### Type Usage Patterns
+
+```tsx
+import type { Database } from '@/lib/supabase/database.types'
+
+// Extract specific table types
+type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
+type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert']
+type NotificationUpdate = Database['notify']['Tables']['ent_notification']['Update']
+
+// Extract enum types
+type NotificationStatus = Database['shared_types']['Enums']['notification_status']
+type ChannelType = Database['shared_types']['Enums']['notification_channel_type']
+type WorkflowType = Database['shared_types']['Enums']['notification_workflow_type']
+```
+
+### Notification System Tables
+
+#### Core Tables
+- **`ent_notification`** - Individual notification instances with payload, recipients, and status
+- **`ent_notification_workflow`** - Workflow definitions (static vs dynamic)
+- **`ent_notification_template`** - Channel-specific templates for dynamic workflows
+- **`ent_notification_rule`** - Trigger rules that create notifications
+- **`typ_notification_category`** - Categorization (maintenance, security, etc.)
+- **`typ_notification_priority`** - Priority levels (low, medium, high, critical)
+
+#### Type-Safe Database Operations
+```tsx
+// Type-safe notification insert
+const { data, error } = await supabase
+  .schema('notify')
+  .from('ent_notification')
+  .insert({
+    name: 'Building Alert',
+    payload: { buildingId: 'building-123', message: 'HVAC failure detected' },
+    recipients: ['user-456'],
+    notification_workflow_id: 1,
+    enterprise_id: 'ent-789'
+  } satisfies Database['notify']['Tables']['ent_notification']['Insert'])
+
+// Type-safe notification query with relationships
+const { data: notification } = await supabase
+  .schema('notify')
+  .from('ent_notification')
+  .select(`
+    *,
+    ent_notification_workflow!inner(*),
+    typ_notification_category(*),
+    typ_notification_priority(*)
+  `)
+  .eq('id', notificationId)
+  .single()
+```
+
+#### Handling Json Types
+The generated types use `Json` type for flexible payload fields. Cast to `any` when interfacing with external APIs:
+
+```tsx
+// Safe casting for Novu API integration
+const result = await novu.trigger(workflow.workflow_key, {
+  to: recipients.map(id => ({ subscriberId: id })),
+  payload: notification.payload as any, // Cast Json to any for Novu
+  overrides: notification.overrides as any || {}
+})
+```
 
 ## Static vs Dynamic Workflows
 

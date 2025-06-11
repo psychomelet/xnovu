@@ -57,6 +57,7 @@ create table if not exists notify.typ_notification_category (
   path LTREE,
   path_text TEXT GENERATED ALWAYS as (path::TEXT) STORED,
   sort_order INTEGER default 0 not null,
+  business_id UUID,
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
   enterprise_id UUID references base.ent_enterprise (id) on delete set null,
   created_at TIMESTAMPTZ default NOW() not null,
@@ -77,6 +78,7 @@ create table if not exists notify.typ_notification_priority (
   publish_status shared_types.publish_status default 'DRAFT' not null,
   deactivated BOOLEAN default false not null,
   sort_order INTEGER default 0 not null, -- Higher value can mean higher priority
+  business_id UUID,
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
   enterprise_id UUID references base.ent_enterprise (id) on delete set null,
   created_at TIMESTAMPTZ default NOW() not null,
@@ -99,8 +101,8 @@ create table if not exists notify.ent_notification_template (
   publish_status shared_types.publish_status default 'DRAFT' not null,
   deactivated BOOLEAN default false not null, -- For "Enable Status" or "Template Enable/Disable"
   typ_notification_category_id BIGINT references notify.typ_notification_category (id) on delete set null,
+  business_id UUID,
   channel_type shared_types.notification_channel_type not null,
-  channel_step_key TEXT, -- Identifier for the step in the Novu workflow this template applies to.
   subject_template TEXT, -- For channels like email that support a subject line
   body_template TEXT not null, -- Content template, can use placeholders like {{variable}}
   variables_description JSONB, -- Describes available placeholders and their meanings, e.g., {"username": "Recipient''s name", "event_time": "Time of the event"}
@@ -123,6 +125,7 @@ create table if not exists notify.ent_notification_workflow (
   publish_status shared_types.publish_status default 'DRAFT' not null,
   deactivated BOOLEAN default false not null,
   typ_notification_category_id BIGINT references notify.typ_notification_category (id) on delete set null,
+  business_id UUID,
   workflow_type shared_types.notification_workflow_type not null,
   workflow_key TEXT not null unique, -- Identifier used by the external system (Novu workflow ID)
   default_channels shared_types.notification_channel_type[], -- Default channels for this workflow
@@ -148,6 +151,7 @@ create table if not exists notify.ent_notification_rule (
   publish_status shared_types.publish_status default 'DRAFT' not null,
   deactivated BOOLEAN default false not null, -- For "Enable/Disable" (Enable/Disable) of rules
   notification_workflow_id BIGINT not null references notify.ent_notification_workflow (id) on delete CASCADE,
+  business_id UUID,
   trigger_type TEXT not null, -- e.g., 'EVENT', 'SCHEDULE'
   trigger_config JSONB, -- Configuration, e.g., {"event_name": "user.signup"} or {"cron": "0 9 * * MON"}
   rule_payload JSONB, -- For complex rules defined as javascript, as per design document.
@@ -174,8 +178,8 @@ create table if not exists notify.ent_notification (
   typ_notification_priority_id BIGINT references notify.typ_notification_priority (id) on delete set null,
   notification_workflow_id BIGINT references notify.ent_notification_workflow (id) on delete set null,
   notification_rule_id BIGINT references notify.ent_notification_rule (id) on delete set null, -- Null if manually triggered
-
   notification_status shared_types.notification_status default 'PENDING' not null,
+  business_id UUID,
 
   -- Workflow selection
   -- Complete payload for Novu
@@ -213,8 +217,3 @@ COMMENT on table notify.ent_notification is 'Records individual notification eve
 
 -- Indexes for performance
 create index if not exists idx_ent_notification_created on notify.ent_notification (created_at DESC);
-create index if not exists idx_ent_notification_enterprise_workflow on notify.ent_notification(enterprise_id, notification_workflow_id);
-create index if not exists idx_ent_notification_status on notify.ent_notification(notification_status);
-create index if not exists idx_ent_notification_enterprise_status on notify.ent_notification(enterprise_id, notification_status);
-create index if not exists idx_ent_workflow_enterprise_key on notify.ent_notification_workflow(enterprise_id, workflow_key);
-create index if not exists idx_ent_workflow_enterprise_type on notify.ent_notification_workflow(enterprise_id, workflow_type);

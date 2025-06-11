@@ -6129,6 +6129,137 @@ export type Database = {
         }
         Relationships: []
       }
+      ent_notification: {
+        Row: {
+          business_id: string | null
+          channels:
+            | Database["shared_types"]["Enums"]["notification_channel_type"][]
+            | null
+          created_at: string
+          created_by: string | null
+          deactivated: boolean
+          description: string | null
+          enterprise_id: string | null
+          error_details: Json | null
+          id: number
+          name: string
+          notification_rule_id: number | null
+          notification_status: Database["shared_types"]["Enums"]["notification_status"]
+          notification_workflow_id: number | null
+          overrides: Json | null
+          payload: Json
+          processed_at: string | null
+          publish_status: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          recipients: string[]
+          repr: string | null
+          retracted_at: string | null
+          retraction_reason: string | null
+          scheduled_for: string | null
+          tags: string[] | null
+          transaction_id: string | null
+          typ_notification_category_id: number | null
+          typ_notification_priority_id: number | null
+          updated_at: string
+          updated_by: string | null
+          workflow_version: number | null
+        }
+        Insert: {
+          business_id?: string | null
+          channels?:
+            | Database["shared_types"]["Enums"]["notification_channel_type"][]
+            | null
+          created_at?: string
+          created_by?: string | null
+          deactivated?: boolean
+          description?: string | null
+          enterprise_id?: string | null
+          error_details?: Json | null
+          id?: never
+          name: string
+          notification_rule_id?: number | null
+          notification_status?: Database["shared_types"]["Enums"]["notification_status"]
+          notification_workflow_id?: number | null
+          overrides?: Json | null
+          payload: Json
+          processed_at?: string | null
+          publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          recipients: string[]
+          repr?: string | null
+          retracted_at?: string | null
+          retraction_reason?: string | null
+          scheduled_for?: string | null
+          tags?: string[] | null
+          transaction_id?: string | null
+          typ_notification_category_id?: number | null
+          typ_notification_priority_id?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          workflow_version?: number | null
+        }
+        Update: {
+          business_id?: string | null
+          channels?:
+            | Database["shared_types"]["Enums"]["notification_channel_type"][]
+            | null
+          created_at?: string
+          created_by?: string | null
+          deactivated?: boolean
+          description?: string | null
+          enterprise_id?: string | null
+          error_details?: Json | null
+          id?: never
+          name?: string
+          notification_rule_id?: number | null
+          notification_status?: Database["shared_types"]["Enums"]["notification_status"]
+          notification_workflow_id?: number | null
+          overrides?: Json | null
+          payload?: Json
+          processed_at?: string | null
+          publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          recipients?: string[]
+          repr?: string | null
+          retracted_at?: string | null
+          retraction_reason?: string | null
+          scheduled_for?: string | null
+          tags?: string[] | null
+          transaction_id?: string | null
+          typ_notification_category_id?: number | null
+          typ_notification_priority_id?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          workflow_version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ent_notification_notification_rule_id_fkey"
+            columns: ["notification_rule_id"]
+            isOneToOne: false
+            referencedRelation: "ent_notification_rule"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ent_notification_notification_workflow_id_fkey"
+            columns: ["notification_workflow_id"]
+            isOneToOne: false
+            referencedRelation: "ent_notification_workflow"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ent_notification_typ_notification_category_id_fkey"
+            columns: ["typ_notification_category_id"]
+            isOneToOne: false
+            referencedRelation: "typ_notification_category"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ent_notification_typ_notification_priority_id_fkey"
+            columns: ["typ_notification_priority_id"]
+            isOneToOne: false
+            referencedRelation: "typ_notification_priority"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ent_notification_rule: {
         Row: {
           business_id: string | null
@@ -6185,6 +6316,154 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      ent_notification_template: {
+        Row: {
+          body_template: string
+          business_id: string | null
+          channel_type: Database["shared_types"]["Enums"]["notification_channel_type"]
+          created_at: string
+          created_by: string | null
+          deactivated: boolean
+          description: string | null
+          enterprise_id: string | null
+          id: number
+          name: string
+          publish_status: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          repr: string | null
+          subject_template: string | null
+          typ_notification_category_id: number | null
+          updated_at: string
+          updated_by: string | null
+          variables_description: Json | null
+        }
+        Insert: {
+          body_template: string
+          business_id?: string | null
+          channel_type: Database["shared_types"]["Enums"]["notification_channel_type"]
+          created_at?: string
+          created_by?: string | null
+          deactivated?: boolean
+          description?: string | null
+          enterprise_id?: string | null
+          id?: never
+          name: string
+          publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          repr?: string | null
+          subject_template?: string | null
+          typ_notification_category_id?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          variables_description?: Json | null
+        }
+        Update: {
+          body_template?: string
+          business_id?: string | null
+          channel_type?: Database["shared_types"]["Enums"]["notification_channel_type"]
+          created_at?: string
+          created_by?: string | null
+          deactivated?: boolean
+          description?: string | null
+          enterprise_id?: string | null
+          id?: never
+          name?: string
+          publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          repr?: string | null
+          subject_template?: string | null
+          typ_notification_category_id?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          variables_description?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ent_notification_template_typ_notification_category_id_fkey"
+            columns: ["typ_notification_category_id"]
+            isOneToOne: false
+            referencedRelation: "typ_notification_category"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ent_notification_workflow: {
+        Row: {
+          business_id: string | null
+          control_schema: Json | null
+          created_at: string
+          created_by: string | null
+          deactivated: boolean
+          default_channels:
+            | Database["shared_types"]["Enums"]["notification_channel_type"][]
+            | null
+          description: string | null
+          enterprise_id: string | null
+          id: number
+          name: string
+          payload_schema: Json | null
+          publish_status: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          repr: string | null
+          template_overrides: Json | null
+          typ_notification_category_id: number | null
+          updated_at: string
+          updated_by: string | null
+          workflow_key: string
+          workflow_type: Database["shared_types"]["Enums"]["notification_workflow_type"]
+        }
+        Insert: {
+          business_id?: string | null
+          control_schema?: Json | null
+          created_at?: string
+          created_by?: string | null
+          deactivated?: boolean
+          default_channels?:
+            | Database["shared_types"]["Enums"]["notification_channel_type"][]
+            | null
+          description?: string | null
+          enterprise_id?: string | null
+          id?: never
+          name: string
+          payload_schema?: Json | null
+          publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          repr?: string | null
+          template_overrides?: Json | null
+          typ_notification_category_id?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          workflow_key: string
+          workflow_type: Database["shared_types"]["Enums"]["notification_workflow_type"]
+        }
+        Update: {
+          business_id?: string | null
+          control_schema?: Json | null
+          created_at?: string
+          created_by?: string | null
+          deactivated?: boolean
+          default_channels?:
+            | Database["shared_types"]["Enums"]["notification_channel_type"][]
+            | null
+          description?: string | null
+          enterprise_id?: string | null
+          id?: never
+          name?: string
+          payload_schema?: Json | null
+          publish_status?: "NONE" | "DRAFT" | "DISCARD" | "PUBLISH" | "DELETED"
+          repr?: string | null
+          template_overrides?: Json | null
+          typ_notification_category_id?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          workflow_key?: string
+          workflow_type?: Database["shared_types"]["Enums"]["notification_workflow_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ent_notification_workflow_typ_notification_category_id_fkey"
+            columns: ["typ_notification_category_id"]
+            isOneToOne: false
+            referencedRelation: "typ_notification_category"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       typ_notification_category: {
         Row: {
@@ -6350,6 +6629,14 @@ export type Database = {
         | "DONE"
         | "FAILED"
       gender_type: "MALE" | "FEMALE" | "OTHER"
+      notification_channel_type: "IN_APP" | "EMAIL" | "SMS" | "CHAT" | "PUSH"
+      notification_status:
+        | "PENDING"
+        | "PROCESSING"
+        | "SENT"
+        | "FAILED"
+        | "RETRACTED"
+      notification_workflow_type: "STATIC" | "DYNAMIC"
       order_status: "OPEN" | "COMPLETED" | "FAILED" | "CANCELED"
       permission_type: "SELECT" | "INSERT" | "UPDATE" | "DELETE"
       publish_status:
@@ -6528,6 +6815,15 @@ export const Constants = {
         "FAILED",
       ],
       gender_type: ["MALE", "FEMALE", "OTHER"],
+      notification_channel_type: ["IN_APP", "EMAIL", "SMS", "CHAT", "PUSH"],
+      notification_status: [
+        "PENDING",
+        "PROCESSING",
+        "SENT",
+        "FAILED",
+        "RETRACTED",
+      ],
+      notification_workflow_type: ["STATIC", "DYNAMIC"],
       order_status: ["OPEN", "COMPLETED", "FAILED", "CANCELED"],
       permission_type: ["SELECT", "INSERT", "UPDATE", "DELETE"],
       publish_status: [
