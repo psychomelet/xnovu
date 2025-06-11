@@ -116,7 +116,6 @@ pnpm xnovu generate-types
 ```
 
 This creates `lib/supabase/database.types.ts` with comprehensive type definitions for all database schemas:
-- `base` - Core platform entities (enterprises, roles, permissions)
 - `notify` - Notification system tables
 - `shared_types` - Common enums and shared types
 
