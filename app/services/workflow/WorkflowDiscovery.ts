@@ -9,7 +9,9 @@ export interface DiscoveredWorkflow {
 }
 
 export class WorkflowDiscovery {
-  private static readonly WORKFLOWS_DIR = path.join(process.cwd(), 'app/novu/workflows');
+  private static get WORKFLOWS_DIR(): string {
+    return path.join(process.cwd(), 'app/novu/workflows');
+  }
 
   /**
    * Discover all static workflows from the filesystem

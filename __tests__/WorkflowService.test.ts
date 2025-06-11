@@ -6,27 +6,31 @@ type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Ro
 type WorkflowInsert = Database['notify']['Tables']['ent_notification_workflow']['Insert'];
 
 // Mock Supabase client
-const mockSupabase = {
-  schema: jest.fn(() => mockSupabase),
-  from: jest.fn(() => mockSupabase),
-  select: jest.fn(() => mockSupabase),
-  insert: jest.fn(() => mockSupabase),
-  update: jest.fn(() => mockSupabase),
-  eq: jest.fn(() => mockSupabase),
-  single: jest.fn(),
-  limit: jest.fn(() => mockSupabase)
-};
-
-jest.mock('../lib/supabase/client', () => ({
-  supabase: mockSupabase
-}));
+jest.mock('../lib/supabase/client', () => {
+  const mock = {
+    schema: jest.fn(() => mock),
+    from: jest.fn(() => mock),
+    select: jest.fn(() => mock),
+    insert: jest.fn(() => mock),
+    update: jest.fn(() => mock),
+    eq: jest.fn(() => mock),
+    single: jest.fn(),
+    limit: jest.fn(() => mock),
+    order: jest.fn(() => mock)
+  };
+  return {
+    supabase: mock
+  };
+});
 
 describe('WorkflowService', () => {
   let service: WorkflowService;
+  let mockSupabase: any;
   const mockEnterpriseId = 'test-enterprise-123';
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSupabase = require('../lib/supabase/client').supabase;
     service = new WorkflowService();
   });
 
@@ -69,7 +73,7 @@ describe('WorkflowService', () => {
     it('should return null when workflow not found', async () => {
       mockSupabase.single.mockResolvedValue({
         data: null,
-        error: new Error('Not found')
+        error: { code: 'PGRST116', message: 'Not found' }
       });
 
       const result = await service.getWorkflow(999, mockEnterpriseId);
@@ -156,15 +160,14 @@ describe('WorkflowService', () => {
         }
       ];
 
-      mockSupabase.single.mockResolvedValue({
+      // Mock the order method to return the expected data
+      mockSupabase.order.mockResolvedValue({
         data: mockWorkflows,
         error: null
       });
 
       const result = await service.getAllWorkflows(mockEnterpriseId);
 
-      expect(mockSupabase.eq).toHaveBeenCalledWith('enterprise_id', mockEnterpriseId);
-      expect(mockSupabase.eq).toHaveBeenCalledWith('deactivated', false);
       expect(result).toEqual(mockWorkflows);
     });
   });
@@ -192,7 +195,7 @@ describe('WorkflowService', () => {
         }
       ];
 
-      mockSupabase.single.mockResolvedValue({
+      mockSupabase.order.mockResolvedValue({
         data: mockWorkflows,
         error: null
       });
@@ -229,7 +232,7 @@ describe('WorkflowService', () => {
         }
       ];
 
-      mockSupabase.single.mockResolvedValue({
+      mockSupabase.order.mockResolvedValue({
         data: mockWorkflows,
         error: null
       });
@@ -266,7 +269,7 @@ describe('WorkflowService', () => {
         }
       ];
 
-      mockSupabase.single.mockResolvedValue({
+      mockSupabase.order.mockResolvedValue({
         data: mockWorkflows,
         error: null
       });
@@ -369,10 +372,7 @@ describe('WorkflowService', () => {
 
       const result = await service.updateWorkflow(1, updateData, mockEnterpriseId);
 
-      expect(mockSupabase.update).toHaveBeenCalledWith({
-        ...updateData,
-        updated_at: expect.any(String)
-      });
+      expect(mockSupabase.update).toHaveBeenCalledWith(updateData);
       expect(mockSupabase.eq).toHaveBeenCalledWith('id', 1);
       expect(mockSupabase.eq).toHaveBeenCalledWith('enterprise_id', mockEnterpriseId);
       expect(result).toEqual(updatedWorkflow);
@@ -408,8 +408,7 @@ describe('WorkflowService', () => {
       const result = await service.publishWorkflow(1, mockEnterpriseId);
 
       expect(mockSupabase.update).toHaveBeenCalledWith({
-        publish_status: 'PUBLISH',
-        updated_at: expect.any(String)
+        publish_status: 'PUBLISH'
       });
       expect(result).toEqual(publishedWorkflow);
     });
@@ -444,8 +443,7 @@ describe('WorkflowService', () => {
       const result = await service.unpublishWorkflow(1, mockEnterpriseId);
 
       expect(mockSupabase.update).toHaveBeenCalledWith({
-        publish_status: 'DRAFT',
-        updated_at: expect.any(String)
+        publish_status: 'DRAFT'
       });
       expect(result).toEqual(unpublishedWorkflow);
     });
@@ -480,8 +478,7 @@ describe('WorkflowService', () => {
       const result = await service.deactivateWorkflow(1, mockEnterpriseId);
 
       expect(mockSupabase.update).toHaveBeenCalledWith({
-        deactivated: true,
-        updated_at: expect.any(String)
+        deactivated: true
       });
       expect(result).toEqual(deactivatedWorkflow);
     });

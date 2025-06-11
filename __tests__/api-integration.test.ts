@@ -6,29 +6,31 @@ import { GET as novuGET, POST as novuPOST } from '../app/api/novu/route';
 process.env.NOVU_SECRET_KEY = 'test-secret-key';
 process.env.NEXT_PUBLIC_NOVU_SUBSCRIBER_ID = 'default-subscriber';
 
-// Mock dependencies
-const mockWorkflowLoader = {
-  getWorkflow: jest.fn(),
-  getAllWorkflows: jest.fn()
-};
-
-const mockNotificationService = {
-  updateNotificationStatus: jest.fn()
-};
-
-const mockServe = jest.fn();
-
+// Mock dependencies - define mocks before jest.mock calls to avoid hoisting issues
 jest.mock('../app/services/workflow', () => ({
-  workflowLoader: mockWorkflowLoader
+  workflowLoader: {
+    getWorkflow: jest.fn(),
+    getAllWorkflows: jest.fn()
+  }
 }));
 
 jest.mock('../app/services/database', () => ({
-  notificationService: mockNotificationService
+  notificationService: {
+    updateNotificationStatus: jest.fn()
+  }
 }));
 
 jest.mock('@novu/framework', () => ({
-  serve: mockServe
+  serve: jest.fn()
 }));
+
+import { workflowLoader } from '../app/services/workflow';
+import { notificationService } from '../app/services/database';
+import { serve } from '@novu/framework';
+
+const mockWorkflowLoader = workflowLoader as jest.Mocked<typeof workflowLoader>;
+const mockNotificationService = notificationService as jest.Mocked<typeof notificationService>;
+const mockServe = serve as jest.MockedFunction<typeof serve>;
 
 describe('API Integration Tests', () => {
   beforeEach(() => {
@@ -44,7 +46,7 @@ describe('API Integration Tests', () => {
         })
       };
 
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(mockWorkflow);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(mockWorkflow);
 
       const requestBody = {
         workflowId: 'user-signup',
@@ -92,7 +94,7 @@ describe('API Integration Tests', () => {
         })
       };
 
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(mockWorkflow);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(mockWorkflow);
       mockNotificationService.updateNotificationStatus.mockResolvedValue(undefined);
 
       const requestBody = {
@@ -178,7 +180,12 @@ describe('API Integration Tests', () => {
     });
 
     it('should handle workflow not found', async () => {
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(null);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(null);
+      mockWorkflowLoader.getStats.mockReturnValue({
+        total: 0,
+        static: 0,
+        dynamic: 0
+      });
 
       const requestBody = {
         workflowId: 'non-existent-workflow',
@@ -206,7 +213,7 @@ describe('API Integration Tests', () => {
         trigger: jest.fn().mockRejectedValue(new Error('Novu API error'))
       };
 
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(mockWorkflow);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(mockWorkflow);
 
       const requestBody = {
         workflowId: 'error-workflow',
@@ -267,7 +274,7 @@ describe('API Integration Tests', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(500);
-      expect(responseData.message).toBe('Server configuration error');
+      expect(responseData.message).toBe('Configuration error: NOVU_SECRET_KEY is missing');
 
       // Restore environment variable
       process.env.NOVU_SECRET_KEY = originalSecretKey;
@@ -280,7 +287,7 @@ describe('API Integration Tests', () => {
         })
       };
 
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(mockWorkflow);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(mockWorkflow);
       mockNotificationService.updateNotificationStatus.mockResolvedValue(undefined);
 
       const requestBody = {
@@ -320,7 +327,7 @@ describe('API Integration Tests', () => {
         { key: 'workflow-2', type: 'dynamic' }
       ];
 
-      mockWorkflowLoader.getAllWorkflows.mockResolvedValue(mockWorkflows);
+      mockWorkflowLoader.getAllWorkflows.mockReturnValue(mockWorkflows);
       mockServe.mockReturnValue({
         GET: jest.fn().mockResolvedValue(new Response('Novu GET response')),
         POST: jest.fn().mockResolvedValue(new Response('Novu POST response')),
@@ -371,7 +378,7 @@ describe('API Integration Tests', () => {
 
     it('should cache handlers between requests', async () => {
       const mockWorkflows = [{ key: 'test-workflow' }];
-      mockWorkflowLoader.getAllWorkflows.mockResolvedValue(mockWorkflows);
+      mockWorkflowLoader.getAllWorkflows.mockReturnValue(mockWorkflows);
 
       const mockHandlers = {
         GET: jest.fn().mockResolvedValue(new Response('GET')),
@@ -413,7 +420,7 @@ describe('API Integration Tests', () => {
         })
       };
 
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(mockWorkflow);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(mockWorkflow);
 
       const requestBody = {
         workflowId: 'test-workflow',
@@ -437,9 +444,9 @@ describe('API Integration Tests', () => {
     });
 
     it('should handle workflow loader errors', async () => {
-      mockWorkflowLoader.getWorkflow.mockRejectedValue(
-        new Error('Workflow loader initialization failed')
-      );
+      mockWorkflowLoader.getWorkflow.mockImplementation(() => {
+        throw new Error('Workflow loader initialization failed');
+      });
 
       const requestBody = {
         workflowId: 'test-workflow'
@@ -468,7 +475,7 @@ describe('API Integration Tests', () => {
         trigger: jest.fn().mockResolvedValue({ transactionId: 'txn-123' })
       };
 
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(mockWorkflow);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(mockWorkflow);
 
       const requestBody = {
         workflowId: 'test-workflow',
@@ -497,7 +504,7 @@ describe('API Integration Tests', () => {
         trigger: jest.fn().mockResolvedValue({ transactionId: 'txn-123' })
       };
 
-      mockWorkflowLoader.getWorkflow.mockResolvedValue(mockWorkflow);
+      mockWorkflowLoader.getWorkflow.mockReturnValue(mockWorkflow);
 
       // Create large payload
       const largePayload = {

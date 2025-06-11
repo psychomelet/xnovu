@@ -5,28 +5,33 @@ import type { Database } from '../lib/supabase/database.types';
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert'];
 
-// Mock Supabase client
-const mockSupabase = {
-  schema: jest.fn(() => mockSupabase),
-  from: jest.fn(() => mockSupabase),
-  select: jest.fn(() => mockSupabase),
-  insert: jest.fn(() => mockSupabase),
-  update: jest.fn(() => mockSupabase),
-  eq: jest.fn(() => mockSupabase),
-  single: jest.fn(),
-  limit: jest.fn(() => mockSupabase)
-};
-
-jest.mock('../lib/supabase/client', () => ({
-  supabase: mockSupabase
-}));
+// Mock Supabase client with proper factory pattern
+jest.mock('../lib/supabase/client', () => {
+  const mock = {
+    schema: jest.fn(() => mock),
+    from: jest.fn(() => mock),
+    select: jest.fn(() => mock),
+    insert: jest.fn(() => mock),
+    update: jest.fn(() => mock),
+    eq: jest.fn(() => mock),
+    single: jest.fn(),
+    limit: jest.fn(() => mock),
+    order: jest.fn(() => mock)
+  };
+  return {
+    supabase: mock
+  };
+});
 
 describe('NotificationService', () => {
   let service: NotificationService;
+  let mockSupabase: any;
   const mockEnterpriseId = 'test-enterprise-123';
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Get fresh mock instance
+    mockSupabase = require('../lib/supabase/client').supabase;
     service = new NotificationService();
   });
 
@@ -74,7 +79,7 @@ describe('NotificationService', () => {
     it('should return null when notification not found', async () => {
       mockSupabase.single.mockResolvedValue({
         data: null,
-        error: new Error('Not found')
+        error: null // Return null data without error for not found case
       });
 
       const result = await service.getNotification(999, mockEnterpriseId);
@@ -198,10 +203,23 @@ describe('NotificationService', () => {
     });
 
     it('should handle update errors', async () => {
-      mockSupabase.single.mockResolvedValue({
-        data: null,
-        error: new Error('Notification not found')
-      });
+      // Mock the entire chain to return an error
+      const mockChain = {
+        schema: jest.fn(() => mockChain),
+        from: jest.fn(() => mockChain),
+        update: jest.fn(() => mockChain),
+        eq: jest.fn()
+      };
+      
+      // The first .eq() call returns the chain, the second returns a promise with error
+      mockChain.eq
+        .mockReturnValueOnce(mockChain) // First .eq('id', id) returns chain
+        .mockResolvedValueOnce({ // Second .eq('enterprise_id', enterpriseId) returns promise with error
+          data: null,
+          error: new Error('Notification not found')
+        });
+      
+      mockSupabase.schema.mockReturnValueOnce(mockChain);
 
       await expect(
         service.updateNotificationStatus(999, 'SENT', mockEnterpriseId)
@@ -250,7 +268,8 @@ describe('NotificationService', () => {
         }
       ];
 
-      mockSupabase.single.mockResolvedValue({
+      // Mock the full chain since this method doesn't use .single()
+      mockSupabase.order.mockResolvedValue({
         data: mockNotifications,
         error: null
       });
@@ -267,7 +286,7 @@ describe('NotificationService', () => {
     });
 
     it('should use default limit when not specified', async () => {
-      mockSupabase.single.mockResolvedValue({
+      mockSupabase.order.mockResolvedValue({
         data: [],
         error: null
       });
@@ -298,14 +317,27 @@ describe('NotificationService', () => {
     });
 
     it('should handle cancellation errors', async () => {
-      mockSupabase.single.mockResolvedValue({
-        data: null,
-        error: new Error('Access denied')
-      });
+      // Mock the entire chain to return an error
+      const mockChain = {
+        schema: jest.fn(() => mockChain),
+        from: jest.fn(() => mockChain),
+        update: jest.fn(() => mockChain),
+        eq: jest.fn()
+      };
+      
+      // The first .eq() call returns the chain, the second returns a promise with error
+      mockChain.eq
+        .mockReturnValueOnce(mockChain) // First .eq('id', id) returns chain
+        .mockResolvedValueOnce({ // Second .eq('enterprise_id', enterpriseId) returns promise with error
+          data: null,
+          error: new Error('Access denied')
+        });
+      
+      mockSupabase.schema.mockReturnValueOnce(mockChain);
 
       await expect(
         service.cancelNotification(1, mockEnterpriseId)
-      ).rejects.toThrow('Failed to cancel notification: Access denied');
+      ).rejects.toThrow('Failed to update notification status: Access denied');
     });
   });
 
@@ -332,7 +364,7 @@ describe('NotificationService', () => {
         }
       ];
 
-      mockSupabase.single.mockResolvedValue({
+      mockSupabase.order.mockResolvedValue({
         data: mockNotifications,
         error: null
       });

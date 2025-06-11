@@ -2,40 +2,60 @@ import { DynamicWorkflowFactory } from '../app/services/workflow/DynamicWorkflow
 import type { WorkflowConfig } from '../app/services/database/WorkflowService';
 
 // Mock dependencies
-const mockNotificationService = {
-  updateNotificationStatus: jest.fn()
-};
-
-const mockTemplateRenderer = {
-  renderTemplate: jest.fn()
-};
-
-const mockGetTemplateRenderer = jest.fn(() => mockTemplateRenderer);
 
 // Mock workflow function from @novu/framework
-const mockWorkflowFunction = jest.fn();
-const mockWorkflow = jest.fn((key, stepFunction, options) => {
-  mockWorkflowFunction(key, stepFunction, options);
-  return { key, stepFunction, options };
+jest.mock('@novu/framework', () => {
+  const mockWorkflowFunction = jest.fn();
+  const mockWorkflow = jest.fn((key, stepFunction, options) => {
+    mockWorkflowFunction(key, stepFunction, options);
+    return { key, stepFunction, options };
+  });
+  mockWorkflow.mockFunction = mockWorkflowFunction;
+  return {
+    workflow: mockWorkflow
+  };
 });
 
-jest.mock('@novu/framework', () => ({
-  workflow: mockWorkflow
-}));
+jest.mock('../app/services/database/NotificationService', () => {
+  const mockFn = jest.fn();
+  return {
+    NotificationService: jest.fn().mockImplementation(() => ({
+      updateNotificationStatus: mockFn
+    })),
+    notificationService: {
+      updateNotificationStatus: mockFn
+    }
+  };
+});
 
-jest.mock('../app/services/database/NotificationService', () => ({
-  notificationService: mockNotificationService
-}));
-
-jest.mock('../app/services/template/TemplateRenderer', () => ({
-  getTemplateRenderer: mockGetTemplateRenderer
-}));
+jest.mock('../app/services/template/TemplateRenderer', () => {
+  const mockFn = jest.fn();
+  return {
+    getTemplateRenderer: jest.fn(() => ({
+      renderTemplate: mockFn
+    }))
+  };
+});
 
 describe('DynamicWorkflowFactory', () => {
   const mockEnterpriseId = 'test-enterprise-123';
+  let mockWorkflow: any;
+  let mockUpdateNotificationStatus: any;
+  let mockRenderTemplate: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Get fresh mock instances
+    mockWorkflow = require('@novu/framework').workflow;
+    const { notificationService } = require('../app/services/database/NotificationService');
+    const { getTemplateRenderer } = require('../app/services/template/TemplateRenderer');
+    
+    mockUpdateNotificationStatus = notificationService.updateNotificationStatus;
+    mockRenderTemplate = getTemplateRenderer().renderTemplate;
+    
+    // Reset mock functions
+    mockUpdateNotificationStatus.mockReset();
+    mockRenderTemplate.mockReset();
   });
 
   describe('createDynamicWorkflow', () => {
@@ -96,7 +116,7 @@ describe('DynamicWorkflowFactory', () => {
       };
 
       // Mock template rendering
-      mockTemplateRenderer.renderTemplate.mockResolvedValue({
+      mockRenderTemplate.mockResolvedValue({
         subject: 'Test Subject',
         body: 'Test Body Content'
       });
@@ -122,20 +142,20 @@ describe('DynamicWorkflowFactory', () => {
       await stepFunction({ step: mockStep, payload });
 
       // Verify status updates
-      expect(mockNotificationService.updateNotificationStatus).toHaveBeenCalledWith(
+      expect(mockUpdateNotificationStatus).toHaveBeenCalledWith(
         456,
         'PROCESSING',
         mockEnterpriseId
       );
 
-      expect(mockNotificationService.updateNotificationStatus).toHaveBeenCalledWith(
+      expect(mockUpdateNotificationStatus).toHaveBeenCalledWith(
         456,
         'SENT',
         mockEnterpriseId
       );
 
       // Verify template rendering
-      expect(mockTemplateRenderer.renderTemplate).toHaveBeenCalledWith(
+      expect(mockRenderTemplate).toHaveBeenCalledWith(
         '123',
         mockEnterpriseId,
         { message: 'Test message' }
@@ -157,7 +177,7 @@ describe('DynamicWorkflowFactory', () => {
       };
 
       // Mock template rendering to throw error
-      mockTemplateRenderer.renderTemplate.mockRejectedValue(
+      mockRenderTemplate.mockRejectedValue(
         new Error('Template not found')
       );
 
@@ -180,8 +200,14 @@ describe('DynamicWorkflowFactory', () => {
       // Execute workflow and expect it to throw
       await expect(stepFunction({ step: mockStep, payload })).rejects.toThrow('Template not found');
 
-      // Verify FAILED status update
-      expect(mockNotificationService.updateNotificationStatus).toHaveBeenCalledWith(
+      // Verify status updates - both PROCESSING and FAILED should be called
+      expect(mockUpdateNotificationStatus).toHaveBeenCalledWith(
+        789,
+        'PROCESSING',
+        mockEnterpriseId
+      );
+      
+      expect(mockUpdateNotificationStatus).toHaveBeenCalledWith(
         789,
         'FAILED',
         mockEnterpriseId,
@@ -197,7 +223,7 @@ describe('DynamicWorkflowFactory', () => {
         emailTemplateId: 123
       };
 
-      mockTemplateRenderer.renderTemplate.mockResolvedValue({
+      mockRenderTemplate.mockResolvedValue({
         subject: 'Test',
         body: 'Test'
       });
@@ -217,7 +243,7 @@ describe('DynamicWorkflowFactory', () => {
       await stepFunction({ step: mockStep, payload });
 
       // Verify that string ID was parsed to number
-      expect(mockNotificationService.updateNotificationStatus).toHaveBeenCalledWith(
+      expect(mockUpdateNotificationStatus).toHaveBeenCalledWith(
         123, // Should be parsed to number
         'PROCESSING',
         mockEnterpriseId
@@ -232,7 +258,7 @@ describe('DynamicWorkflowFactory', () => {
         inAppTemplateId: 124
       };
 
-      mockTemplateRenderer.renderTemplate.mockResolvedValue({
+      mockRenderTemplate.mockResolvedValue({
         subject: 'In-App Subject',
         body: 'In-App Body'
       });
@@ -277,7 +303,7 @@ describe('DynamicWorkflowFactory', () => {
         smsTemplateId: 125
       };
 
-      mockTemplateRenderer.renderTemplate.mockResolvedValue({
+      mockRenderTemplate.mockResolvedValue({
         body: 'SMS message content'
       });
 
@@ -316,7 +342,7 @@ describe('DynamicWorkflowFactory', () => {
         pushTemplateId: 126
       };
 
-      mockTemplateRenderer.renderTemplate.mockResolvedValue({
+      mockRenderTemplate.mockResolvedValue({
         subject: 'Push Title',
         body: 'Push notification body'
       });
@@ -358,7 +384,7 @@ describe('DynamicWorkflowFactory', () => {
         // Missing smsTemplateId
       };
 
-      mockTemplateRenderer.renderTemplate.mockResolvedValue({
+      mockRenderTemplate.mockResolvedValue({
         subject: 'Email Subject',
         body: 'Email Body'
       });

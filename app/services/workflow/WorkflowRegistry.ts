@@ -117,15 +117,10 @@ export class WorkflowRegistry {
   }
 
   /**
-   * Get a workflow by key (checks static first, then enterprise-specific)
+   * Get a workflow by key (checks enterprise-specific first when enterpriseId provided, then static)
    */
   getWorkflow(workflowKey: string, enterpriseId?: string): RegisteredWorkflow | null {
-    // First check static workflows
-    if (this.workflows.has(workflowKey)) {
-      return this.workflows.get(workflowKey)!;
-    }
-
-    // Then check enterprise-specific workflows
+    // If enterprise ID provided, check enterprise-specific workflows FIRST
     if (enterpriseId) {
       const enterpriseWorkflowMap = this.enterpriseWorkflows.get(enterpriseId);
       if (enterpriseWorkflowMap?.has(workflowKey)) {
@@ -137,6 +132,11 @@ export class WorkflowRegistry {
       if (this.workflows.has(prefixedKey)) {
         return this.workflows.get(prefixedKey)!;
       }
+    }
+
+    // Fallback to static workflows
+    if (this.workflows.has(workflowKey)) {
+      return this.workflows.get(workflowKey)!;
     }
 
     return null;

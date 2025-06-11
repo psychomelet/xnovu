@@ -220,6 +220,9 @@ export class WorkflowService {
       config.payloadSchema = workflow.payload_schema as any;
     }
 
+    // Tags are already parsed from template_overrides above
+    // No need to parse tags from workflow directly as they don't exist on the workflow row
+
     return config;
   }
 }

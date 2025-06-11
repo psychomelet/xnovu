@@ -1,12 +1,26 @@
-import { WorkflowDiscovery } from '../app/services/workflow/WorkflowDiscovery';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+// Mock process.cwd() BEFORE importing WorkflowDiscovery
+const originalCwd = process.cwd;
+process.cwd = jest.fn(() => '/app');
+
+// Now import WorkflowDiscovery after mocking process.cwd
+import { WorkflowDiscovery } from '../app/services/workflow/WorkflowDiscovery';
+
+afterAll(() => {
+  process.cwd = originalCwd;
+});
+
 // Mock fs operations
+const mockReaddir = jest.fn();
+const mockAccess = jest.fn();
+const mockStat = jest.fn();
+
 jest.mock('fs/promises', () => ({
-  readdir: jest.fn(),
-  access: jest.fn(),
-  stat: jest.fn()
+  readdir: mockReaddir,
+  access: mockAccess,
+  stat: mockStat
 }));
 
 // Mock path operations
@@ -17,7 +31,11 @@ jest.mock('path', () => ({
   basename: jest.fn()
 }));
 
-const mockFs = fs as jest.Mocked<typeof fs>;
+const mockFs = {
+  readdir: mockReaddir,
+  access: mockAccess,
+  stat: mockStat
+};
 const mockPath = path as jest.Mocked<typeof path>;
 
 describe('WorkflowDiscovery', () => {
@@ -27,10 +45,20 @@ describe('WorkflowDiscovery', () => {
     jest.clearAllMocks();
     
     // Setup default path mocks
-    mockPath.join.mockImplementation((...args) => args.join('/'));
+    mockPath.join.mockImplementation((...args) => {
+      // Handle the specific call to create WORKFLOWS_DIR
+      if (args.length === 2 && args[1] === 'app/novu/workflows') {
+        return mockWorkflowsDir;
+      }
+      return args.join('/');
+    });
     mockPath.resolve.mockImplementation((...args) => args.join('/'));
     mockPath.dirname.mockReturnValue('/app/novu');
     mockPath.basename.mockImplementation((p) => p.split('/').pop() || '');
+    
+    // Reset fs mocks to default successful behavior
+    mockFs.readdir.mockResolvedValue([]);
+    mockFs.access.mockResolvedValue(undefined);
   });
 
   describe('discoverStaticWorkflows', () => {
