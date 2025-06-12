@@ -1,13 +1,14 @@
-# XNovu Dynamic Workflow System - Deployment Guide
+# XNovu Dynamic Workflow System - Operations Guide
 
 ## Overview
 
-This guide provides comprehensive instructions for deploying the XNovu Dynamic Workflow System in production environments, including configuration, monitoring, and operational procedures.
+This guide provides comprehensive instructions for operating the XNovu Dynamic Workflow System in production environments, including Temporal configuration, worker management, monitoring, and operational procedures.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
 - [Environment Configuration](#environment-configuration)
+- [Temporal Setup](#temporal-setup)
 - [Database Setup](#database-setup)
 - [Application Deployment](#application-deployment)
 - [Monitoring & Observability](#monitoring--observability)
@@ -22,14 +23,15 @@ This guide provides comprehensive instructions for deploying the XNovu Dynamic W
 - **Node.js**: Version 18.0.0 or higher
 - **pnpm**: Version 8.0.0 or higher
 - **PostgreSQL**: Version 14.0 or higher (via Supabase)
-- **Memory**: Minimum 2GB RAM for production
-- **Storage**: 10GB minimum for application and logs
+- **Temporal Server**: Version 1.22.0 or higher
+- **Memory**: Minimum 4GB RAM for production (including Temporal workers)
+- **Storage**: 20GB minimum for application, logs, and Temporal data
 
 ### External Services
 
 - **Supabase**: PostgreSQL database with real-time subscriptions
 - **Novu**: Cloud or self-hosted notification infrastructure
-- **Redis** (optional): For enhanced caching and session management
+- **Temporal**: Workflow orchestration platform (cloud or self-hosted)
 
 ### Network Requirements
 
@@ -37,6 +39,7 @@ This guide provides comprehensive instructions for deploying the XNovu Dynamic W
 - **Outbound HTTPS (443)**: For Supabase connections
 - **Inbound HTTP/HTTPS**: For API endpoints
 - **WebSocket**: For Supabase real-time subscriptions
+- **gRPC (7233)**: For Temporal server connections
 
 ## Environment Configuration
 
@@ -60,8 +63,11 @@ NODE_ENV=production
 NEXT_PUBLIC_APP_URL=https://your-domain.com
 LOG_LEVEL=info
 
-# Optional: Redis for enhanced caching
-REDIS_URL=redis://localhost:6379
+# Temporal Configuration
+TEMPORAL_ADDRESS=localhost:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_TASK_QUEUE=xnovu-notifications
+TEMPORAL_WORKER_MAX_CONCURRENT=100
 
 # Optional: Monitoring
 SENTRY_DSN=your-sentry-dsn
@@ -89,6 +95,92 @@ NEXT_PUBLIC_APP_URL=https://staging.your-domain.com
 NODE_ENV=production
 LOG_LEVEL=warn
 NEXT_PUBLIC_APP_URL=https://your-domain.com
+```
+
+## Temporal Setup
+
+### Temporal Server Deployment
+
+1. **Using Temporal Cloud** (Recommended for production)
+   ```bash
+   # Configure Temporal Cloud connection
+   export TEMPORAL_ADDRESS=your-namespace.tmprl.cloud:7233
+   export TEMPORAL_NAMESPACE=your-namespace
+   export TEMPORAL_CLIENT_CERT_PATH=/path/to/client.pem
+   export TEMPORAL_CLIENT_KEY_PATH=/path/to/client.key
+   ```
+
+2. **Self-Hosted Temporal**
+   ```yaml
+   # docker-compose.temporal.yml
+   version: '3.8'
+   services:
+     temporal:
+       image: temporalio/temporal:latest
+       ports:
+         - "7233:7233"
+       environment:
+         - DB=postgresql
+         - DB_PORT=5432
+         - POSTGRES_USER=temporal
+         - POSTGRES_PWD=temporal
+         - POSTGRES_SEEDS=postgres:5432
+       depends_on:
+         - postgres
+
+     temporal-ui:
+       image: temporalio/ui:latest
+       ports:
+         - "8080:8080"
+       environment:
+         - TEMPORAL_ADDRESS=temporal:7233
+
+     postgres:
+       image: postgres:14-alpine
+       ports:
+         - "5432:5432"
+       environment:
+         - POSTGRES_USER=temporal
+         - POSTGRES_PASSWORD=temporal
+         - POSTGRES_DB=temporal
+       volumes:
+         - temporal_data:/var/lib/postgresql/data
+
+   volumes:
+     temporal_data:
+   ```
+
+### Worker Configuration
+
+The XNovu daemon includes an embedded Temporal worker that processes notification workflows:
+
+```typescript
+// Worker configuration in daemon/src/temporal/worker.ts
+export const workerOptions = {
+  taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notifications',
+  maxConcurrentActivityExecutions: parseInt(process.env.TEMPORAL_WORKER_MAX_CONCURRENT || '100'),
+  maxConcurrentWorkflowTaskExecutions: parseInt(process.env.TEMPORAL_WORKER_MAX_CONCURRENT || '100'),
+  enableNonLocalActivities: true,
+  interceptors: {
+    activity: [createActivityLogger()],
+    workflow: [createWorkflowLogger()]
+  }
+};
+```
+
+### Temporal Namespace Setup
+
+```bash
+# Create namespace (self-hosted only)
+temporal operator namespace create --namespace xnovu-prod
+
+# Register search attributes for better workflow visibility
+temporal operator search-attribute create \
+  --namespace xnovu-prod \
+  --name EnterpriseId --type Text \
+  --name WorkflowType --type Text \
+  --name NotificationId --type Text \
+  --name Status --type Text
 ```
 
 ## Database Setup
@@ -264,16 +356,32 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
          retries: 3
          start_period: 40s
 
-     redis:
-       image: redis:7-alpine
-       ports:
-         - "6379:6379"
+     xnovu-daemon:
+       build: 
+         context: ./daemon
+         dockerfile: Dockerfile
+       environment:
+         - NODE_ENV=production
+         - SUPABASE_URL=${SUPABASE_URL}
+         - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+         - NOVU_SECRET_KEY=${NOVU_SECRET_KEY}
+         - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS}
+         - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE}
+         - TEMPORAL_TASK_QUEUE=${TEMPORAL_TASK_QUEUE}
        volumes:
-         - redis_data:/data
+         - ./logs:/app/logs
        restart: unless-stopped
+       depends_on:
+         - xnovu
+       healthcheck:
+         test: ["CMD", "node", "-e", "require('http').get('http://localhost:8090/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
+         interval: 30s
+         timeout: 10s
+         retries: 3
+         start_period: 40s
 
    volumes:
-     redis_data:
+     logs:
    ```
 
 ### Kubernetes Deployment
@@ -339,6 +447,66 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
              initialDelaySeconds: 5
              periodSeconds: 5
    ---
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: xnovu-daemon-deployment
+     namespace: default
+   spec:
+     replicas: 1  # Single instance to avoid duplicate processing
+     selector:
+       matchLabels:
+         app: xnovu-daemon
+     template:
+       metadata:
+         labels:
+           app: xnovu-daemon
+       spec:
+         containers:
+         - name: xnovu-daemon
+           image: your-registry/xnovu-daemon:latest
+           env:
+           - name: NODE_ENV
+             value: "production"
+           - name: SUPABASE_URL
+             valueFrom:
+               secretKeyRef:
+                 name: xnovu-secrets
+                 key: supabase-url
+           - name: SUPABASE_SERVICE_ROLE_KEY
+             valueFrom:
+               secretKeyRef:
+                 name: xnovu-secrets
+                 key: supabase-service-key
+           - name: NOVU_SECRET_KEY
+             valueFrom:
+               secretKeyRef:
+                 name: xnovu-secrets
+                 key: novu-secret-key
+           - name: TEMPORAL_ADDRESS
+             valueFrom:
+               configMapKeyRef:
+                 name: xnovu-config
+                 key: temporal-address
+           - name: TEMPORAL_NAMESPACE
+             valueFrom:
+               configMapKeyRef:
+                 name: xnovu-config
+                 key: temporal-namespace
+           resources:
+             requests:
+               memory: "1Gi"
+               cpu: "500m"
+             limits:
+               memory: "2Gi"
+               cpu: "1000m"
+           livenessProbe:
+             httpGet:
+               path: /health
+               port: 8090
+             initialDelaySeconds: 30
+             periodSeconds: 10
+   ---
    apiVersion: v1
    kind: Service
    metadata:
@@ -373,6 +541,9 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
    data:
      LOG_LEVEL: "info"
      NODE_ENV: "production"
+     temporal-address: "temporal:7233"
+     temporal-namespace: "default"
+     temporal-task-queue: "xnovu-notifications"
    ```
 
 ### Vercel Deployment
@@ -427,6 +598,7 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
        database: await checkDatabase(),
        novu: await checkNovu(),
        workflows: await checkWorkflows(),
+       temporal: await checkTemporalConnection(),
        timestamp: new Date().toISOString()
      };
 
@@ -473,6 +645,66 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
    });
 
    export default logger;
+   ```
+
+### Temporal Monitoring
+
+1. **Temporal UI Access**
+
+   The Temporal UI provides comprehensive visibility into workflow execution:
+
+   - **Workflow List**: View all running and completed workflows
+   - **Workflow Details**: Inspect individual workflow execution history
+   - **Search**: Query workflows by custom search attributes
+   - **Metrics**: Monitor worker performance and task queue health
+
+   Access at: `http://temporal-ui:8080` (or your Temporal Cloud URL)
+
+2. **Temporal Metrics**
+
+   ```typescript
+   // daemon/src/temporal/metrics.ts
+   export async function getTemporalMetrics() {
+     const client = getTemporalClient();
+     
+     return {
+       workflows: {
+         running: await client.workflowService.countWorkflowExecutions({
+           namespace: process.env.TEMPORAL_NAMESPACE,
+           query: 'ExecutionStatus="Running"'
+         }),
+         completed: await client.workflowService.countWorkflowExecutions({
+           namespace: process.env.TEMPORAL_NAMESPACE,
+           query: 'ExecutionStatus="Completed"'
+         }),
+         failed: await client.workflowService.countWorkflowExecutions({
+           namespace: process.env.TEMPORAL_NAMESPACE,
+           query: 'ExecutionStatus="Failed"'
+         })
+       },
+       taskQueue: {
+         name: process.env.TEMPORAL_TASK_QUEUE,
+         pollers: await getTaskQueuePollers()
+       }
+     };
+   }
+   ```
+
+3. **Worker Health Monitoring**
+
+   ```typescript
+   // daemon/src/monitoring/health.ts
+   export class WorkerHealthMonitor {
+     async checkWorkerHealth() {
+       return {
+         status: this.worker.getStatus(),
+         runningActivities: this.worker.runningActivities.size,
+         runningWorkflows: this.worker.runningWorkflows.size,
+         taskQueueName: this.worker.options.taskQueue,
+         lastHeartbeat: new Date().toISOString()
+       };
+     }
+   }
    ```
 
 ### Performance Monitoring
@@ -540,6 +772,30 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
        annotations:
          summary: "XNovu service is down"
 
+     - alert: XNovuDaemonDown
+       expr: up{job="xnovu-daemon"} == 0
+       for: 5m
+       labels:
+         severity: critical
+       annotations:
+         summary: "XNovu daemon service is down"
+
+     - alert: TemporalWorkerDown
+       expr: temporal_worker_active == 0
+       for: 2m
+       labels:
+         severity: critical
+       annotations:
+         summary: "Temporal worker is not processing tasks"
+
+     - alert: HighWorkflowFailureRate
+       expr: rate(temporal_workflow_failed_total[5m]) > 0.1
+       for: 5m
+       labels:
+         severity: warning
+       annotations:
+         summary: "High workflow failure rate detected"
+
      - alert: HighErrorRate
        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
        for: 2m
@@ -595,30 +851,35 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
 ### Scalability
 
 1. **Horizontal Scaling**
-   - Use load balancers
+   - Use load balancers for API services
    - Stateless application design
    - Database connection pooling
-   - Cache shared data in Redis
+   - Temporal handles workflow state persistence
 
-2. **Workflow Registry Scaling**
+2. **Temporal Worker Scaling**
    ```typescript
-   // Use Redis for distributed workflow registry
-   class DistributedWorkflowRegistry extends WorkflowRegistry {
-     private redis = new Redis(process.env.REDIS_URL);
+   // Configure worker pool for high throughput
+   export const workerOptions = {
+     taskQueue: 'xnovu-notifications',
+     maxConcurrentActivityExecutions: 200,
+     maxConcurrentWorkflowTaskExecutions: 200,
+     maxCachedWorkflows: 100,
+     // Enable sticky execution for better performance
+     enableSDKTracing: true,
+     stickyScheduleToStartTimeout: '10s'
+   };
+   ```
 
-     async loadEnterpriseWorkflows(enterpriseId: string) {
-       const cached = await this.redis.get(`workflows:${enterpriseId}`);
-       if (cached) {
-         // Load from cache
-         return JSON.parse(cached);
-       }
-       
-       // Load from database and cache
-       const workflows = await super.loadEnterpriseWorkflows(enterpriseId);
-       await this.redis.setex(`workflows:${enterpriseId}`, 300, JSON.stringify(workflows));
-       return workflows;
-     }
-   }
+3. **Multi-Region Deployment**
+   ```yaml
+   # Deploy workers in multiple regions
+   regions:
+     - us-east-1:
+         workers: 3
+         temporal_endpoint: temporal-us-east.tmprl.cloud:7233
+     - eu-west-1:
+         workers: 2
+         temporal_endpoint: temporal-eu-west.tmprl.cloud:7233
    ```
 
 3. **Database Optimization**
@@ -653,26 +914,37 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
 
 ### Common Issues
 
-1. **Workflow Not Loading**
+1. **Temporal Worker Not Processing**
    ```bash
-   # Check workflow registry
-   curl http://localhost:3000/api/trigger \
-     -H "Content-Type: application/json" \
-     -d '{"workflowId": "test", "enterpriseId": "test"}'
+   # Check worker status
+   curl http://localhost:8090/health
 
-   # Check database connectivity
-   npx supabase status
+   # View Temporal UI for task queue status
+   open http://localhost:8080
+
+   # Check worker logs
+   docker logs xnovu-daemon
+
+   # Verify Temporal connection
+   temporal operator namespace describe --namespace default
    ```
 
-2. **Template Rendering Failures**
-   ```typescript
-   // Enable debug logging
-   process.env.LOG_LEVEL = 'debug';
-   
-   // Check template cache
-   const renderer = getTemplateRenderer();
-   const stats = renderer.getCacheStats();
-   console.log('Template cache stats:', stats);
+2. **Workflow Execution Failures**
+   ```bash
+   # Query failed workflows
+   temporal workflow list \
+     --namespace default \
+     --query 'ExecutionStatus="Failed"'
+
+   # Get workflow execution history
+   temporal workflow show \
+     --workflow-id <workflow-id> \
+     --run-id <run-id>
+
+   # Check for stuck workflows
+   temporal workflow list \
+     --namespace default \
+     --query 'ExecutionStatus="Running" AND StartTime < "2024-01-01T00:00:00Z"'
    ```
 
 3. **Database Connection Issues**
@@ -682,6 +954,23 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
    
    # Check connection pool
    SELECT count(*) FROM pg_stat_activity;
+   ```
+
+4. **Subscription Not Working**
+   ```typescript
+   // Check Supabase realtime status
+   const { data, error } = await supabase
+     .from('ent_notification')
+     .select('*')
+     .limit(1);
+   
+   if (error) {
+     console.error('Database connection error:', error);
+   }
+   
+   // Verify realtime is enabled on table
+   SELECT * FROM pg_publication_tables 
+   WHERE pubname = 'supabase_realtime';
    ```
 
 ### Debug Mode
@@ -696,26 +985,41 @@ npm run dev
 
 ### Performance Issues
 
-1. **Slow Database Queries**
-   ```sql
-   -- Identify slow queries
+1. **Slow Workflow Execution**
+   ```bash
+   # Monitor workflow task latency
+   temporal workflow list \
+     --namespace default \
+     --query 'ExecutionTime > "10s"'
+
+   # Check activity execution times
+   temporal activity list \
+     --namespace default \
+     --workflow-id <workflow-id>
+   ```
+
+2. **Worker Performance**
+   ```typescript
+   // Monitor worker metrics
+   const metrics = await worker.getMetrics();
+   console.log('Worker metrics:', {
+     taskQueueBacklog: metrics.taskQueueBacklog,
+     activitiesPerSecond: metrics.activitiesPerSecond,
+     workflowsPerSecond: metrics.workflowsPerSecond
+   });
+   ```
+
+3. **Temporal Server Performance**
+   ```bash
+   # Check Temporal server metrics
+   curl http://temporal:7233/metrics
+
+   # Monitor database performance
    SELECT query, mean_time, calls 
    FROM pg_stat_statements 
+   WHERE query LIKE '%temporal%'
    ORDER BY mean_time DESC 
    LIMIT 10;
-   ```
-
-2. **Memory Leaks**
-   ```bash
-   # Monitor memory usage
-   node --inspect --max-old-space-size=4096 server.js
-   ```
-
-3. **Template Cache Issues**
-   ```typescript
-   // Clear template cache
-   const renderer = getTemplateRenderer();
-   renderer.clearCache();
    ```
 
 ## Maintenance Procedures
@@ -769,14 +1073,47 @@ npm run dev
 # Check application status
 curl -f http://localhost:3000/api/health
 
-# Monitor logs
+# Check daemon status
+curl -f http://localhost:8090/health
+
+# Monitor application logs
 kubectl logs -f deployment/xnovu-deployment
+
+# Monitor daemon logs
+kubectl logs -f deployment/xnovu-daemon-deployment
 
 # Database status
 npx supabase status
 
+# Temporal cluster status
+temporal operator cluster health
+
+# List active workflows
+temporal workflow list --namespace default
+
+# View worker status in Temporal UI
+open http://localhost:8080
+
 # Performance metrics
 curl http://localhost:3000/api/metrics
+curl http://localhost:8090/metrics
 ```
 
-This deployment guide ensures a robust, scalable, and maintainable production deployment of the XNovu Dynamic Workflow System.
+### Temporal CLI Commands
+
+```bash
+# Common Temporal operations
+temporal workflow list                          # List all workflows
+temporal workflow describe -w <workflow-id>     # Get workflow details
+temporal workflow terminate -w <workflow-id>    # Terminate a workflow
+temporal workflow reset -w <workflow-id>        # Reset workflow to specific event
+
+# Task queue management
+temporal task-queue describe --task-queue xnovu-notifications
+
+# Search workflows by custom attributes
+temporal workflow list --query 'EnterpriseId="enterprise-123"'
+temporal workflow list --query 'WorkflowType="dynamic" AND Status="Failed"'
+```
+
+This operations guide ensures a robust, scalable, and maintainable production deployment of the XNovu Dynamic Workflow System with Temporal orchestration.

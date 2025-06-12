@@ -13,6 +13,13 @@ A comprehensive notification system built with Next.js and Novu, featuring Tempo
 - **Tailwind CSS** - Utility-first CSS framework
 - **pnpm** - Fast, disk space efficient package manager
 
+## 📚 Documentation
+
+- [Architecture Overview](docs/architecture.md) - Complete system design and components
+- [API Reference](docs/api-reference.md) - REST API endpoints
+- [Operations Guide](docs/operations-guide.md) - Deployment and monitoring
+- [Novu Workflows](docs/novu-workflow.md) - Workflow development guide
+
 ## ⚡ Temporal-Powered Architecture
 
 The system uses Temporal workflows for:
