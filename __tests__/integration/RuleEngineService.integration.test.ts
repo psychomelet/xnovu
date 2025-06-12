@@ -7,18 +7,19 @@ import type { Database } from '@/lib/supabase/database.types';
 describe('RuleEngineService - Integration Tests', () => {
   let ruleEngine: RuleEngineService;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const novuSecretKey = process.env.NOVU_SECRET_KEY || '';
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
   
-  // Credentials will be validated in tests that require them
+  // Integration tests use whatever credentials are available
+  // Run `pnpm test:connections` first to validate credentials
 
   const testConfig: RuleEngineConfig = {
     ...defaultRuleEngineConfig,
     redisUrl: redisUrl,
     maxConcurrentJobs: 2, // Reduce for testing
     scheduledNotificationInterval: 10000, // Reduce interval for testing
-    scheduledNotificationBatchSize: 10, // Reduce batch size
+    scheduledNotificationBatchSize: 10, // Reduce batch size for testing
   };
 
   beforeEach(async () => {
@@ -49,20 +50,28 @@ describe('RuleEngineService - Integration Tests', () => {
       ruleEngine = instance1; // Store for cleanup
     });
 
-    it('should get status without throwing', async () => {
+    it('should get status with real database connection', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
+      
+      // This will make real database calls
       const status = await ruleEngine.getStatus();
       
       expect(status).toHaveProperty('initialized');
       expect(status).toHaveProperty('cronJobs');
       expect(status).toHaveProperty('scheduledNotifications');
+      expect(status).toHaveProperty('queueStats');
+      expect(status).toHaveProperty('scheduledStats');
       expect(Array.isArray(status.cronJobs)).toBe(true);
-    });
+      expect(typeof status.scheduledStats.totalScheduled).toBe('number');
+      expect(typeof status.scheduledStats.overdue).toBe('number');
+      expect(typeof status.scheduledStats.upcoming24h).toBe('number');
+      expect(typeof status.scheduledStats.upcomingWeek).toBe('number');
+    }, 30000); // Longer timeout for real database calls
 
-    it('should initialize and shutdown without errors', async () => {
+    it('should initialize and shutdown with real database', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       
-      // Initialize should not throw
+      // Initialize will load real cron rules from database
       await expect(ruleEngine.initialize()).resolves.not.toThrow();
       
       // Should be marked as initialized
@@ -71,27 +80,59 @@ describe('RuleEngineService - Integration Tests', () => {
       
       // Shutdown should not throw
       await expect(ruleEngine.shutdown()).resolves.not.toThrow();
-    }, 15000); // Longer timeout for Redis operations
+    }, 30000); // Longer timeout for database operations
 
-    it('should work with real API connections when available', async () => {
-      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
-        throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
-      }
-      if (!novuSecretKey || novuSecretKey.includes('test-secret-key') || novuSecretKey.length <= 20) {
-        throw new Error('Real Novu credentials required. Set NOVU_SECRET_KEY');
-      }
+    it('should handle service orchestration with real database', async () => {
+      ruleEngine = RuleEngineService.getInstance(testConfig);
+      
+      await ruleEngine.initialize();
+      
+      // Test pause and resume
+      await expect(ruleEngine.pause()).resolves.not.toThrow();
+      await expect(ruleEngine.resume()).resolves.not.toThrow();
+      
+      // Test health check
+      const health = await ruleEngine.healthCheck();
+      expect(health).toHaveProperty('status');
+      expect(health).toHaveProperty('details');
+      expect(['healthy', 'unhealthy']).toContain(health.status);
+      expect(health.details).toHaveProperty('initialized');
+      expect(health.details).toHaveProperty('cronManager');
+      expect(health.details).toHaveProperty('scheduledManager');
+      expect(health.details).toHaveProperty('queue');
+      
+      // Test cron rule reload - will query real database
+      await expect(ruleEngine.reloadCronRules()).resolves.not.toThrow();
+      
+      // Test with specific enterprise ID
+      await expect(ruleEngine.reloadCronRules('test-enterprise-id')).resolves.not.toThrow();
+    }, 30000);
 
-      // Test that real API clients can be created
-      const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+    it('should work with real API connections', async () => {
+      // Test real database connection using the correct service role key
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+      const supabase = createClient<Database>(supabaseUrl, serviceKey, {
         auth: { persistSession: false }
       });
       expect(supabase).toBeDefined();
 
+      // Test basic database connectivity
+      const { data, error } = await supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .select('id')
+        .limit(1);
+      
+      // Should not throw an error (even if no data exists)
+      expect(error).toBeNull();
+      expect(Array.isArray(data)).toBe(true);
+
+      // Test Novu client creation
       const novu = new Novu({ secretKey: novuSecretKey });
       expect(novu).toBeDefined();
 
-      console.log('✅ RuleEngineService integration test with real API connections completed');
-    }, 15000);
+      console.log('✅ RuleEngineService integration test with real connections completed');
+    }, 30000);
   });
 });
 
