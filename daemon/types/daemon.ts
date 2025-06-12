@@ -23,24 +23,8 @@ export interface DaemonConfig {
   };
 }
 
-export interface SubscriptionPoolConfig {
-  enterpriseIds: string[];
-  supabaseUrl: string;
-  supabaseServiceKey: string;
-  reconnectDelay: number;
-  maxRetries: number;
-  healthCheckInterval: number;
-  notificationQueue: any; // Will be EnhancedNotificationQueue
-}
-
-export interface EnterpriseSubscriptionStatus {
-  enterpriseId: string;
-  status: 'disconnected' | 'connecting' | 'connected' | 'subscribed' | 'error' | 'reconnecting';
-  lastConnected?: Date;
-  lastError?: string;
-  retryCount: number;
-  isHealthy: boolean;
-}
+// SubscriptionPoolConfig and EnterpriseSubscriptionStatus removed - no longer needed
+// The daemon now uses a single shared subscription manager
 
 export interface DaemonHealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';

@@ -139,7 +139,7 @@ daemon/
 ├── index.ts                 # Master daemon entry point
 ├── services/
 │   ├── DaemonManager.ts     # Main orchestration service
-│   ├── SubscriptionPool.ts  # Enterprise subscription management
+│   ├── (SubscriptionPool removed) # Now uses single shared subscription
 │   └── HealthMonitor.ts     # Health check service
 ├── types/
 │   └── daemon.ts           # Daemon-specific types

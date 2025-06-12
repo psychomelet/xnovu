@@ -196,24 +196,29 @@ export class HealthMonitor {
    */
   private async handleSubscriptionHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const subscriptionPool = this.config.daemonManager.getSubscriptionPool();
+      const subscriptionManager = this.config.daemonManager.getSubscriptionManager();
       
-      if (!subscriptionPool) {
+      if (!subscriptionManager) {
         this.sendResponse(res, 200, {
           status: 'no_subscriptions',
-          message: 'No subscription pool configured',
+          message: 'No subscription manager configured',
           timestamp: new Date().toISOString()
         });
         return;
       }
 
-      const healthStatus = await subscriptionPool.getHealthStatus();
-      const enterpriseStatus = await subscriptionPool.getEnterpriseStatus();
-
+      const managerStatus = subscriptionManager.getStatus();
+      const isHealthy = subscriptionManager.isHealthy();
+      
       this.sendResponse(res, 200, {
-        status: healthStatus.failed === 0 ? 'healthy' : 'degraded',
-        summary: healthStatus,
-        enterprises: enterpriseStatus,
+        status: isHealthy ? 'healthy' : 'degraded',
+        subscription_manager: {
+          isActive: managerStatus.isActive,
+          isHealthy,
+          retryCount: managerStatus.retryCount,
+          maxRetries: managerStatus.maxRetries,
+          events: managerStatus.events
+        },
         timestamp: new Date().toISOString()
       });
 
@@ -233,7 +238,7 @@ export class HealthMonitor {
   private async handleMetrics(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const healthStatus = await this.config.daemonManager.getHealthStatus();
-      const subscriptionPool = this.config.daemonManager.getSubscriptionPool();
+      const subscriptionManager = this.config.daemonManager.getSubscriptionManager();
       
       let metrics = [
         `# HELP xnovu_daemon_uptime_seconds Daemon uptime in seconds`,

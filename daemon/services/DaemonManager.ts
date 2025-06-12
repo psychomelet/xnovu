@@ -2,7 +2,7 @@
  * Main daemon orchestration service
  * 
  * Coordinates all notification services:
- * - SubscriptionPool (realtime subscriptions per enterprise)
+ * - EnhancedSubscriptionManager (single shared realtime subscription for all enterprises)
  * - RuleEngineService (cron + scheduled notifications)
  * - HealthMonitor (health checks and monitoring)
  */
@@ -10,14 +10,14 @@
 import { RuleEngineService, defaultRuleEngineConfig } from '@/app/services';
 import { EnhancedNotificationQueue } from '@/app/services/queue/EnhancedNotificationQueue';
 import { RuleService } from '@/app/services/database/RuleService';
-import { SubscriptionPool } from './SubscriptionPool';
+import { EnhancedSubscriptionManager } from '@/app/services/realtime/EnhancedSubscriptionManager';
 import { HealthMonitor } from './HealthMonitor';
 import type { DaemonConfig, DaemonHealthStatus } from '../types/daemon';
 import { logger, measureTime } from '../utils/logging';
 
 export class DaemonManager {
   private config: DaemonConfig;
-  private subscriptionPool: SubscriptionPool | null = null;
+  private subscriptionManager: EnhancedSubscriptionManager | null = null;
   private ruleEngineService: RuleEngineService | null = null;
   private enhancedNotificationQueue: EnhancedNotificationQueue | null = null;
   private ruleService: RuleService | null = null;
@@ -80,11 +80,11 @@ export class DaemonManager {
     // 3. Start Rule Engine Service (cron + scheduled notifications)
     await this.startRuleEngineService();
 
-    // 4. Start Subscription Pool (realtime subscriptions)
+    // 4. Start Subscription Manager (single realtime subscription for all enterprises)
     if (this.config.enterpriseIds.length > 0) {
-      await this.startSubscriptionPool();
+      await this.startSubscriptionManager();
     } else {
-      logger.warn('No enterprise IDs configured, skipping subscription pool');
+      logger.warn('No enterprise IDs configured, skipping subscription manager');
     }
 
     // 5. Start Health Monitor (health checks + HTTP server)
@@ -156,31 +156,41 @@ export class DaemonManager {
   }
 
   /**
-   * Start the subscription pool for realtime subscriptions
+   * Start the subscription manager for realtime subscriptions (single shared subscription)
    */
-  private async startSubscriptionPool(): Promise<void> {
+  private async startSubscriptionManager(): Promise<void> {
     try {
-      logger.subscription('Initializing Subscription Pool...', 'daemon', {
+      logger.subscription('Initializing Subscription Manager...', 'daemon', {
         enterpriseCount: this.config.enterpriseIds.length
       });
 
-      this.subscriptionPool = new SubscriptionPool({
-        enterpriseIds: this.config.enterpriseIds,
-        supabaseUrl: this.config.supabase.url,
-        supabaseServiceKey: this.config.supabase.serviceKey,
+      // Create a single subscription manager that handles all enterprises
+      this.subscriptionManager = new EnhancedSubscriptionManager({
+        enterpriseId: 'shared', // Special identifier for shared subscription
+        enterpriseIds: this.config.enterpriseIds, // Pass the list of enterprises to monitor
+        notificationQueue: this.enhancedNotificationQueue!,
+        events: ['INSERT', 'UPDATE'],
         reconnectDelay: this.config.subscription.reconnectDelay,
         maxRetries: this.config.subscription.maxRetries,
-        healthCheckInterval: this.config.subscription.healthCheckInterval,
-        notificationQueue: this.enhancedNotificationQueue!,
+        onNotification: async (notification, eventType) => {
+          logger.subscription(`Notification received via callback (${eventType})`, 'shared', {
+            notificationId: notification.id,
+            enterpriseId: notification.enterprise_id,
+            eventType
+          });
+        },
+        onError: (error) => {
+          logger.error(`Subscription error for shared subscription:`, error);
+        }
       });
 
-      await this.subscriptionPool.start();
+      await this.subscriptionManager.start();
 
-      logger.subscription('Subscription Pool started successfully', 'daemon', {
+      logger.subscription('Subscription Manager started successfully', 'daemon', {
         enterpriseCount: this.config.enterpriseIds.length
       });
     } catch (error) {
-      logger.error('Failed to start Subscription Pool:', error instanceof Error ? error : new Error(String(error)));
+      logger.error('Failed to start Subscription Manager:', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -232,11 +242,11 @@ export class DaemonManager {
         );
       }
 
-      // Shutdown subscription pool (stop receiving new realtime events)
-      if (this.subscriptionPool) {
+      // Shutdown subscription manager (stop receiving new realtime events)
+      if (this.subscriptionManager) {
         shutdownPromises.push(
-          this.subscriptionPool.shutdown().catch(error => 
-            logger.error('Error shutting down Subscription Pool:', error)
+          this.subscriptionManager.stop().catch(error => 
+            logger.error('Error shutting down Subscription Manager:', error)
           )
         );
       }
@@ -296,7 +306,7 @@ export class DaemonManager {
 
     const cleanupTasks = [
       () => this.healthMonitor?.stop(),
-      () => this.subscriptionPool?.shutdown(),
+      () => this.subscriptionManager?.stop(),
       () => this.ruleEngineService?.shutdown(),
       () => this.enhancedNotificationQueue?.shutdown(),
       () => this.ruleService?.shutdown(),
@@ -320,14 +330,23 @@ export class DaemonManager {
     const uptime = this.getUptime();
     
     try {
-      // Get subscription pool status
-      const subscriptionStatus = this.subscriptionPool 
-        ? await this.subscriptionPool.getHealthStatus()
+      // Get subscription manager status
+      const subscriptionStatus = this.subscriptionManager 
+        ? {
+            total: this.config.enterpriseIds.length,
+            active: this.subscriptionManager.isHealthy() ? this.config.enterpriseIds.length : 0,
+            failed: this.subscriptionManager.isHealthy() ? 0 : this.config.enterpriseIds.length,
+            reconnecting: 0
+          }
         : { total: 0, active: 0, failed: 0, reconnecting: 0 };
 
-      const enterpriseStatus = this.subscriptionPool
-        ? await this.subscriptionPool.getEnterpriseStatus()
-        : {};
+      const enterpriseStatus: Record<string, string> = {};
+      if (this.subscriptionManager) {
+        const status = this.subscriptionManager.getStatus();
+        this.config.enterpriseIds.forEach(enterpriseId => {
+          enterpriseStatus[enterpriseId] = status.isActive ? 'subscribed' : 'error';
+        });
+      }
 
       // Get rule engine status
       const ruleEngineHealth = this.ruleEngineService
@@ -407,10 +426,10 @@ export class DaemonManager {
   }
 
   /**
-   * Get subscription pool (for testing/debugging)
+   * Get subscription manager (for testing/debugging)
    */
-  getSubscriptionPool(): SubscriptionPool | null {
-    return this.subscriptionPool;
+  getSubscriptionManager(): EnhancedSubscriptionManager | null {
+    return this.subscriptionManager;
   }
 
   /**

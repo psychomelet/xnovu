@@ -18,7 +18,8 @@ import { logger } from '../logger';
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 
 export interface EnhancedSubscriptionConfig {
-  enterpriseId: string;
+  enterpriseId: string; // Use 'shared' for multi-enterprise subscriptions
+  enterpriseIds?: string[]; // Optional: specific enterprises to monitor
   notificationQueue: EnhancedNotificationQueue;
   onNotification?: (notification: NotificationRow, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => Promise<void>;
   onError?: (error: Error) => void;
@@ -45,7 +46,8 @@ export class EnhancedSubscriptionManager {
 
     logger.subscription('Enhanced subscription manager initialized', this.config.enterpriseId, {
       events: this.config.events,
-      maxRetries: this.config.maxRetries
+      maxRetries: this.config.maxRetries,
+      enterpriseIds: this.config.enterpriseIds
     });
   }
 
@@ -82,15 +84,26 @@ export class EnhancedSubscriptionManager {
       // Create subscription channel using the same pattern as SubscriptionManager
       this.channel = supabase.channel(`notifications-${this.config.enterpriseId}-enhanced`);
 
+      // For shared subscriptions, don't filter by enterprise_id to get all notifications
+      // For single enterprise, still filter
+      const isSharedSubscription = this.config.enterpriseId === 'shared';
+      const subscriptionConfig = isSharedSubscription ? {
+        schema: 'notify',
+        table: 'ent_notification'
+        // No filter - receive all enterprise notifications
+      } : {
+        schema: 'notify', 
+        table: 'ent_notification',
+        filter: `enterprise_id=eq.${this.config.enterpriseId}`
+      };
+
       // Subscribe to each configured event type - unroll the loop to avoid TypeScript issues
       if (this.config.events!.includes('INSERT')) {
         this.channel.on(
           'postgres_changes',
           {
             event: 'INSERT',
-            schema: 'notify',
-            table: 'ent_notification',
-            filter: `enterprise_id=eq.${this.config.enterpriseId}`,
+            ...subscriptionConfig
           },
           async (payload: RealtimePostgresChangesPayload<NotificationRow>) => {
             await this.handleRealtimeEvent('INSERT', payload);
@@ -103,9 +116,7 @@ export class EnhancedSubscriptionManager {
           'postgres_changes',
           {
             event: 'UPDATE',
-            schema: 'notify',
-            table: 'ent_notification',
-            filter: `enterprise_id=eq.${this.config.enterpriseId}`,
+            ...subscriptionConfig
           },
           async (payload: RealtimePostgresChangesPayload<NotificationRow>) => {
             await this.handleRealtimeEvent('UPDATE', payload);
@@ -118,9 +129,7 @@ export class EnhancedSubscriptionManager {
           'postgres_changes',
           {
             event: 'DELETE',
-            schema: 'notify',
-            table: 'ent_notification',
-            filter: `enterprise_id=eq.${this.config.enterpriseId}`,
+            ...subscriptionConfig
           },
           async (payload: RealtimePostgresChangesPayload<NotificationRow>) => {
             await this.handleRealtimeEvent('DELETE', payload);
@@ -216,8 +225,19 @@ export class EnhancedSubscriptionManager {
 
       // For INSERT and UPDATE events, fetch complete notification data if needed
       if ((eventType === 'INSERT' || eventType === 'UPDATE') && notificationData) {
-        // Validate the notification is still in our enterprise
-        if (notificationData.enterprise_id !== this.config.enterpriseId) {
+        // For shared subscriptions, validate the notification is for one of our monitored enterprises
+        const isSharedSubscription = this.config.enterpriseId === 'shared';
+        if (isSharedSubscription && this.config.enterpriseIds) {
+          if (!this.config.enterpriseIds.includes(notificationData.enterprise_id)) {
+            logger.debug(`Received notification for unmonitored enterprise`, {
+              component: 'EnhancedSubscriptionManager',
+              monitoredEnterprises: this.config.enterpriseIds,
+              notificationId,
+              actualEnterpriseId: notificationData.enterprise_id
+            });
+            return;
+          }
+        } else if (!isSharedSubscription && notificationData.enterprise_id !== this.config.enterpriseId) {
           logger.warn(`Received notification for different enterprise`, {
             component: 'EnhancedSubscriptionManager',
             enterpriseId: this.config.enterpriseId,
@@ -272,12 +292,12 @@ export class EnhancedSubscriptionManager {
     try {
       const realtimeJobData: RealtimeJobData = {
         type: `realtime-${eventType.toLowerCase()}` as RealtimeJobData['type'],
-        enterpriseId: this.config.enterpriseId,
+        enterpriseId: notification.enterprise_id, // Use the actual enterprise from notification
         notificationId: notification.id,
         payload: notification,
         oldPayload: oldNotification,
         timestamp: new Date(),
-        eventId: `${this.config.enterpriseId}-${notification.id}-${eventType}-${Date.now()}`,
+        eventId: `${notification.enterprise_id}-${notification.id}-${eventType}-${Date.now()}`,
       };
 
       // Use the enhanced notification queue to add realtime job
@@ -285,13 +305,14 @@ export class EnhancedSubscriptionManager {
 
       logger.subscription('Event added to queue successfully', this.config.enterpriseId, {
         notificationId: notification.id,
+        enterpriseId: notification.enterprise_id,
         eventType,
         jobId: realtimeJobData.eventId
       });
 
     } catch (error) {
       logger.error(`Failed to add ${eventType} event to queue:`, error instanceof Error ? error : new Error(String(error)), {
-        enterpriseId: this.config.enterpriseId,
+        enterpriseId: notification.enterprise_id,
         notificationId: notification.id,
         eventType
       });
