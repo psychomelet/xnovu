@@ -8,6 +8,11 @@ XNovu is an internal notification system for smart building management platforms
 
 The system integrates with a larger smart buildings management platform via Supabase realtime subscriptions. When notification rows are inserted into the management database, XNovu subscribes to these changes and triggers predefined workflows.
 
+## Development Guidelines
+
+- Always use pnpm for package management
+- Always prefer to use rg
+
 ## Architecture Overview
 
 ### System Integration Flow
