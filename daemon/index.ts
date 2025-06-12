@@ -4,10 +4,9 @@
  * XNovu Unified Daemon
  * 
  * Master daemon that orchestrates all notification services:
- * - Realtime subscriptions (SubscriptionManager)
- * - Cron scheduling (CronManager) 
- * - Scheduled notifications (ScheduledNotificationManager)
- * - BullMQ workers (NotificationQueue)
+ * - Realtime subscriptions (EnhancedSubscriptionManager)
+ * - Temporal workflows for notification processing
+ * - Health monitoring and status endpoints
  */
 
 import { config } from 'dotenv';
@@ -27,7 +26,7 @@ async function main() {
       'NEXT_PUBLIC_SUPABASE_URL',
       'SUPABASE_SERVICE_ROLE_KEY', 
       'NOVU_SECRET_KEY',
-      'REDIS_URL'
+      'TEMPORAL_ADDRESS'
     ];
 
     const missingVars = requiredVars.filter(varName => !process.env[varName]);
@@ -46,9 +45,6 @@ async function main() {
       enterpriseIds,
       healthPort: parseInt(process.env.DAEMON_HEALTH_PORT || '3001'),
       logLevel: process.env.DAEMON_LOG_LEVEL || 'info',
-      redis: {
-        url: process.env.REDIS_URL!,
-      },
       supabase: {
         url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
         serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,

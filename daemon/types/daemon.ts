@@ -6,9 +6,6 @@ export interface DaemonConfig {
   enterpriseIds: string[];
   healthPort: number;
   logLevel: string;
-  redis: {
-    url: string;
-  };
   supabase: {
     url: string;
     serviceKey: string;
@@ -37,14 +34,10 @@ export interface DaemonHealthStatus {
       reconnecting: number;
     };
     ruleEngine: 'healthy' | 'unhealthy' | 'not_initialized';
-    queue: 'healthy' | 'unhealthy' | 'not_initialized';
+    temporal: 'healthy' | 'unhealthy' | 'not_initialized';
   };
   enterprise_status: Record<string, string>;
-  queue_stats?: {
-    notification: any;
-    ruleExecution: any;
-    realtime: any;
-  };
+  temporal_status?: any;
 }
 
 export interface RealtimeJobData {

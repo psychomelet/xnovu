@@ -1,34 +1,31 @@
-# XNovu Unified Daemon & Worker System
+# XNovu Unified Daemon
 
-This document describes the unified daemon and worker system that handles realtime subscriptions, cron scheduling, scheduled notifications, and BullMQ-based processing.
+This document describes the unified daemon that orchestrates notification processing using Temporal workflows and Supabase realtime subscriptions.
 
 ## Architecture Overview
 
-The system consists of two main components:
+The system consists of:
 
 1. **Unified Daemon** - Single orchestrator process that manages:
    - Realtime subscriptions to Supabase (INSERT/UPDATE events)
-   - Cron-based notification rules
-   - Scheduled notification processing
+   - Temporal workflow orchestration
    - Health monitoring and metrics
 
-2. **Worker Processes** - Scalable job processors that handle:
-   - Realtime notification processing
-   - Scheduled notification delivery
-   - Rule execution jobs
-   - Novu workflow triggering
+2. **Temporal Workers** - Run as part of the daemon process to execute:
+   - Notification processing workflows
+   - Cron-based scheduling workflows
+   - Scheduled notification workflows
+   - Master orchestration workflow
 
 ## Key Features
 
-- ✅ **Unified Management** - Single daemon orchestrates all notification services
-- ✅ **Enterprise Isolation** - Separate subscriptions per enterprise with filtering
-- ✅ **UPDATE Monitoring** - Monitors both INSERT and UPDATE events (not just INSERT)
-- ✅ **BullMQ Integration** - Uses BullMQ for reliable job processing with retry logic
-- ✅ **Priority Queues** - Different priorities for realtime vs scheduled vs cron jobs
-- ✅ **Health Monitoring** - Comprehensive health checks and metrics endpoints
-- ✅ **Graceful Shutdown** - Proper cleanup and shutdown handling
-- ✅ **Docker Ready** - Complete Docker deployment configuration
-- ✅ **Scalable Workers** - Horizontal scaling of worker processes
+- ✅ **Temporal Workflows** - Durable execution with automatic retries
+- ✅ **Enterprise Isolation** - Separate handling per enterprise
+- ✅ **UPDATE Monitoring** - Monitors both INSERT and UPDATE events
+- ✅ **Workflow Visibility** - Real-time monitoring via Temporal UI
+- ✅ **Health Monitoring** - Comprehensive health checks and metrics
+- ✅ **Graceful Shutdown** - Proper cleanup and workflow termination
+- ✅ **Scalable Workers** - Horizontal scaling via Temporal
 - ✅ **Reconnection Logic** - Automatic reconnection with exponential backoff
 
 ## Quick Start
@@ -37,53 +34,46 @@ The system consists of two main components:
 
 Copy the example environment file:
 ```bash
-cp .env.daemon.example .env
+cp .env.example .env
 ```
 
-Fill in your configuration:
+Configure Temporal connection:
 ```bash
 # Required settings
+TEMPORAL_ADDRESS=your-temporal-server:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_TASK_QUEUE=xnovu-notification-processing
+
+# Supabase settings
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Novu settings
 NOVU_SECRET_KEY=your-novu-secret-key
-REDIS_URL=redis://localhost:6379
+
+# Enterprise configuration
 DAEMON_ENTERPRISE_IDS=enterprise-1,enterprise-2
 ```
 
 ### 2. Development Mode
-
-Start Redis:
-```bash
-docker run -d --name redis -p 6379:6379 redis:7-alpine
-```
 
 Start the daemon:
 ```bash
 pnpm xnovu daemon start --dev --enterprises "ent1,ent2"
 ```
 
-Start workers (in another terminal):
+### 3. Production Mode
+
 ```bash
-pnpm xnovu worker scale 2 --dev --concurrency 5
-```
-
-### 3. Docker Mode
-
-Start everything with Docker Compose:
-```bash
-# Development
-docker-compose -f docker/docker-compose.yml up -d
-
-# Production  
-docker-compose -f docker/docker-compose.prod.yml up -d
+# Start daemon with production settings
+pnpm xnovu daemon start --enterprises "ent1,ent2,ent3" --log-level info
 ```
 
 ### 4. Monitoring
 
 - **Health Check**: http://localhost:3001/health
-- **Detailed Health**: http://localhost:3001/health/detailed
-- **Bull Board**: http://localhost:3000 (queue monitoring)
-- **Metrics**: http://localhost:3001/metrics (Prometheus format)
+- **Detailed Status**: http://localhost:3001/status
+- **Temporal UI**: Access your Temporal UI to monitor workflows
 
 ## CLI Commands
 
@@ -108,38 +98,14 @@ pnpm xnovu daemon stop
 pnpm xnovu daemon restart [options]
 ```
 
-### Worker Management
-
-```bash
-# Start single worker
-pnpm xnovu worker start [options]
-  --dev                    # Development mode
-  --concurrency <n>        # Concurrent jobs per worker (default: 5)
-  --log-level <level>      # Log level
-
-# Scale workers
-pnpm xnovu worker scale <count> [options]
-  --concurrency <n>        # Concurrent jobs per worker
-
-# List workers
-pnpm xnovu worker list
-
-# Stop all workers
-pnpm xnovu worker stop
-```
-
 ### Examples
 
 ```bash
 # Start daemon for specific enterprises
 pnpm xnovu daemon start --enterprises "ent1,ent2,ent3" --log-level debug
 
-# Scale to 4 workers with high concurrency
-pnpm xnovu worker scale 4 --concurrency 10
-
 # Development setup
 pnpm xnovu daemon start --dev --enterprises "test-ent"
-pnpm xnovu worker scale 2 --dev --concurrency 3
 ```
 
 ## Configuration
@@ -148,36 +114,16 @@ pnpm xnovu worker scale 2 --dev --concurrency 3
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DAEMON_ENTERPRISE_IDS` | - | Comma-separated enterprise IDs to monitor |
+| `TEMPORAL_ADDRESS` | - | Temporal server address |
+| `TEMPORAL_NAMESPACE` | `default` | Temporal namespace |
+| `TEMPORAL_TASK_QUEUE` | `xnovu-notification-processing` | Task queue name |
+| `TEMPORAL_MAX_CONCURRENT_ACTIVITIES` | `100` | Max concurrent activities |
+| `TEMPORAL_MAX_CONCURRENT_WORKFLOWS` | `50` | Max concurrent workflows |
+| `DAEMON_ENTERPRISE_IDS` | - | Comma-separated enterprise IDs |
 | `DAEMON_HEALTH_PORT` | `3001` | Health check HTTP port |
-| `DAEMON_LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
-| `SUBSCRIPTION_RECONNECT_DELAY` | `1000` | Reconnection delay in milliseconds |
+| `DAEMON_LOG_LEVEL` | `info` | Logging level |
+| `SUBSCRIPTION_RECONNECT_DELAY` | `1000` | Reconnection delay in ms |
 | `SUBSCRIPTION_MAX_RETRIES` | `10` | Maximum reconnection attempts |
-| `REALTIME_QUEUE_PRIORITY` | `10` | Priority for realtime events |
-| `SCHEDULED_QUEUE_PRIORITY` | `5` | Priority for scheduled notifications |
-| `CRON_QUEUE_PRIORITY` | `1` | Priority for cron-generated notifications |
-| `WORKER_CONCURRENCY` | `5` | Concurrent jobs per worker process |
-
-### Queue Priorities
-
-The system uses priority-based job processing:
-
-1. **Realtime Events** (Priority 10) - Immediate processing of INSERT/UPDATE events
-2. **Scheduled Notifications** (Priority 5) - Time-sensitive scheduled deliveries  
-3. **Cron Jobs** (Priority 1) - Background rule execution
-
-### Enterprise Configuration
-
-You can configure settings per enterprise:
-
-```bash
-# Enable/disable subscription for specific enterprise
-ENT_enterprise-1_SUBSCRIPTION_ENABLED=true
-ENT_enterprise-2_SUBSCRIPTION_ENABLED=false
-
-# Custom priority for enterprise
-ENT_enterprise-1_REALTIME_PRIORITY=15
-```
 
 ## Health Monitoring
 
@@ -186,15 +132,13 @@ ENT_enterprise-1_REALTIME_PRIORITY=15
 | Endpoint | Description |
 |----------|-------------|
 | `/health` | Basic health status |
-| `/health/detailed` | Comprehensive health information |
-| `/health/subscriptions` | Subscription-specific health |
-| `/metrics` | Prometheus metrics |
+| `/status` | Comprehensive status information |
 
 ### Health Status
 
 ```json
 {
-  "status": "healthy",     // healthy, degraded, unhealthy
+  "status": "healthy",
   "uptime": 3600,
   "components": {
     "subscriptions": {
@@ -204,88 +148,46 @@ ENT_enterprise-1_REALTIME_PRIORITY=15
       "reconnecting": 0
     },
     "ruleEngine": "healthy",
-    "queue": "healthy"
+    "queue": "healthy",
+    "temporal": "healthy"
   },
   "enterprise_status": {
     "enterprise-1": "subscribed",
     "enterprise-2": "subscribed"
+  },
+  "temporal_status": {
+    "status": "healthy",
+    "orchestrationWorkflow": "RUNNING"
   }
 }
 ```
 
-### Monitoring Integration
+## Temporal Workflows
 
-The system provides Prometheus metrics for integration with monitoring systems:
+### Master Orchestration Workflow
+Coordinates all subsystems:
+- Manages cron scheduling workflows
+- Manages scheduled notification workflows
+- Handles graceful shutdown
 
-```bash
-# Daemon uptime
-xnovu_daemon_uptime_seconds
+### Notification Processing Workflow
+Processes individual notifications:
+- Fetches workflow configuration
+- Renders templates for dynamic workflows
+- Triggers Novu workflows
+- Updates notification status
 
-# Health status
-xnovu_daemon_healthy
+### Cron Scheduling Workflow
+Executes notifications based on cron expressions:
+- Monitors active cron rules
+- Executes rules at scheduled times
+- Handles timezone conversions
 
-# Subscription metrics
-xnovu_subscriptions_total
-xnovu_subscriptions_active
-xnovu_subscriptions_failed
-
-# Queue metrics
-xnovu_queue_notification_waiting
-xnovu_queue_notification_active
-xnovu_queue_notification_completed
-```
-
-## Docker Deployment
-
-### Development
-
-```yaml
-# docker/docker-compose.yml
-services:
-  daemon:
-    build: 
-      dockerfile: docker/Dockerfile.daemon
-    environment:
-      - DAEMON_ENTERPRISE_IDS=ent1,ent2
-  
-  worker:
-    deploy:
-      replicas: 2
-    environment:
-      - WORKER_CONCURRENCY=5
-```
-
-### Production
-
-```yaml
-# docker/docker-compose.prod.yml  
-services:
-  daemon:
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-  
-  worker:
-    deploy:
-      replicas: 4
-      resources:
-        limits:
-          memory: 1.5G
-          cpus: '1.0'
-```
-
-### Scaling
-
-```bash
-# Scale workers
-docker service scale xnovu-stack_worker=6
-
-# Scale Redis replicas
-docker service scale xnovu-stack_redis-replica=3
-```
+### Scheduled Notification Workflow
+Processes time-based notifications:
+- Polls for due notifications
+- Processes in batches
+- Updates notification status
 
 ## Troubleshooting
 
@@ -296,8 +198,8 @@ docker service scale xnovu-stack_redis-replica=3
 # Check environment variables
 pnpm xnovu daemon start --log-level debug
 
-# Verify Redis connection
-redis-cli ping
+# Verify Temporal connectivity
+curl $TEMPORAL_ADDRESS
 
 # Check Supabase connectivity
 curl -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
@@ -309,18 +211,14 @@ curl -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
 # Check subscription health
 pnpm xnovu daemon health
 
-# View detailed subscription status
-curl http://localhost:3001/health/subscriptions
+# View detailed status
+curl http://localhost:3001/status
 ```
 
-**Queue issues:**
-```bash
-# Check queue statistics
-curl http://localhost:3001/health/detailed
-
-# View Bull Board dashboard
-open http://localhost:3000
-```
+**Workflow issues:**
+- Check Temporal UI for workflow status
+- View workflow history for errors
+- Check worker logs for activity failures
 
 ### Log Analysis
 
@@ -329,18 +227,16 @@ open http://localhost:3000
 {
   "level": "info",
   "timestamp": "2024-01-15T10:30:00Z",
-  "component": "SubscriptionManager",
-  "enterprise_id": "ent1",
-  "event": "notification_received",
-  "notification_id": 12345,
-  "event_type": "INSERT"
+  "component": "DaemonManager",
+  "event": "orchestration_started",
+  "workflow_id": "orchestration-123456"
 }
 ```
 
 **Key Log Components:**
 - `DaemonManager` - Overall daemon orchestration
-- `SubscriptionManager` - Realtime subscription events
-- `NotificationQueue` - Job processing
+- `EnhancedSubscriptionManager` - Realtime subscription events
+- `TemporalService` - Worker and workflow management
 - `HealthMonitor` - Health check events
 
 ### Performance Tuning
@@ -348,121 +244,15 @@ open http://localhost:3000
 **High Load Scenarios:**
 
 ```bash
-# Increase worker concurrency
-WORKER_CONCURRENCY=15
+# Increase worker capacity
+TEMPORAL_MAX_CONCURRENT_ACTIVITIES=200
+TEMPORAL_MAX_CONCURRENT_WORKFLOWS=100
 
-# Scale worker processes
-pnpm xnovu worker scale 6
-
-# Increase queue concurrency
-RULE_ENGINE_MAX_CONCURRENT_JOBS=25
+# Scale Temporal workers horizontally
+# Deploy multiple daemon instances with same task queue
 
 # Tune subscription health checks
 SUBSCRIPTION_HEALTH_CHECK_INTERVAL=120000
-```
-
-**Memory Optimization:**
-
-```bash
-# Reduce queue retention
-removeOnComplete: 20
-removeOnFail: 50
-
-# Optimize Redis memory
-redis-cli config set maxmemory-policy allkeys-lru
-```
-
-## Migration from Existing System
-
-### Step 1: Parallel Deployment
-
-1. Deploy daemon in monitoring mode (no processing)
-2. Verify subscription connectivity
-3. Compare event capture with existing system
-
-### Step 2: Gradual Rollout
-
-1. Enable processing for test enterprise
-2. Monitor performance and error rates  
-3. Gradually add more enterprises
-
-### Step 3: Full Migration
-
-1. Enable for all enterprises
-2. Decommission existing realtime processing
-3. Monitor and optimize
-
-### Migration Checklist
-
-- [ ] Environment variables configured
-- [ ] Redis accessible from both daemon and workers
-- [ ] Supabase permissions verified
-- [ ] Novu integration tested
-- [ ] Health monitoring configured
-- [ ] Log aggregation set up
-- [ ] Monitoring dashboards created
-- [ ] Backup/recovery procedures documented
-
-## Advanced Configuration
-
-### Custom Enterprise Settings
-
-```typescript
-// Per-enterprise configuration
-const enterpriseConfig = {
-  'enterprise-1': {
-    enabled: true,
-    events: ['INSERT', 'UPDATE'],
-    priority: 10,
-    maxRetries: 15
-  },
-  'enterprise-2': {
-    enabled: true,
-    events: ['INSERT'],
-    priority: 5,
-    maxRetries: 10
-  }
-};
-```
-
-### Queue Customization
-
-```typescript
-// Custom queue configuration
-const queueConfig = {
-  defaultJobOptions: {
-    attempts: 5,
-    backoff: {
-      type: 'exponential',
-      delay: 3000,
-    },
-    removeOnComplete: 50,
-    removeOnFail: 100,
-  },
-  settings: {
-    stalledInterval: 30000,
-    maxStalledCount: 3,
-  }
-};
-```
-
-### Monitoring Extensions
-
-```typescript
-// Custom metrics
-const customMetrics = {
-  notificationLatency: new Histogram({
-    name: 'xnovu_notification_latency_seconds',
-    help: 'Notification processing latency',
-    buckets: [0.1, 0.5, 1, 2, 5]
-  }),
-  
-  enterpriseEvents: new Counter({
-    name: 'xnovu_enterprise_events_total',
-    help: 'Total events per enterprise',
-    labelNames: ['enterprise_id', 'event_type']
-  })
-};
 ```
 
 ## Best Practices
@@ -471,46 +261,41 @@ const customMetrics = {
 
 1. **Resource Planning**
    - 1 daemon per deployment/region
-   - 2-4 workers per CPU core
-   - Redis with persistence enabled
+   - Configure Temporal worker limits based on load
    - Monitor memory usage and scale accordingly
 
 2. **Security**
-   - Use Redis AUTH in production
+   - Use secure Temporal connections
    - Restrict network access to health endpoints
    - Rotate secrets regularly
-   - Enable TLS for external connections
 
 3. **Monitoring**
    - Set up alerts for subscription failures
-   - Monitor queue depth and processing rates
-   - Track enterprise-specific metrics
-   - Configure log aggregation and analysis
+   - Monitor Temporal workflow metrics
+   - Track enterprise-specific events
+   - Configure log aggregation
 
 4. **Backup/Recovery**
-   - Redis persistence configuration
-   - Queue job recovery procedures
-   - Subscription state recovery
-   - Disaster recovery testing
+   - Temporal provides workflow history
+   - Configure workflow retention policies
+   - Test disaster recovery procedures
 
 ### Development Best Practices
 
 1. **Local Development**
-   - Use Docker Compose for consistent environment
-   - Enable debug logging for troubleshooting
-   - Use separate Redis instance for testing
-   - Mock external services when needed
+   - Use local Temporal server for testing
+   - Enable debug logging
+   - Use test enterprise IDs
 
 2. **Testing**
    - Integration tests for subscription handling
-   - Load tests for queue processing
-   - End-to-end tests for notification flow
-   - Chaos engineering for failure scenarios
+   - Workflow testing with Temporal test framework
+   - End-to-end notification flow tests
 
 3. **Code Quality**
    - Structured logging throughout
    - Comprehensive error handling
-   - Type safety for all job data
-   - Documentation for custom configurations
+   - Type safety for all workflow data
+   - Documentation for workflows
 
-This unified daemon and worker system provides a robust, scalable foundation for handling all XNovu notification processing with enterprise isolation, reliability, and comprehensive monitoring.
+This unified daemon provides a robust, scalable foundation for handling all XNovu notification processing with Temporal workflows, enterprise isolation, and comprehensive monitoring.

@@ -1,6 +1,6 @@
 # XNovu - Smart Building Notification Platform
 
-A comprehensive notification system built with Next.js and Novu, featuring an advanced rule engine for smart building management platforms. Supports both manual triggers and automated rule-based notifications with cron scheduling and time-based delivery.
+A comprehensive notification system built with Next.js and Novu, featuring Temporal workflows for reliable and scalable notification processing in smart building management platforms.
 
 ## Tech Stack
 
@@ -8,26 +8,26 @@ A comprehensive notification system built with Next.js and Novu, featuring an ad
 - **TypeScript** - Type-safe development
 - **Novu** - Open-source notification infrastructure
 - **Supabase** - Database and real-time subscriptions
-- **BullMQ** - Redis-based queue system for job processing
+- **Temporal** - Durable workflow execution platform
 - **React Email** - Build emails with React components
 - **Tailwind CSS** - Utility-first CSS framework
 - **pnpm** - Fast, disk space efficient package manager
 
-## ⚡ New: Rule Engine
+## ⚡ Temporal-Powered Architecture
 
-The rule engine provides automated notification processing with:
+The system uses Temporal workflows for:
 
-- **Cron-based Rules** - Schedule notifications using cron expressions
-- **Time-based Scheduling** - Schedule notifications for specific times
-- **Enterprise Isolation** - Multi-tenant support with data isolation
-- **Queue Management** - Redis-backed job processing with BullMQ
-- **Automatic Retries** - Robust error handling and retry mechanisms
+- **Durable Execution** - Workflows survive failures and restarts
+- **Automatic Retries** - Built-in retry policies with exponential backoff
+- **Scalable Processing** - Horizontal scaling with worker pools
+- **Workflow Visibility** - Real-time monitoring and debugging
+- **Time-based Scheduling** - Cron and scheduled notifications
 
 ## Prerequisites
 
 - Node.js 18+
 - pnpm (install with `npm install -g pnpm`)
-- Redis server (for BullMQ queue system)
+- Docker & Docker Compose (for Temporal)
 - Novu account and API keys
 - Supabase project with notification schema
 
@@ -44,6 +44,9 @@ cp .env.example .env
 ```bash
 # Install dependencies
 pnpm install
+
+# Start Temporal services
+pnpm temporal:start
 ```
 
 ## Development
@@ -54,9 +57,12 @@ pnpm dev
 
 # In another terminal, start Novu dev server
 pnpm dlx novu@latest dev
+
+# View Temporal UI
+pnpm temporal:ui
 ```
 
-Both servers must be running for full functionality.
+All three services must be running for full functionality.
 
 ## Available Scripts
 
@@ -66,10 +72,14 @@ pnpm build            # Build for production
 pnpm start            # Start production server
 pnpm lint             # Run ESLint
 pnpm test             # Run unit tests
-pnpm test:integration # Run integration tests with Docker Redis
-pnpm test:setup       # Start Docker Redis for testing
-pnpm test:teardown    # Stop Docker Redis
+pnpm test:integration # Run integration tests
 pnpm xnovu            # CLI commands for utilities
+
+# Temporal commands
+pnpm temporal:start   # Start Temporal services
+pnpm temporal:stop    # Stop Temporal services
+pnpm temporal:logs    # View Temporal logs
+pnpm temporal:ui      # Open Temporal UI (http://localhost:8080)
 ```
 
 ## Features
@@ -80,13 +90,12 @@ pnpm xnovu            # CLI commands for utilities
 - Real-time connection status monitoring
 - Type-safe workflow definitions with Zod
 
-### Rule Engine
-- **Cron-based Rules** - Automated notifications using cron expressions
-- **Scheduled Notifications** - Time-specific notification delivery
-- **Enterprise Isolation** - Multi-tenant data separation
-- **Queue Management** - BullMQ for reliable job processing
-- **Error Handling** - Comprehensive retry and error tracking
-- **Real-time Monitoring** - Status tracking and health checks
+### Temporal Workflows
+- **Notification Processing** - Reliable notification delivery
+- **Realtime Monitoring** - Process Supabase realtime events
+- **Cron Scheduling** - Automated notifications using cron expressions
+- **Scheduled Delivery** - Time-specific notification processing
+- **Master Orchestration** - Coordinate all subsystems
 
 ### Supported Notification Scenarios
 - Building maintenance reminders
@@ -102,115 +111,98 @@ app/
 ├── api/                    # API routes
 │   ├── novu/              # Novu bridge endpoint
 │   ├── trigger/           # Trigger workflows
-│   ├── rule-engine/       # Rule engine management endpoints
 │   └── dev-studio-status/ # Connection monitoring
-├── services/              # Rule engine services
+├── services/              # Core services
 │   ├── database/          # Supabase database operations
-│   ├── queue/             # BullMQ queue management
-│   ├── scheduler/         # Cron and scheduled notification managers
-│   └── RuleEngineService.ts # Main orchestrator service
-├── lib/                   # Utility libraries
-│   └── rule-engine-init.ts # Initialization and lifecycle management
+│   └── realtime/          # Enhanced subscription manager
 ├── novu/
 │   ├── workflows/         # Notification workflows
 │   └── emails/           # Email templates
 └── components/           # React components
 
+lib/
+└── temporal/             # Temporal integration
+    ├── workflows/        # Workflow definitions
+    ├── activities/       # Activity implementations
+    ├── client/          # Temporal client
+    └── worker/          # Worker configuration
+
+daemon/
+├── services/            # Daemon services
+│   ├── DaemonManager.ts # Main orchestrator
+│   └── HealthMonitor.ts # Health checks
+└── index.ts            # Daemon entry point
+
 types/
-└── rule-engine.ts         # Type definitions for rule engine
+└── rule-engine.ts      # Type definitions
 
 docs/
-├── rule-engine-implementation.md # Implementation guide
-└── rule-engine-api.md            # API reference
-
-examples/
-└── rule-engine-usage.ts  # Usage examples and patterns
+├── temporal-architecture.md  # Temporal design docs
+└── deployment.md            # Deployment guide
 ```
 
 ## API Endpoints
 
 ### Core Notification APIs
 - `POST /api/novu` - Novu bridge for workflow sync
-- `POST /api/trigger` - Trigger welcome email
+- `POST /api/trigger` - Trigger workflows
 - `GET /api/dev-studio-status` - Check Novu connection
 
-### Rule Engine Management APIs
-- `GET /api/rule-engine/status` - Get rule engine status
-- `POST /api/rule-engine/status` - Pause/resume/health-check operations
-- `POST /api/rule-engine/reload` - Reload cron rules
+## Temporal Workflows
 
-## Workflows
+### Notification Processing Workflow
+Processes individual notifications with retry logic and error handling.
 
-Each workflow includes:
-- `workflow.ts` - Step definitions and logic
-- `schemas.ts` - Zod validation schemas
-- `types.ts` - TypeScript type definitions
-- `index.ts` - Workflow export
+### Realtime Monitoring Workflow
+Polls Supabase for new notifications when realtime subscriptions are not available.
 
-## Rule Engine Usage
+### Scheduling Workflows
+- **Cron Scheduling** - Execute notifications based on cron expressions
+- **Scheduled Notifications** - Process time-based notifications
 
-### Quick Start
+### Master Orchestration Workflow
+Coordinates all subsystems and manages workflow lifecycles.
 
-```typescript
-import { initializeRuleEngine } from '@/app/lib/rule-engine-init';
+## Daemon Operation
 
-// Initialize rule engine (auto-starts with app)
-const ruleEngine = await initializeRuleEngine();
+The daemon runs all notification services:
 
-// Check status
-const status = await ruleEngine.getStatus();
-console.log(`Rule engine running with ${status.cronJobs.length} cron jobs`);
+```bash
+# Start the daemon
+pnpm xnovu daemon:start
+
+# Check daemon status
+pnpm xnovu daemon:status
+
+# Stop the daemon
+pnpm xnovu daemon:stop
 ```
 
-### Creating Cron Rules
+## Monitoring
 
-Create rules in your database with the following structure:
+### Temporal UI
+Access the Temporal Web UI at http://localhost:8080 to:
+- View running workflows
+- Inspect execution history
+- Debug failures
+- Monitor performance
 
-```json
-{
-  "name": "Daily Standup Reminder",
-  "trigger_type": "CRON",
-  "trigger_config": {
-    "cron": "0 9 * * 1-5",
-    "timezone": "America/New_York",
-    "enabled": true
-  },
-  "rule_payload": {
-    "recipients": ["user-123", "user-456"],
-    "payload": {
-      "message": "Time for daily standup!"
-    }
-  }
-}
-```
-
-### Scheduling Notifications
-
-```json
-{
-  "name": "Scheduled Maintenance",
-  "scheduled_for": "2024-01-15T14:00:00Z",
-  "recipients": ["tenant-123", "admin-456"],
-  "payload": {
-    "message": "Building maintenance scheduled",
-    "maintenanceType": "HVAC"
-  }
-}
-```
+### Health Endpoints
+- Daemon health: http://localhost:3001/health
+- Detailed status: http://localhost:3001/status
 
 ## Documentation
 
-- [Rule Engine Implementation Guide](docs/rule-engine-implementation.md)
-- [Rule Engine API Reference](docs/rule-engine-api.md)
-- [Testing Guide](docs/testing-guide.md)
-- [Usage Examples](examples/rule-engine-usage.ts)
+- [Temporal Architecture](docs/temporal-architecture.md)
+- [Deployment Guide](docs/deployment.md)
+- [Novu Workflow Development](docs/novu-workflow.md)
 
 ## Learn More
 
+- [Temporal Documentation](https://docs.temporal.io/)
 - [Novu Documentation](https://docs.novu.co/)
 - [Next.js Documentation](https://nextjs.org/docs)
 - [React Email](https://react.email/)
-- [BullMQ Documentation](https://docs.bullmq.io/)
 - [Supabase Documentation](https://supabase.com/docs)
 
 ## Contributing

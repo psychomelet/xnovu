@@ -1,30 +1,27 @@
 /**
  * Main daemon orchestration service
  * 
- * Coordinates all notification services:
+ * Coordinates all notification services using Temporal workflows:
  * - EnhancedSubscriptionManager (single shared realtime subscription for all enterprises)
- * - RuleEngineService (cron + scheduled notifications)
+ * - Temporal workflows (notification processing, scheduling, orchestration)
  * - HealthMonitor (health checks and monitoring)
  */
 
-import { RuleEngineService, defaultRuleEngineConfig } from '@/app/services';
-import { EnhancedNotificationQueue } from '@/app/services/queue/EnhancedNotificationQueue';
-import { RuleService } from '@/app/services/database/RuleService';
 import { EnhancedSubscriptionManager } from '@/app/services/realtime/EnhancedSubscriptionManager';
 import { HealthMonitor } from './HealthMonitor';
 import type { DaemonConfig, DaemonHealthStatus } from '../types/daemon';
 import { logger, measureTime } from '../utils/logging';
+import { temporalService } from '@/lib/temporal/service';
+import { getTemporalClient } from '@/lib/temporal/client';
 
 export class DaemonManager {
   private config: DaemonConfig;
   private subscriptionManager: EnhancedSubscriptionManager | null = null;
-  private ruleEngineService: RuleEngineService | null = null;
-  private enhancedNotificationQueue: EnhancedNotificationQueue | null = null;
-  private ruleService: RuleService | null = null;
   private healthMonitor: HealthMonitor | null = null;
   private isStarted = false;
   private isShuttingDown = false;
   private startTime: Date = new Date();
+  private orchestrationWorkflowId: string | null = null;
 
   constructor(config: DaemonConfig) {
     this.config = config;
@@ -71,86 +68,70 @@ export class DaemonManager {
    * Initialize all services in correct order
    */
   private async initializeServices(): Promise<void> {
-    // 1. Initialize Rule Service (database operations)
-    await this.startRuleService();
+    // 1. Start Temporal Service and Workers
+    await this.startTemporalService();
 
-    // 2. Start Enhanced Notification Queue (BullMQ with realtime support)
-    await this.startEnhancedNotificationQueue();
+    // 2. Start Temporal Orchestration Workflow
+    await this.startOrchestrationWorkflow();
 
-    // 3. Start Rule Engine Service (cron + scheduled notifications)
-    await this.startRuleEngineService();
-
-    // 4. Start Subscription Manager (single realtime subscription for all enterprises)
+    // 3. Start Subscription Manager (single realtime subscription for all enterprises)
     if (this.config.enterpriseIds.length > 0) {
       await this.startSubscriptionManager();
     } else {
       logger.warn('No enterprise IDs configured, skipping subscription manager');
     }
 
-    // 5. Start Health Monitor (health checks + HTTP server)
+    // 4. Start Health Monitor (health checks + HTTP server)
     await this.startHealthMonitor();
   }
 
   /**
-   * Start the rule service (database operations)
+   * Start the Temporal service
    */
-  private async startRuleService(): Promise<void> {
+  private async startTemporalService(): Promise<void> {
     try {
-      logger.daemon('Initializing Rule Service...');
+      logger.daemon('Starting Temporal service...');
       
-      this.ruleService = new RuleService();
+      // Initialize Temporal (starts workers)
+      await temporalService.initialize();
       
-      logger.daemon('Rule Service started successfully');
+      logger.daemon('Temporal service started successfully');
     } catch (error) {
-      logger.error('Failed to start Rule Service:', error instanceof Error ? error : new Error(String(error)));
+      logger.error('Failed to start Temporal service:', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
 
   /**
-   * Start the enhanced notification queue (BullMQ with realtime support)
+   * Start the master orchestration workflow
    */
-  private async startEnhancedNotificationQueue(): Promise<void> {
+  private async startOrchestrationWorkflow(): Promise<void> {
     try {
-      logger.queue('Initializing Enhanced Notification Queue...');
-
-      // Use existing rule engine configuration for queue
-      const ruleEngineConfig = {
-        ...defaultRuleEngineConfig,
-        redisUrl: this.config.redis.url,
-      };
-
-      this.enhancedNotificationQueue = new EnhancedNotificationQueue(
-        ruleEngineConfig, 
-        this.ruleService!
-      );
-
-      logger.queue('Enhanced Notification Queue started successfully');
+      logger.daemon('Starting orchestration workflow...');
+      
+      const client = await getTemporalClient();
+      
+      // Start the master orchestration workflow
+      this.orchestrationWorkflowId = `orchestration-${Date.now()}`;
+      
+      await client.workflow.start('masterOrchestrationWorkflow', {
+        workflowId: this.orchestrationWorkflowId,
+        taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notification-processing',
+        args: [{
+          enterpriseIds: this.config.enterpriseIds,
+          cronInterval: '1m',
+          scheduledInterval: '1m',
+          scheduledBatchSize: 100,
+        }],
+        // Run until explicitly cancelled
+        workflowExecutionTimeout: undefined,
+      });
+      
+      logger.daemon('Orchestration workflow started successfully', {
+        workflowId: this.orchestrationWorkflowId
+      });
     } catch (error) {
-      logger.error('Failed to start Enhanced Notification Queue:', error instanceof Error ? error : new Error(String(error)));
-      throw error;
-    }
-  }
-
-  /**
-   * Start the rule engine service (existing cron + scheduled functionality)
-   */
-  private async startRuleEngineService(): Promise<void> {
-    try {
-      logger.ruleEngine('Initializing Rule Engine Service...');
-
-      // Use existing rule engine configuration
-      const ruleEngineConfig = {
-        ...defaultRuleEngineConfig,
-        redisUrl: this.config.redis.url,
-      };
-
-      this.ruleEngineService = RuleEngineService.getInstance(ruleEngineConfig);
-      await this.ruleEngineService.initialize();
-
-      logger.ruleEngine('Rule Engine Service started successfully');
-    } catch (error) {
-      logger.error('Failed to start Rule Engine Service:', error instanceof Error ? error : new Error(String(error)));
+      logger.error('Failed to start orchestration workflow:', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -168,7 +149,6 @@ export class DaemonManager {
       this.subscriptionManager = new EnhancedSubscriptionManager({
         enterpriseId: 'shared', // Special identifier for shared subscription
         enterpriseIds: this.config.enterpriseIds, // Pass the list of enterprises to monitor
-        notificationQueue: this.enhancedNotificationQueue!,
         events: ['INSERT', 'UPDATE'],
         reconnectDelay: this.config.subscription.reconnectDelay,
         maxRetries: this.config.subscription.maxRetries,
@@ -251,32 +231,21 @@ export class DaemonManager {
         );
       }
 
-      // Shutdown rule engine service (stop cron jobs and scheduled processing)
-      if (this.ruleEngineService) {
+      // Cancel orchestration workflow
+      if (this.orchestrationWorkflowId) {
         shutdownPromises.push(
-          this.ruleEngineService.shutdown().catch(error => 
-            logger.error('Error shutting down Rule Engine Service:', error)
+          this.cancelOrchestrationWorkflow().catch(error => 
+            logger.error('Error cancelling orchestration workflow:', error)
           )
         );
       }
 
-      // Shutdown enhanced notification queue (stop BullMQ workers and queues)
-      if (this.enhancedNotificationQueue) {
-        shutdownPromises.push(
-          this.enhancedNotificationQueue.shutdown().catch(error => 
-            logger.error('Error shutting down Enhanced Notification Queue:', error)
-          )
-        );
-      }
-
-      // Shutdown rule service (close database connections)
-      if (this.ruleService) {
-        shutdownPromises.push(
-          this.ruleService.shutdown().catch(error => 
-            logger.error('Error shutting down Rule Service:', error)
-          )
-        );
-      }
+      // Shutdown Temporal service (workers)
+      shutdownPromises.push(
+        temporalService.shutdown().catch(error => 
+          logger.error('Error shutting down Temporal Service:', error)
+        )
+      );
 
       // Wait for all shutdowns to complete (with timeout)
       await Promise.race([
@@ -299,6 +268,38 @@ export class DaemonManager {
   }
 
   /**
+   * Cancel the orchestration workflow
+   */
+  private async cancelOrchestrationWorkflow(): Promise<void> {
+    if (!this.orchestrationWorkflowId) {
+      return;
+    }
+
+    try {
+      const client = await getTemporalClient();
+      const handle = client.workflow.getHandle(this.orchestrationWorkflowId);
+      
+      // Signal the workflow to stop gracefully
+      await handle.signal('stopOrchestration');
+      
+      // Wait a bit for graceful shutdown
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // If still running, cancel it
+      try {
+        await handle.cancel();
+      } catch (error) {
+        // Workflow might have already completed
+        logger.debug('Workflow cancellation error (likely already completed):', { 
+          error: error instanceof Error ? error.message : String(error) 
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to cancel orchestration workflow:', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  /**
    * Force cleanup (used in error scenarios)
    */
   private async cleanup(): Promise<void> {
@@ -307,9 +308,8 @@ export class DaemonManager {
     const cleanupTasks = [
       () => this.healthMonitor?.stop(),
       () => this.subscriptionManager?.stop(),
-      () => this.ruleEngineService?.shutdown(),
-      () => this.enhancedNotificationQueue?.shutdown(),
-      () => this.ruleService?.shutdown(),
+      () => this.cancelOrchestrationWorkflow(),
+      () => temporalService.shutdown(),
     ];
 
     for (const task of cleanupTasks) {
@@ -348,44 +348,54 @@ export class DaemonManager {
         });
       }
 
-      // Get rule engine status
-      const ruleEngineHealth = this.ruleEngineService
-        ? await this.ruleEngineService.healthCheck()
-        : { status: 'unhealthy' as const };
-
-      // Get queue stats (if available)
-      let queueStats;
+      // Get Temporal status
+      let temporalStatus;
       try {
-        queueStats = this.enhancedNotificationQueue
-          ? await this.enhancedNotificationQueue.getQueueStats()
-          : undefined;
+        temporalStatus = await temporalService.getHealth();
       } catch (error) {
-        logger.debug('Could not fetch queue stats:', { error: error instanceof Error ? error.message : String(error) });
+        logger.debug('Could not fetch Temporal status:', { error: error instanceof Error ? error.message : String(error) });
+      }
+
+      // Check orchestration workflow status
+      let orchestrationStatus = 'not_started';
+      if (this.orchestrationWorkflowId) {
+        try {
+          const client = await getTemporalClient();
+          const handle = client.workflow.getHandle(this.orchestrationWorkflowId);
+          const description = await handle.describe();
+          orchestrationStatus = description.status.name;
+        } catch (error) {
+          orchestrationStatus = 'error';
+        }
       }
 
       // Determine overall status
       const isHealthy = 
         this.isStarted && 
         !this.isShuttingDown &&
-        ruleEngineHealth.status === 'healthy' &&
-        subscriptionStatus.failed === 0;
+        temporalStatus?.status === 'healthy' &&
+        subscriptionStatus.failed === 0 &&
+        orchestrationStatus === 'RUNNING';
 
       const isDegraded = 
         this.isStarted &&
         !this.isShuttingDown &&
-        (subscriptionStatus.reconnecting > 0 || subscriptionStatus.failed > 0) &&
-        ruleEngineHealth.status === 'healthy';
+        (subscriptionStatus.reconnecting > 0 || subscriptionStatus.failed > 0);
 
       return {
         status: isHealthy ? 'healthy' : isDegraded ? 'degraded' : 'unhealthy',
         uptime,
         components: {
           subscriptions: subscriptionStatus,
-          ruleEngine: this.ruleEngineService ? ruleEngineHealth.status : 'not_initialized',
-          queue: queueStats ? 'healthy' : 'not_initialized',
+          ruleEngine: temporalStatus?.status === 'healthy' ? 'healthy' : 'unhealthy',
+          queue: temporalStatus?.status === 'healthy' ? 'healthy' : 'unhealthy',
+          temporal: temporalStatus ? temporalStatus.status : 'unhealthy',
         },
         enterprise_status: enterpriseStatus,
-        queue_stats: queueStats,
+        temporal_status: {
+          ...temporalStatus,
+          orchestrationWorkflow: orchestrationStatus
+        },
       };
 
     } catch (error) {
@@ -398,6 +408,7 @@ export class DaemonManager {
           subscriptions: { total: 0, active: 0, failed: 0, reconnecting: 0 },
           ruleEngine: 'unhealthy',
           queue: 'unhealthy',
+          temporal: 'unhealthy',
         },
         enterprise_status: {},
       };
@@ -430,12 +441,5 @@ export class DaemonManager {
    */
   getSubscriptionManager(): EnhancedSubscriptionManager | null {
     return this.subscriptionManager;
-  }
-
-  /**
-   * Get rule engine service (for testing/debugging)
-   */
-  getRuleEngineService(): RuleEngineService | null {
-    return this.ruleEngineService;
   }
 }

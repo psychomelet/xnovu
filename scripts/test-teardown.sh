@@ -1,18 +1,15 @@
 #!/bin/bash
 
-# Test teardown script to stop Redis after tests
+# Test Teardown Script
+# Cleans up test environment after integration tests
 
-set -e
+echo "Cleaning up test environment..."
 
-# Skip teardown in CI environment
-if [ "$CI" = "true" ]; then
-  echo "🚀 Running in CI environment - skipping Docker teardown"
-  exit 0
+# Stop and remove Temporal test container if it exists
+if [ "$(docker ps -a -q -f name=temporal-test)" ]; then
+  echo "Stopping Temporal test container..."
+  docker stop temporal-test
+  docker rm temporal-test
 fi
 
-echo "🧹 Cleaning up test environment..."
-
-# Stop and remove Redis container
-docker-compose -f docker-compose.test.yml down >/dev/null 2>&1
-
-echo "✅ Test environment cleaned up!"
+echo "Test environment cleanup complete"

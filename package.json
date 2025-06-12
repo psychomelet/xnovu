@@ -18,7 +18,11 @@
     "test:debug": "bash scripts/test-setup.sh && node --inspect-brk node_modules/.bin/jest --runInBand",
     "test:lint": "eslint __tests__/**/*.{ts,tsx}",
     "test:type-check": "tsc --noEmit",
-    "xnovu": "tsx cli/index.ts"
+    "xnovu": "tsx cli/index.ts",
+    "temporal:start": "bash scripts/start-temporal.sh",
+    "temporal:stop": "docker-compose down",
+    "temporal:logs": "docker-compose logs -f temporal",
+    "temporal:ui": "open http://localhost:8080 || xdg-open http://localhost:8080 || start http://localhost:8080"
   },
   "dependencies": {
     "@novu/api": "^1.0.0",
@@ -28,8 +32,11 @@
     "@react-email/components": "^0.0.41",
     "@react-email/tailwind": "^1.0.5",
     "@supabase/supabase-js": "^2.50.0",
-    "bullmq": "^5.34.0",
-    "ioredis": "^5.4.1",
+    "@temporalio/activity": "^1.11.8",
+    "@temporalio/client": "^1.11.8",
+    "@temporalio/common": "^1.11.8",
+    "@temporalio/worker": "^1.11.8",
+    "@temporalio/workflow": "^1.11.8",
     "next": "15.3.3",
     "node-cron": "^3.0.3",
     "prettier": "^3.5.3",

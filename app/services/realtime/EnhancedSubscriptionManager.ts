@@ -1,18 +1,17 @@
 /**
- * Enhanced Subscription Manager with UPDATE monitoring and BullMQ integration
+ * Enhanced Subscription Manager with UPDATE monitoring and Temporal integration
  * 
  * Enhancements over the original SubscriptionManager:
  * - Monitors both INSERT and UPDATE events
- * - Direct BullMQ integration instead of internal queue
+ * - Direct Temporal workflow integration instead of queues
  * - Better error handling and reconnection logic
  * - Structured logging with enterprise context
  */
 
 import { supabase } from '@/lib/supabase/client';
 import { RealtimeChannel, RealtimePostgresChangesPayload, REALTIME_LISTEN_TYPES } from '@supabase/supabase-js';
-import { EnhancedNotificationQueue } from '@/app/services/queue/EnhancedNotificationQueue';
+import { getTemporalClient } from '@/lib/temporal/client';
 import type { Database } from '@/lib/supabase/database.types';
-import type { RealtimeJobData } from '@/types/rule-engine';
 import { logger } from '../logger';
 
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
@@ -20,7 +19,6 @@ type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 export interface EnhancedSubscriptionConfig {
   enterpriseId: string; // Use 'shared' for multi-enterprise subscriptions
   enterpriseIds?: string[]; // Optional: specific enterprises to monitor
-  notificationQueue: EnhancedNotificationQueue;
   onNotification?: (notification: NotificationRow, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => Promise<void>;
   onError?: (error: Error) => void;
   events?: ('INSERT' | 'UPDATE' | 'DELETE')[];
@@ -247,8 +245,8 @@ export class EnhancedSubscriptionManager {
           return;
         }
 
-        // Add to BullMQ for processing
-        await this.addToQueue(eventType, notificationData, payload.old as NotificationRow | undefined);
+        // Process with Temporal workflow
+        await this.processWithTemporal(eventType, notificationData, payload.old as NotificationRow | undefined);
       }
 
       // Call custom handler if provided
@@ -282,36 +280,43 @@ export class EnhancedSubscriptionManager {
   }
 
   /**
-   * Add realtime event to BullMQ for processing
+   * Process notification with Temporal workflow
    */
-  private async addToQueue(
+  private async processWithTemporal(
     eventType: 'INSERT' | 'UPDATE' | 'DELETE',
     notification: NotificationRow,
     oldNotification?: NotificationRow
   ): Promise<void> {
     try {
-      const realtimeJobData: RealtimeJobData = {
-        type: `realtime-${eventType.toLowerCase()}` as RealtimeJobData['type'],
-        enterpriseId: notification.enterprise_id, // Use the actual enterprise from notification
-        notificationId: notification.id,
-        payload: notification,
-        oldPayload: oldNotification,
-        timestamp: new Date(),
-        eventId: `${notification.enterprise_id}-${notification.id}-${eventType}-${Date.now()}`,
-      };
+      const client = await getTemporalClient();
+      
+      // Start notification processing workflow
+      const handle = await client.workflow.start('notificationProcessingWorkflow', {
+        workflowId: `notification-${notification.id}-${eventType}-${Date.now()}`,
+        taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notification-processing',
+        args: [{
+          id: notification.id,
+          enterpriseId: notification.enterprise_id,
+          workflowId: notification.notification_workflow_id,
+          payload: notification.payload,
+          recipients: notification.recipients || [],
+          overrides: notification.overrides || {},
+          status: notification.notification_status || 'PENDING',
+          createdAt: notification.created_at,
+        }],
+        // Allow workflow to run for up to 1 hour
+        workflowExecutionTimeout: '1h',
+      });
 
-      // Use the enhanced notification queue to add realtime job
-      await this.config.notificationQueue.addRealtimeJob(realtimeJobData);
-
-      logger.subscription('Event added to queue successfully', this.config.enterpriseId, {
+      logger.subscription('Notification processing workflow started', this.config.enterpriseId, {
         notificationId: notification.id,
         enterpriseId: notification.enterprise_id,
         eventType,
-        jobId: realtimeJobData.eventId
+        workflowId: handle.workflowId,
       });
 
     } catch (error) {
-      logger.error(`Failed to add ${eventType} event to queue:`, error instanceof Error ? error : new Error(String(error)), {
+      logger.error(`Failed to start Temporal workflow for ${eventType} event:`, error instanceof Error ? error : new Error(String(error)), {
         enterpriseId: notification.enterprise_id,
         notificationId: notification.id,
         eventType

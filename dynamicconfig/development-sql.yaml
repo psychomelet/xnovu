@@ -1,0 +1,33 @@
+# Dynamic configuration for Temporal development environment
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+
+# Workflow execution settings
+limit.maxIDLength:
+  - value: 255
+
+# History settings
+history.maxPageSize:
+  - value: 1000
+
+# Task queue settings
+matching.numTaskqueueReadPartitions:
+  - value: 4
+matching.numTaskqueueWritePartitions:
+  - value: 4
+
+# Worker settings
+worker.perNamespaceWorkerCount:
+  - value: 100
+
+# Frontend settings
+frontend.enableClientVersionCheck:
+  - value: false
+
+# Namespace settings
+system.maxConsecutiveWorkflowTaskFailures:
+  - value: 10
+
+# Retention settings
+history.retentionDays:
+  - value: 30

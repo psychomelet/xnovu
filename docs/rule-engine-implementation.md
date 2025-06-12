@@ -235,7 +235,7 @@ console.log(health.status); // 'healthy' or 'unhealthy'
 
 ### Enterprise Isolation:
 - All database queries scoped by `enterprise_id`
-- Queue jobs include enterprise context
+- Workflow executions include enterprise context
 - No cross-enterprise data access
 
 ### Input Validation:

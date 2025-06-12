@@ -8,10 +8,11 @@ config()
 process.env.NODE_ENV = 'test'
 
 // Override specific values for test environment
-process.env.REDIS_URL = 'redis://localhost:6379'
-process.env.RULE_ENGINE_MAX_CONCURRENT_JOBS = '5'
-process.env.RULE_ENGINE_RETRY_ATTEMPTS = '2'
-process.env.RULE_ENGINE_RETRY_DELAY = '1000'
+process.env.TEMPORAL_ADDRESS = 'localhost:7233'
+process.env.TEMPORAL_NAMESPACE = 'default'
+process.env.TEMPORAL_TASK_QUEUE = 'test-queue'
+process.env.TEMPORAL_MAX_CONCURRENT_ACTIVITIES = '10'
+process.env.TEMPORAL_MAX_CONCURRENT_WORKFLOWS = '5'
 
 // Add Node.js globals for Next.js compatibility
 if (typeof global.TextEncoder === 'undefined') {

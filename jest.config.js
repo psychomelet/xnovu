@@ -8,7 +8,7 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js', '<rootDir>/jest.console.setup.js'],
-  testEnvironment: 'jest-environment-node', // Use node environment for Redis tests
+  testEnvironment: 'jest-environment-node', // Use node environment for server-side tests
   testEnvironmentOptions: {
     customExportConditions: ['node', 'node-addons'],
   },

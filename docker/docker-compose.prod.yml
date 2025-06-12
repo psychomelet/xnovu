@@ -1,298 +1,111 @@
-# Production Docker Compose Configuration
-# Enhanced configuration for production deployment
+# XNovu Production Docker Compose
+#
+# This file defines the production deployment configuration for XNovu.
+# Temporal is configured as an external service via environment variables.
 
 version: '3.8'
 
 services:
-  # Redis Cluster for production reliability
-  redis-master:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes --replica-read-only no
-    volumes:
-      - redis-master-data:/data
-    networks:
-      - xnovu-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
-
-  redis-replica:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes --replicaof redis-master 6379
-    volumes:
-      - redis-replica-data:/data
-    depends_on:
-      - redis-master
-    networks:
-      - xnovu-network
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
-
-  # XNovu Unified Daemon - Production configuration
-  daemon:
+  # XNovu Next.js Application
+  app:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.daemon
-      target: production
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    image: xnovu:latest
+    restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "${PORT:-4000}:4000"
     environment:
-      - NODE_ENV=production
-      - REDIS_URL=redis://redis-master:6379
-      
-      # Supabase configuration
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      
-      # Novu configuration
-      - NOVU_SECRET_KEY=${NOVU_SECRET_KEY}
-      
-      # Daemon configuration
-      - DAEMON_ENTERPRISE_IDS=${DAEMON_ENTERPRISE_IDS}
-      - DAEMON_HEALTH_PORT=3001
-      - DAEMON_LOG_LEVEL=${DAEMON_LOG_LEVEL:-info}
-      
-      # Subscription configuration
-      - SUBSCRIPTION_RECONNECT_DELAY=${SUBSCRIPTION_RECONNECT_DELAY:-2000}
-      - SUBSCRIPTION_MAX_RETRIES=${SUBSCRIPTION_MAX_RETRIES:-15}
-      - SUBSCRIPTION_HEALTH_CHECK_INTERVAL=${SUBSCRIPTION_HEALTH_CHECK_INTERVAL:-60000}
-      
-      # Queue priorities
-      - REALTIME_QUEUE_PRIORITY=${REALTIME_QUEUE_PRIORITY:-10}
-      - SCHEDULED_QUEUE_PRIORITY=${SCHEDULED_QUEUE_PRIORITY:-5}
-      - CRON_QUEUE_PRIORITY=${CRON_QUEUE_PRIORITY:-1}
-      
-      # Rule engine configuration
-      - RULE_ENGINE_TIMEZONE=${RULE_ENGINE_TIMEZONE:-UTC}
-      - RULE_ENGINE_MAX_CONCURRENT_JOBS=${RULE_ENGINE_MAX_CONCURRENT_JOBS:-20}
-      - RULE_ENGINE_RETRY_ATTEMPTS=${RULE_ENGINE_RETRY_ATTEMPTS:-5}
-      - RULE_ENGINE_RETRY_DELAY=${RULE_ENGINE_RETRY_DELAY:-3000}
-      - RULE_ENGINE_SCHEDULED_INTERVAL=${RULE_ENGINE_SCHEDULED_INTERVAL:-30000}
-      - RULE_ENGINE_SCHEDULED_BATCH_SIZE=${RULE_ENGINE_SCHEDULED_BATCH_SIZE:-200}
-      
-    depends_on:
-      - redis-master
-    restart: unless-stopped
-    networks:
-      - xnovu-network
+      NODE_ENV: production
+      PORT: 4000
+      # Database
+      DATABASE_URL: ${DATABASE_URL}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Novu
+      NOVU_SECRET_KEY: ${NOVU_SECRET_KEY}
+      NEXT_PUBLIC_NOVU_APP_ID: ${NEXT_PUBLIC_NOVU_APP_ID}
+      NEXT_PUBLIC_NOVU_BACKEND_URL: ${NEXT_PUBLIC_NOVU_BACKEND_URL}
+      NEXT_PUBLIC_NOVU_SOCKET_URL: ${NEXT_PUBLIC_NOVU_SOCKET_URL}
+      # Temporal (External)
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-xnovu-notification-processing}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    deploy:
-      replicas: 1  # Single daemon instance
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 3
-        window: 120s
-
-  # XNovu Workers - Production scaling
-  worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.worker
-      target: production
-    environment:
-      - NODE_ENV=production
-      - REDIS_URL=redis://redis-master:6379
-      
-      # Supabase configuration
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      
-      # Novu configuration
-      - NOVU_SECRET_KEY=${NOVU_SECRET_KEY}
-      
-      # Worker configuration
-      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-10}
-      - WORKER_LOG_LEVEL=${WORKER_LOG_LEVEL:-info}
-      
-      # Queue configuration
-      - RULE_ENGINE_MAX_CONCURRENT_JOBS=${RULE_ENGINE_MAX_CONCURRENT_JOBS:-20}
-      - RULE_ENGINE_RETRY_ATTEMPTS=${RULE_ENGINE_RETRY_ATTEMPTS:-5}
-      - RULE_ENGINE_RETRY_DELAY=${RULE_ENGINE_RETRY_DELAY:-3000}
-      
-    depends_on:
-      - redis-master
-      - daemon
-    restart: unless-stopped
-    networks:
-      - xnovu-network
-    healthcheck:
-      test: ["CMD", "node", "-e", "process.exit(0)"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
-    deploy:
-      replicas: 4  # Scale based on load
-      resources:
-        limits:
-          memory: 1.5G
-          cpus: '1.0'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 60s
+      start_period: 40s
+    networks:
+      - xnovu
 
-  # Bull Board - Production monitoring
-  bull-board:
-    image: deadly0/bull-board
+  # XNovu Daemon
+  daemon:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: xnovu:latest
+    restart: unless-stopped
+    command: ["pnpm", "xnovu", "daemon", "start", "--enterprises", "${DAEMON_ENTERPRISE_IDS}"]
     ports:
-      - "3000:3000"
+      - "${DAEMON_HEALTH_PORT:-3001}:3001"
     environment:
-      - REDIS_HOST=redis-master
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      NODE_ENV: production
+      # Database
+      DATABASE_URL: ${DATABASE_URL}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Novu
+      NOVU_SECRET_KEY: ${NOVU_SECRET_KEY}
+      # Temporal (External)
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-xnovu-notification-processing}
+      TEMPORAL_MAX_CONCURRENT_ACTIVITIES: ${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-100}
+      TEMPORAL_MAX_CONCURRENT_WORKFLOWS: ${TEMPORAL_MAX_CONCURRENT_WORKFLOWS:-50}
+      # Daemon config
+      DAEMON_ENTERPRISE_IDS: ${DAEMON_ENTERPRISE_IDS}
+      DAEMON_HEALTH_PORT: 3001
+      DAEMON_LOG_LEVEL: ${DAEMON_LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
-      - redis-master
+      - app
     networks:
-      - xnovu-network
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.1'
+      - xnovu
 
-  # Prometheus - Production metrics
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
-      - '--web.enable-lifecycle'
-      - '--storage.tsdb.wal-compression'
-    networks:
-      - xnovu-network
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
-
-  # Grafana - Production dashboards
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3002:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_INSTALL_PLUGINS=redis-datasource
-      - GF_SECURITY_DISABLE_GRAVATAR=true
-      - GF_ANALYTICS_REPORTING_ENABLED=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    depends_on:
-      - prometheus
-    networks:
-      - xnovu-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
-
-  # Log aggregation (optional)
-  loki:
-    image: grafana/loki:latest
-    ports:
-      - "3100:3100"
-    volumes:
-      - loki-data:/loki
-    networks:
-      - xnovu-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-
-  # NGINX Load Balancer (optional)
+  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
+      - app
       - daemon
-      - bull-board
-      - grafana
     networks:
-      - xnovu-network
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-
-volumes:
-  redis-master-data:
-  redis-replica-data:
-  prometheus-data:
-  grafana-data:
-  loki-data:
+      - xnovu
 
 networks:
-  xnovu-network:
-    driver: overlay
-    attachable: true
+  xnovu:
+    driver: bridge
 
-# Production deployment commands:
-# docker stack deploy -c docker-compose.prod.yml xnovu-stack
-#
-# Scaling commands:
-# docker service scale xnovu-stack_worker=6
-# docker service scale xnovu-stack_redis-replica=3
+# Production Notes:
+# 1. Temporal is expected to be running as an external service
+# 2. Configure TEMPORAL_ADDRESS to point to your Temporal cluster
+# 3. Ensure all required environment variables are set
+# 4. Use proper SSL certificates in production
+# 5. Consider using a managed database service for PostgreSQL
+# 6. Monitor daemon health endpoint for operational status
