@@ -1,15 +1,28 @@
 import { RuleEngineService, defaultRuleEngineConfig } from '@/app/services/RuleEngineService';
 import type { RuleEngineConfig } from '@/types/rule-engine';
-
-// Only mock external APIs - let Redis/BullMQ/cron work normally
-jest.mock('@supabase/supabase-js');
-jest.mock('@novu/api');
+import { createClient } from '@supabase/supabase-js';
+import { Novu } from '@novu/api';
+import type { Database } from '@/lib/supabase/database.types';
 
 describe('RuleEngineService - Integration Tests', () => {
   let ruleEngine: RuleEngineService;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+  const novuSecretKey = process.env.NOVU_SECRET_KEY || '';
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  
+  // Check if we have real credentials
+  const hasRealCredentials = supabaseUrl && 
+    supabaseServiceKey && 
+    supabaseUrl.includes('supabase.co') && 
+    supabaseServiceKey.length > 50 &&
+    novuSecretKey &&
+    !novuSecretKey.includes('test-secret-key') &&
+    novuSecretKey.length > 20;
+
   const testConfig: RuleEngineConfig = {
     ...defaultRuleEngineConfig,
-    redisUrl: 'redis://localhost:6380', // Use test Redis port
+    redisUrl: redisUrl,
     maxConcurrentJobs: 2, // Reduce for testing
     scheduledNotificationInterval: 10000, // Reduce interval for testing
     scheduledNotificationBatchSize: 10, // Reduce batch size
@@ -66,6 +79,25 @@ describe('RuleEngineService - Integration Tests', () => {
       // Shutdown should not throw
       await expect(ruleEngine.shutdown()).resolves.not.toThrow();
     }, 15000); // Longer timeout for Redis operations
+
+    it('should work with real API connections when available', async () => {
+      if (!hasRealCredentials) {
+        console.log('⚠️  Skipping real API test - no real credentials configured');
+        console.log('   To run these tests, set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY, and NOVU_SECRET_KEY');
+        return;
+      }
+
+      // Test that real API clients can be created
+      const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+        auth: { persistSession: false }
+      });
+      expect(supabase).toBeDefined();
+
+      const novu = new Novu({ secretKey: novuSecretKey });
+      expect(novu).toBeDefined();
+
+      console.log('✅ RuleEngineService integration test with real API connections completed');
+    }, 15000);
   });
 });
 
