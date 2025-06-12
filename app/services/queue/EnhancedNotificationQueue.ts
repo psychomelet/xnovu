@@ -15,10 +15,10 @@ import type {
   NotificationJobData,
   RuleJobData,
   RuleEngineConfig,
+  RealtimeJobData,
 } from '@/types/rule-engine';
-import type { RealtimeJobData } from '../../daemon/types/daemon';
 import { RuleService } from '../database/RuleService';
-import { logger } from '../../daemon/utils/logging';
+import { logger } from '../logger';
 
 interface QueuePriorities {
   realtime: number;
@@ -597,28 +597,28 @@ export class EnhancedNotificationQueue {
    */
   private setupEventListeners(): void {
     // Original queue events
-    this.queueEvents.on('completed', (jobId) => {
+    this.queueEvents.on('completed', ({ jobId }) => {
       logger.queue('Job completed', { jobId, queue: 'notification' });
     });
 
-    this.queueEvents.on('failed', (jobId, err) => {
-      logger.error('Job failed', new Error(err), { jobId, queue: 'notification' });
+    this.queueEvents.on('failed', ({ jobId, failedReason }) => {
+      logger.error('Job failed', new Error(failedReason), { jobId, queue: 'notification' });
     });
 
-    this.queueEvents.on('stalled', (jobId) => {
+    this.queueEvents.on('stalled', ({ jobId }) => {
       logger.queue('Job stalled', { jobId, queue: 'notification' });
     });
 
     // Realtime queue events
-    this.realtimeQueueEvents.on('completed', (jobId) => {
+    this.realtimeQueueEvents.on('completed', ({ jobId }) => {
       logger.queue('Realtime job completed', { jobId, queue: 'realtime' });
     });
 
-    this.realtimeQueueEvents.on('failed', (jobId, err) => {
-      logger.error('Realtime job failed', new Error(err), { jobId, queue: 'realtime' });
+    this.realtimeQueueEvents.on('failed', ({ jobId, failedReason }) => {
+      logger.error('Realtime job failed', new Error(failedReason), { jobId, queue: 'realtime' });
     });
 
-    this.realtimeQueueEvents.on('stalled', (jobId) => {
+    this.realtimeQueueEvents.on('stalled', ({ jobId }) => {
       logger.queue('Realtime job stalled', { jobId, queue: 'realtime' });
     });
 
@@ -715,7 +715,7 @@ export class EnhancedNotificationQueue {
       try {
         this.redis.disconnect();
       } catch (redisError) {
-        logger.warn('Redis disconnect error (ignored during shutdown):', { error: redisError });
+        logger.warn('Redis disconnect error (ignored during shutdown):', { error: String(redisError) });
       }
 
       logger.queue('Enhanced notification queue shutdown complete');

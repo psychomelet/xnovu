@@ -21,7 +21,7 @@ export function setupSignalHandlers(shutdownHandler: SignalHandler): void {
     try {
       await shutdownHandler('uncaughtException');
     } catch (shutdownError) {
-      logger.error('Error during emergency shutdown:', shutdownError);
+      logger.error('Error during emergency shutdown:', shutdownError instanceof Error ? shutdownError : new Error(String(shutdownError)));
     }
     
     process.exit(1);
@@ -38,7 +38,7 @@ export function setupSignalHandlers(shutdownHandler: SignalHandler): void {
     try {
       await shutdownHandler('unhandledRejection');
     } catch (shutdownError) {
-      logger.error('Error during emergency shutdown:', shutdownError);
+      logger.error('Error during emergency shutdown:', shutdownError instanceof Error ? shutdownError : new Error(String(shutdownError)));
     }
     
     process.exit(1);

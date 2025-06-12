@@ -337,8 +337,8 @@ export class DaemonManager {
       // Get queue stats (if available)
       let queueStats;
       try {
-        queueStats = this.ruleEngineService
-          ? await this.ruleEngineService.getStatus()
+        queueStats = this.enhancedNotificationQueue
+          ? await this.enhancedNotificationQueue.getQueueStats()
           : undefined;
       } catch (error) {
         logger.debug('Could not fetch queue stats:', { error: error instanceof Error ? error.message : String(error) });
@@ -366,7 +366,7 @@ export class DaemonManager {
           queue: queueStats ? 'healthy' : 'not_initialized',
         },
         enterprise_status: enterpriseStatus,
-        queue_stats: queueStats?.queueStats,
+        queue_stats: queueStats,
       };
 
     } catch (error) {

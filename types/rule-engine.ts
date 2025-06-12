@@ -57,6 +57,16 @@ export interface RuleJobData {
   executionTime: Date;
 }
 
+export interface RealtimeJobData {
+  type: 'realtime-insert' | 'realtime-update' | 'realtime-delete';
+  enterpriseId: string;
+  notificationId: number;
+  payload: any;
+  oldPayload?: any; // For updates
+  timestamp: Date;
+  eventId: string;
+}
+
 // Service interfaces
 export interface RuleEngineConfig {
   redisUrl?: string;

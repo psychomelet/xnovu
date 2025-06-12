@@ -77,7 +77,7 @@ async function main() {
     logger.info(`🏥 Health check available at http://localhost:${daemonManager.getHealthPort()}/health`);
 
   } catch (error) {
-    logger.error('❌ Failed to start XNovu Unified Daemon:', error);
+    logger.error('❌ Failed to start XNovu Unified Daemon:', error instanceof Error ? error : new Error(String(error)));
     process.exit(1);
   }
 }
@@ -89,12 +89,15 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('🚫 Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('🚫 Unhandled Rejection at:', reason instanceof Error ? reason : new Error(String(reason)), {
+    promise: String(promise),
+    reason: String(reason)
+  });
   process.exit(1);
 });
 
 // Start the daemon
 main().catch((error) => {
-  logger.error('Fatal error in main:', error);
+  logger.error('Fatal error in main:', error instanceof Error ? error : new Error(String(error)));
   process.exit(1);
 });

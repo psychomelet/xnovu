@@ -9,18 +9,18 @@
  */
 
 import { supabase } from '@/lib/supabase/client';
-import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
-import { NotificationQueue } from '@/app/services/queue/NotificationQueue';
+import { RealtimeChannel, RealtimePostgresChangesPayload, REALTIME_LISTEN_TYPES } from '@supabase/supabase-js';
+import { EnhancedNotificationQueue } from '@/app/services/queue/EnhancedNotificationQueue';
 import type { Database } from '@/lib/supabase/database.types';
-import type { RealtimeJobData } from '../../daemon/types/daemon';
-import { logger } from '../../daemon/utils/logging';
+import type { RealtimeJobData } from '@/types/rule-engine';
+import { logger } from '../logger';
 
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 
 export interface EnhancedSubscriptionConfig {
   enterpriseId: string;
-  notificationQueue: NotificationQueue;
-  onNotification?: (notification: NotificationRow, eventType: 'INSERT' | 'UPDATE') => Promise<void>;
+  notificationQueue: EnhancedNotificationQueue;
+  onNotification?: (notification: NotificationRow, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => Promise<void>;
   onError?: (error: Error) => void;
   events?: ('INSERT' | 'UPDATE' | 'DELETE')[];
   reconnectDelay?: number;
@@ -79,21 +79,51 @@ export class EnhancedSubscriptionManager {
    */
   private async createSubscription(): Promise<void> {
     try {
-      // Create subscription channel
+      // Create subscription channel using the same pattern as SubscriptionManager
       this.channel = supabase.channel(`notifications-${this.config.enterpriseId}-enhanced`);
 
-      // Subscribe to each configured event type
-      for (const eventType of this.config.events!) {
+      // Subscribe to each configured event type - unroll the loop to avoid TypeScript issues
+      if (this.config.events!.includes('INSERT')) {
         this.channel.on(
           'postgres_changes',
           {
-            event: eventType,
+            event: 'INSERT',
             schema: 'notify',
             table: 'ent_notification',
             filter: `enterprise_id=eq.${this.config.enterpriseId}`,
           },
           async (payload: RealtimePostgresChangesPayload<NotificationRow>) => {
-            await this.handleRealtimeEvent(eventType, payload);
+            await this.handleRealtimeEvent('INSERT', payload);
+          }
+        );
+      }
+
+      if (this.config.events!.includes('UPDATE')) {
+        this.channel.on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'notify',
+            table: 'ent_notification',
+            filter: `enterprise_id=eq.${this.config.enterpriseId}`,
+          },
+          async (payload: RealtimePostgresChangesPayload<NotificationRow>) => {
+            await this.handleRealtimeEvent('UPDATE', payload);
+          }
+        );
+      }
+
+      if (this.config.events!.includes('DELETE')) {
+        this.channel.on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'notify',
+            table: 'ent_notification',
+            filter: `enterprise_id=eq.${this.config.enterpriseId}`,
+          },
+          async (payload: RealtimePostgresChangesPayload<NotificationRow>) => {
+            await this.handleRealtimeEvent('DELETE', payload);
           }
         );
       }
@@ -142,9 +172,13 @@ export class EnhancedSubscriptionManager {
     const startTime = Date.now();
 
     try {
+      const recordId = 
+        (payload.new && 'id' in payload.new ? payload.new.id : null) ||
+        (payload.old && 'id' in payload.old ? payload.old.id : null);
+
       logger.subscription(`Received ${eventType} event`, this.config.enterpriseId, {
         eventType,
-        recordId: payload.new?.id || payload.old?.id,
+        recordId,
       });
 
       // Validate payload based on event type
@@ -184,7 +218,9 @@ export class EnhancedSubscriptionManager {
       if ((eventType === 'INSERT' || eventType === 'UPDATE') && notificationData) {
         // Validate the notification is still in our enterprise
         if (notificationData.enterprise_id !== this.config.enterpriseId) {
-          logger.warn(`Received notification for different enterprise`, this.config.enterpriseId, {
+          logger.warn(`Received notification for different enterprise`, {
+            component: 'EnhancedSubscriptionManager',
+            enterpriseId: this.config.enterpriseId,
             notificationId,
             actualEnterpriseId: notificationData.enterprise_id
           });
@@ -209,10 +245,14 @@ export class EnhancedSubscriptionManager {
 
     } catch (error) {
       const duration = Date.now() - startTime;
+      const errorRecordId = 
+        (payload.new && 'id' in payload.new ? payload.new.id : null) ||
+        (payload.old && 'id' in payload.old ? payload.old.id : null);
+
       logger.error(`Failed to handle ${eventType} event for enterprise ${this.config.enterpriseId}:`, error instanceof Error ? error : new Error(String(error)), {
         eventType,
         duration,
-        recordId: payload.new?.id || payload.old?.id
+        recordId: errorRecordId
       });
 
       // Don't re-throw as this would break the subscription

@@ -72,7 +72,7 @@ async function main() {
     logger.info(`🔧 Worker concurrency: ${workerConfig.concurrency}`);
 
   } catch (error) {
-    logger.error('❌ Failed to start XNovu Worker Process:', error);
+    logger.error('❌ Failed to start XNovu Worker Process:', error instanceof Error ? error : new Error(String(error)));
     process.exit(1);
   }
 }
@@ -84,12 +84,12 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('🚫 Unhandled Rejection in worker at:', promise, 'reason:', reason);
+  logger.error('🚫 Unhandled Rejection in worker:', reason instanceof Error ? reason : new Error(String(reason)), { promise: String(promise) });
   process.exit(1);
 });
 
 // Start the worker
 main().catch((error) => {
-  logger.error('Fatal error in worker main:', error);
+  logger.error('Fatal error in worker main:', error instanceof Error ? error : new Error(String(error)));
   process.exit(1);
 });
