@@ -59,7 +59,9 @@ describe('Supabase Connection', () => {
       expect(invalidSupabase.from).toBeDefined();
 
       // Test that invalid credentials fail on first use
-      await expect(invalidSupabase.auth.admin.listUsers()).rejects.toThrow();
+      const { error } = await invalidSupabase.auth.admin.listUsers();
+      expect(error).toBeDefined();
+      expect(error?.message).toContain('fetch failed');
     }, 10000);
   });
 
