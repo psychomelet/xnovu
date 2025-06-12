@@ -1,5 +1,5 @@
 /**
- * Structured logging utility for the daemon system
+ * Structured logging utility for the worker system
  */
 
 interface LogContext {
@@ -18,7 +18,7 @@ class Logger {
   private logLevel: string;
 
   constructor() {
-    this.logLevel = process.env.DAEMON_LOG_LEVEL || 'info';
+    this.logLevel = process.env.WORKER_LOG_LEVEL || 'info';
   }
 
   private shouldLog(level: string): boolean {
@@ -37,7 +37,7 @@ class Logger {
       level,
       message,
       timestamp: new Date().toISOString(),
-      component: 'daemon',
+      component: 'worker',
       ...context,
     };
 
@@ -118,9 +118,9 @@ class Logger {
     });
   }
 
-  daemon(message: string, context?: LogContext): void {
+  worker(message: string, context?: LogContext): void {
     this.info(message, {
-      component: 'DaemonManager',
+      component: 'WorkerManager',
       ...context,
     });
   }

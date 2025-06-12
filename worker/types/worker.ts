@@ -1,8 +1,8 @@
 /**
- * Type definitions for the unified daemon system
+ * Type definitions for the unified worker system
  */
 
-export interface DaemonConfig {
+export interface WorkerConfig {
   enterpriseIds: string[];
   healthPort: number;
   logLevel: string;
@@ -21,9 +21,9 @@ export interface DaemonConfig {
 }
 
 // SubscriptionPoolConfig and EnterpriseSubscriptionStatus removed - no longer needed
-// The daemon now uses a single shared subscription manager
+// The worker now uses a single shared subscription manager
 
-export interface DaemonHealthStatus {
+export interface WorkerHealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
   uptime: number;
   components: {

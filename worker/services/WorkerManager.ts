@@ -1,5 +1,5 @@
 /**
- * Main daemon orchestration service
+ * Main worker orchestration service
  * 
  * Coordinates all notification services using Temporal workflows:
  * - EnhancedSubscriptionManager (single shared realtime subscription for all enterprises)
@@ -9,13 +9,13 @@
 
 import { EnhancedSubscriptionManager } from '@/app/services/realtime/EnhancedSubscriptionManager';
 import { HealthMonitor } from './HealthMonitor';
-import type { DaemonConfig, DaemonHealthStatus } from '../types/daemon';
+import type { WorkerConfig, WorkerHealthStatus } from '../types/worker';
 import { logger, measureTime } from '../utils/logging';
 import { temporalService } from '@/lib/temporal/service';
 import { getTemporalClient } from '@/lib/temporal/client';
 
-export class DaemonManager {
-  private config: DaemonConfig;
+export class WorkerManager {
+  private config: WorkerConfig;
   private subscriptionManager: EnhancedSubscriptionManager | null = null;
   private healthMonitor: HealthMonitor | null = null;
   private isStarted = false;
@@ -23,42 +23,42 @@ export class DaemonManager {
   private startTime: Date = new Date();
   private orchestrationWorkflowId: string | null = null;
 
-  constructor(config: DaemonConfig) {
+  constructor(config: WorkerConfig) {
     this.config = config;
-    logger.daemon('Daemon manager initialized', { 
+    logger.worker('Worker manager initialized', { 
       enterpriseCount: config.enterpriseIds.length,
       healthPort: config.healthPort 
     });
   }
 
   /**
-   * Start all daemon services
+   * Start all worker services
    */
   async start(): Promise<void> {
     if (this.isStarted) {
-      logger.warn('Daemon already started, ignoring start request');
+      logger.warn('Worker already started, ignoring start request');
       return;
     }
 
     try {
       this.startTime = new Date();
-      logger.daemon('Starting daemon services...');
+      logger.worker('Starting worker services...');
 
       await measureTime(
         () => this.initializeServices(),
         logger,
-        'Daemon services initialization completed',
-        { component: 'DaemonManager' }
+        'Worker services initialization completed',
+        { component: 'WorkerManager' }
       );
 
       this.isStarted = true;
-      logger.daemon('All daemon services started successfully', {
+      logger.worker('All worker services started successfully', {
         uptime: this.getUptime(),
         enterpriseCount: this.config.enterpriseIds.length
       });
 
     } catch (error) {
-      logger.error('Failed to start daemon services:', error instanceof Error ? error : new Error(String(error)));
+      logger.error('Failed to start worker services:', error instanceof Error ? error : new Error(String(error)));
       await this.cleanup();
       throw error;
     }
@@ -90,12 +90,12 @@ export class DaemonManager {
    */
   private async startTemporalService(): Promise<void> {
     try {
-      logger.daemon('Starting Temporal service...');
+      logger.worker('Starting Temporal service...');
       
       // Initialize Temporal (starts workers)
       await temporalService.initialize();
       
-      logger.daemon('Temporal service started successfully');
+      logger.worker('Temporal service started successfully');
     } catch (error) {
       logger.error('Failed to start Temporal service:', error instanceof Error ? error : new Error(String(error)));
       throw error;
@@ -107,7 +107,7 @@ export class DaemonManager {
    */
   private async startOrchestrationWorkflow(): Promise<void> {
     try {
-      logger.daemon('Starting orchestration workflow...');
+      logger.worker('Starting orchestration workflow...');
       
       const client = await getTemporalClient();
       
@@ -127,7 +127,7 @@ export class DaemonManager {
         workflowExecutionTimeout: undefined,
       });
       
-      logger.daemon('Orchestration workflow started successfully', {
+      logger.worker('Orchestration workflow started successfully', {
         workflowId: this.orchestrationWorkflowId
       });
     } catch (error) {
@@ -141,7 +141,7 @@ export class DaemonManager {
    */
   private async startSubscriptionManager(): Promise<void> {
     try {
-      logger.subscription('Initializing Subscription Manager...', 'daemon', {
+      logger.subscription('Initializing Subscription Manager...', 'worker', {
         enterpriseCount: this.config.enterpriseIds.length
       });
 
@@ -166,7 +166,7 @@ export class DaemonManager {
 
       await this.subscriptionManager.start();
 
-      logger.subscription('Subscription Manager started successfully', 'daemon', {
+      logger.subscription('Subscription Manager started successfully', 'worker', {
         enterpriseCount: this.config.enterpriseIds.length
       });
     } catch (error) {
@@ -184,7 +184,7 @@ export class DaemonManager {
 
       this.healthMonitor = new HealthMonitor({
         port: this.config.healthPort,
-        daemonManager: this,
+        workerManager: this,
       });
 
       await this.healthMonitor.start();
@@ -208,7 +208,7 @@ export class DaemonManager {
     }
 
     this.isShuttingDown = true;
-    logger.daemon('Starting graceful shutdown...');
+    logger.worker('Starting graceful shutdown...');
 
     try {
       const shutdownPromises: Promise<any>[] = [];
@@ -256,7 +256,7 @@ export class DaemonManager {
       ]);
 
       this.isStarted = false;
-      logger.daemon('Graceful shutdown completed', {
+      logger.worker('Graceful shutdown completed', {
         uptime: this.getUptime()
       });
 
@@ -303,7 +303,7 @@ export class DaemonManager {
    * Force cleanup (used in error scenarios)
    */
   private async cleanup(): Promise<void> {
-    logger.daemon('Performing emergency cleanup...');
+    logger.worker('Performing emergency cleanup...');
 
     const cleanupTasks = [
       () => this.healthMonitor?.stop(),
@@ -326,7 +326,7 @@ export class DaemonManager {
   /**
    * Get comprehensive health status
    */
-  async getHealthStatus(): Promise<DaemonHealthStatus> {
+  async getHealthStatus(): Promise<WorkerHealthStatus> {
     const uptime = this.getUptime();
     
     try {
@@ -416,7 +416,7 @@ export class DaemonManager {
   }
 
   /**
-   * Get daemon uptime in seconds
+   * Get worker uptime in seconds
    */
   getUptime(): number {
     return Math.floor((Date.now() - this.startTime.getTime()) / 1000);
@@ -430,7 +430,7 @@ export class DaemonManager {
   }
 
   /**
-   * Check if daemon is started
+   * Check if worker is started
    */
   isRunning(): boolean {
     return this.isStarted && !this.isShuttingDown;

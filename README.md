@@ -134,11 +134,11 @@ lib/
     ├── client/          # Temporal client
     └── worker/          # Worker configuration
 
-daemon/
-├── services/            # Daemon services
-│   ├── DaemonManager.ts # Main orchestrator
+worker/
+├── services/            # Worker services
+│   ├── WorkerManager.ts # Main orchestrator
 │   └── HealthMonitor.ts # Health checks
-└── index.ts            # Daemon entry point
+└── index.ts            # Worker entry point
 
 types/
 └── rule-engine.ts      # Type definitions
@@ -170,19 +170,19 @@ Polls Supabase for new notifications when realtime subscriptions are not availab
 ### Master Orchestration Workflow
 Coordinates all subsystems and manages workflow lifecycles.
 
-## Daemon Operation
+## Worker Operation
 
-The daemon runs all notification services:
+The worker runs all notification services:
 
 ```bash
-# Start the daemon
-pnpm xnovu daemon:start
+# Start the worker
+pnpm xnovu worker:start
 
-# Check daemon status
-pnpm xnovu daemon:status
+# Check worker status
+pnpm xnovu worker:status
 
-# Stop the daemon
-pnpm xnovu daemon:stop
+# Stop the worker
+pnpm xnovu worker:stop
 ```
 
 ## Monitoring
@@ -195,7 +195,7 @@ Access the Temporal Web UI at http://localhost:8080 to:
 - Monitor performance
 
 ### Health Endpoints
-- Daemon health: http://localhost:3001/health
+- Worker health: http://localhost:3001/health
 - Detailed status: http://localhost:3001/status
 
 ## Documentation

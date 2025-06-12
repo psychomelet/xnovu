@@ -1,5 +1,5 @@
 /**
- * CLI commands for daemon management
+ * CLI commands for worker management
  */
 
 import { Command } from 'commander';
@@ -7,138 +7,138 @@ import { spawn, ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-export function createDaemonCommands(program: Command): void {
-  const daemon = program
-    .command('daemon')
-    .description('Manage XNovu unified daemon');
+export function createWorkerCommands(program: Command): void {
+  const worker = program
+    .command('worker')
+    .description('Manage XNovu unified worker');
 
-  daemon
+  worker
     .command('start')
-    .description('Start the unified daemon')
+    .description('Start the unified worker')
     .option('--dev', 'Start in development mode')
     .option('--enterprises <ids>', 'Comma-separated enterprise IDs')
     .option('--health-port <port>', 'Health check port', '3001')
     .option('--log-level <level>', 'Log level (debug, info, warn, error)', 'info')
     .action(async (options) => {
       try {
-        console.log('🚀 Starting XNovu unified daemon...');
+        console.log('🚀 Starting XNovu unified worker...');
 
         const env = {
           ...process.env,
-          DAEMON_HEALTH_PORT: options.healthPort,
-          DAEMON_LOG_LEVEL: options.logLevel,
+          WORKER_HEALTH_PORT: options.healthPort,
+          WORKER_LOG_LEVEL: options.logLevel,
         };
 
         if (options.enterprises) {
-          env.DAEMON_ENTERPRISE_IDS = options.enterprises;
+          env.WORKER_ENTERPRISE_IDS = options.enterprises;
         }
 
-        const daemonPath = path.join(process.cwd(), 'daemon', 'index.ts');
-        const args = options.dev ? ['tsx', daemonPath] : ['node', '-r', 'tsx/cjs', daemonPath];
+        const workerPath = path.join(process.cwd(), 'worker', 'index.ts');
+        const args = options.dev ? ['tsx', workerPath] : ['node', '-r', 'tsx/cjs', workerPath];
 
-        const daemon = spawn(args[0], args.slice(1), {
+        const worker = spawn(args[0], args.slice(1), {
           stdio: 'inherit',
           env,
         });
 
-        daemon.on('exit', (code) => {
+        worker.on('exit', (code) => {
           if (code === 0) {
-            console.log('✅ Daemon exited successfully');
+            console.log('✅ Worker exited successfully');
           } else {
-            console.error(`❌ Daemon exited with code ${code}`);
+            console.error(`❌ Worker exited with code ${code}`);
             process.exit(code || 1);
           }
         });
 
-        daemon.on('error', (error) => {
-          console.error('❌ Failed to start daemon:', error);
+        worker.on('error', (error) => {
+          console.error('❌ Failed to start worker:', error);
           process.exit(1);
         });
 
         // Handle shutdown signals
         process.on('SIGINT', () => {
-          console.log('\n📋 Received SIGINT, stopping daemon...');
-          daemon.kill('SIGINT');
+          console.log('\n📋 Received SIGINT, stopping worker...');
+          worker.kill('SIGINT');
         });
 
         process.on('SIGTERM', () => {
-          console.log('\n📋 Received SIGTERM, stopping daemon...');
-          daemon.kill('SIGTERM');
+          console.log('\n📋 Received SIGTERM, stopping worker...');
+          worker.kill('SIGTERM');
         });
 
       } catch (error) {
-        console.error('❌ Error starting daemon:', error);
+        console.error('❌ Error starting worker:', error);
         process.exit(1);
       }
     });
 
-  daemon
+  worker
     .command('stop')
-    .description('Stop the unified daemon')
+    .description('Stop the unified worker')
     .action(async () => {
       try {
-        console.log('⏹️ Stopping XNovu unified daemon...');
+        console.log('⏹️ Stopping XNovu unified worker...');
 
-        // Try to find and stop the daemon process
+        // Try to find and stop the worker process
         const { spawn } = await import('child_process');
-        const pkill = spawn('pkill', ['-f', 'daemon/index.ts']);
+        const pkill = spawn('pkill', ['-f', 'worker/index.ts']);
 
         pkill.on('exit', (code) => {
           if (code === 0) {
-            console.log('✅ Daemon stopped successfully');
+            console.log('✅ Worker stopped successfully');
           } else {
-            console.log('ℹ️ No daemon process found');
+            console.log('ℹ️ No worker process found');
           }
         });
 
       } catch (error) {
-        console.error('❌ Error stopping daemon:', error);
+        console.error('❌ Error stopping worker:', error);
         process.exit(1);
       }
     });
 
-  daemon
+  worker
     .command('status')
-    .description('Check daemon status')
+    .description('Check worker status')
     .option('--port <port>', 'Health check port', '3001')
     .action(async (options) => {
       try {
-        console.log('🔍 Checking daemon status...');
+        console.log('🔍 Checking worker status...');
 
         const response = await fetch(`http://localhost:${options.port}/health`);
         
         if (response.ok) {
           const status = await response.json();
-          console.log('✅ Daemon is running');
+          console.log('✅ Worker is running');
           console.log('📊 Status:', JSON.stringify(status, null, 2));
         } else {
-          console.log('❌ Daemon health check failed');
+          console.log('❌ Worker health check failed');
           process.exit(1);
         }
 
       } catch (error) {
-        console.log('❌ Could not connect to daemon');
-        console.log('ℹ️ Daemon may not be running or health endpoint unavailable');
+        console.log('❌ Could not connect to worker');
+        console.log('ℹ️ Worker may not be running or health endpoint unavailable');
         process.exit(1);
       }
     });
 
-  daemon
+  worker
     .command('logs')
-    .description('View daemon logs')
+    .description('View worker logs')
     .option('--follow', 'Follow log output')
     .option('--lines <n>', 'Number of lines to show', '50')
     .action(async (options) => {
       try {
-        console.log('📋 Viewing daemon logs...');
+        console.log('📋 Viewing worker logs...');
 
         // In a real implementation, this would connect to a log aggregation system
         // For now, we'll just show a message about viewing logs
-        console.log('ℹ️ Daemon logs are output to stdout/stderr');
+        console.log('ℹ️ Worker logs are output to stdout/stderr');
         console.log('ℹ️ Use Docker logs or your log aggregation system to view logs');
         
         if (options.follow) {
-          console.log('ℹ️ To follow logs in Docker: docker logs -f <daemon-container>');
+          console.log('ℹ️ To follow logs in Docker: docker logs -f <worker-container>');
         }
 
       } catch (error) {
@@ -147,18 +147,18 @@ export function createDaemonCommands(program: Command): void {
       }
     });
 
-  daemon
+  worker
     .command('restart')
-    .description('Restart the unified daemon')
+    .description('Restart the unified worker')
     .option('--dev', 'Restart in development mode')
     .option('--enterprises <ids>', 'Comma-separated enterprise IDs')
     .action(async (options) => {
       try {
-        console.log('🔄 Restarting XNovu unified daemon...');
+        console.log('🔄 Restarting XNovu unified worker...');
 
         // Stop first
         const { spawn } = await import('child_process');
-        const pkill = spawn('pkill', ['-f', 'daemon/index.ts']);
+        const pkill = spawn('pkill', ['-f', 'worker/index.ts']);
 
         await new Promise((resolve) => {
           pkill.on('exit', resolve);
@@ -174,37 +174,37 @@ export function createDaemonCommands(program: Command): void {
         };
 
         // Re-use the start command logic
-        console.log('🚀 Starting daemon again...');
+        console.log('🚀 Starting worker again...');
         
         const env = { ...process.env };
         if (options.enterprises) {
-          env.DAEMON_ENTERPRISE_IDS = options.enterprises;
+          env.WORKER_ENTERPRISE_IDS = options.enterprises;
         }
 
-        const daemonPath = path.join(process.cwd(), 'daemon', 'index.ts');
-        const args = options.dev ? ['tsx', daemonPath] : ['node', '-r', 'tsx/cjs', daemonPath];
+        const workerPath = path.join(process.cwd(), 'worker', 'index.ts');
+        const args = options.dev ? ['tsx', workerPath] : ['node', '-r', 'tsx/cjs', workerPath];
 
-        const daemon = spawn(args[0], args.slice(1), {
+        const worker = spawn(args[0], args.slice(1), {
           stdio: 'inherit',
           env,
         });
 
-        daemon.on('exit', (code) => {
+        worker.on('exit', (code) => {
           process.exit(code || 0);
         });
 
-        daemon.on('error', (error) => {
-          console.error('❌ Failed to restart daemon:', error);
+        worker.on('error', (error) => {
+          console.error('❌ Failed to restart worker:', error);
           process.exit(1);
         });
 
       } catch (error) {
-        console.error('❌ Error restarting daemon:', error);
+        console.error('❌ Error restarting worker:', error);
         process.exit(1);
       }
     });
 
-  daemon
+  worker
     .command('health')
     .description('Detailed health check')
     .option('--port <port>', 'Health check port', '3001')

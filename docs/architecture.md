@@ -11,7 +11,7 @@ The system uses Temporal.io for workflow orchestration, providing durable execut
 ```
 ┌─────────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  Management         │     │     XNovu        │     │    Temporal     │
-│  Platform           │────▶│    Daemon        │────▶│   Workflows     │
+│  Platform           │────▶│    Worker        │────▶│   Workflows     │
 │  (Supabase DB)      │     │                  │     │                 │
 └─────────────────────┘     └──────────────────┘     └─────────────────┘
                                      │                         │
@@ -19,15 +19,15 @@ The system uses Temporal.io for workflow orchestration, providing durable execut
                             ┌──────────────────┐     ┌─────────────────┐
                             │   Temporal       │     │     Novu        │
                             │   Worker         │────▶│   Platform      │
-                            │  (in daemon)     │     │                 │
+                            │  (in worker)     │     │                 │
                             └──────────────────┘     └─────────────────┘
 ```
 
 ## Components
 
-### 1. XNovu Daemon
+### 1. XNovu Worker
 
-The daemon is the core service that:
+The worker is the core service that:
 - Subscribes to Supabase realtime changes
 - Starts Temporal workflows for notification processing
 - Manages health monitoring and graceful shutdown
@@ -89,8 +89,8 @@ The web application provides:
 
 ```
 1. Management platform inserts notification into Supabase
-2. Daemon receives realtime event via subscription
-3. Daemon starts NotificationProcessingWorkflow
+2. Worker receives realtime event via subscription
+3. Worker starts NotificationProcessingWorkflow
 4. Workflow validates and enriches notification data
 5. Workflow triggers appropriate Novu workflow
 6. Novu delivers notification through configured channels
@@ -124,7 +124,7 @@ The web application provides:
 # Local development uses docker-compose for Temporal
 docker-compose up -d  # Starts Temporal dev server
 pnpm dev             # Starts Next.js app
-pnpm xnovu daemon    # Starts daemon with worker
+pnpm xnovu worker    # Starts worker with Temporal worker
 ```
 
 ### Production Environment
@@ -135,8 +135,8 @@ TEMPORAL_ADDRESS=temporal.production.local:7233
 TEMPORAL_NAMESPACE=xnovu-prod
 TEMPORAL_TASK_QUEUE=xnovu-notification-processing
 
-# Multiple daemons can run for different enterprises
-pnpm xnovu daemon --enterprises "ent-1,ent-2"
+# Multiple workers can run for different enterprises
+pnpm xnovu worker --enterprises "ent-1,ent-2"
 ```
 
 ## Configuration
@@ -151,10 +151,10 @@ TEMPORAL_TASK_QUEUE=xnovu-notification-processing
 TEMPORAL_MAX_CONCURRENT_ACTIVITIES=100
 TEMPORAL_MAX_CONCURRENT_WORKFLOWS=50
 
-# Daemon Configuration
-DAEMON_ENTERPRISE_IDS=enterprise-1,enterprise-2
-DAEMON_HEALTH_PORT=3001
-DAEMON_LOG_LEVEL=info
+# Worker Configuration
+WORKER_ENTERPRISE_IDS=enterprise-1,enterprise-2
+WORKER_HEALTH_PORT=3001
+WORKER_LOG_LEVEL=info
 
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
@@ -169,7 +169,7 @@ NEXT_PUBLIC_NOVU_APP_ID=your-app-id
 
 ### Health Checks
 
-The daemon exposes health endpoints:
+The worker exposes health endpoints:
 - `GET /health` - Overall system health
 - `GET /health/details` - Detailed component status
 
@@ -226,7 +226,7 @@ Activities have specific retry policies:
 
 ### Horizontal Scaling
 
-- **Daemons**: Run multiple instances for different enterprises
+- **Workers**: Run multiple instances for different enterprises
 - **Workers**: Temporal workers scale horizontally
 - **Activities**: Concurrent execution controlled by configuration
 
@@ -238,7 +238,7 @@ Activities have specific retry policies:
 
 ### Resource Management
 
-- Memory: ~256MB per daemon instance
+- Memory: ~256MB per worker instance
 - CPU: ~0.5 cores under normal load
 - Network: Minimal, mostly Supabase subscriptions
 - Storage: Temporal handles workflow state
@@ -253,7 +253,7 @@ Activities have specific retry policies:
 
 ### Authorization
 
-- Enterprise isolation at daemon level
+- Enterprise isolation at worker level
 - Row-level security in Supabase
 - Workflow-level access control in Temporal
 
@@ -299,7 +299,7 @@ Activities have specific retry policies:
 - Verify external service connectivity
 
 **Subscription Issues**
-- Check daemon logs for reconnection attempts
+- Check worker logs for reconnection attempts
 - Verify Supabase credentials
 - Review network connectivity
 
@@ -311,8 +311,8 @@ Activities have specific retry policies:
 ### Debug Commands
 
 ```bash
-# View daemon logs
-pnpm xnovu daemon --log-level debug
+# View worker logs
+pnpm xnovu worker --log-level debug
 
 # Check Temporal workflow status
 temporal workflow describe -w <workflow-id>

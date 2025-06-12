@@ -152,10 +152,10 @@ NEXT_PUBLIC_APP_URL=https://your-domain.com
 
 ### Worker Configuration
 
-The XNovu daemon includes an embedded Temporal worker that processes notification workflows:
+The XNovu worker includes an embedded Temporal worker that processes notification workflows:
 
 ```typescript
-// Worker configuration in daemon/src/temporal/worker.ts
+// Worker configuration in worker/src/temporal/worker.ts
 export const workerOptions = {
   taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notifications',
   maxConcurrentActivityExecutions: parseInt(process.env.TEMPORAL_WORKER_MAX_CONCURRENT || '100'),
@@ -356,9 +356,9 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
          retries: 3
          start_period: 40s
 
-     xnovu-daemon:
+     xnovu-worker:
        build: 
-         context: ./daemon
+         context: ./worker
          dockerfile: Dockerfile
        environment:
          - NODE_ENV=production
@@ -450,21 +450,21 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
    apiVersion: apps/v1
    kind: Deployment
    metadata:
-     name: xnovu-daemon-deployment
+     name: xnovu-worker-deployment
      namespace: default
    spec:
      replicas: 1  # Single instance to avoid duplicate processing
      selector:
        matchLabels:
-         app: xnovu-daemon
+         app: xnovu-worker
      template:
        metadata:
          labels:
-           app: xnovu-daemon
+           app: xnovu-worker
        spec:
          containers:
-         - name: xnovu-daemon
-           image: your-registry/xnovu-daemon:latest
+         - name: xnovu-worker
+           image: your-registry/xnovu-worker:latest
            env:
            - name: NODE_ENV
              value: "production"
@@ -663,7 +663,7 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
 2. **Temporal Metrics**
 
    ```typescript
-   // daemon/src/temporal/metrics.ts
+   // worker/src/temporal/metrics.ts
    export async function getTemporalMetrics() {
      const client = getTemporalClient();
      
@@ -693,7 +693,7 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
 3. **Worker Health Monitoring**
 
    ```typescript
-   // daemon/src/monitoring/health.ts
+   // worker/src/monitoring/health.ts
    export class WorkerHealthMonitor {
      async checkWorkerHealth() {
        return {
@@ -773,12 +773,12 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
          summary: "XNovu service is down"
 
      - alert: XNovuDaemonDown
-       expr: up{job="xnovu-daemon"} == 0
+       expr: up{job="xnovu-worker"} == 0
        for: 5m
        labels:
          severity: critical
        annotations:
-         summary: "XNovu daemon service is down"
+         summary: "XNovu worker service is down"
 
      - alert: TemporalWorkerDown
        expr: temporal_worker_active == 0
@@ -923,7 +923,7 @@ GROUP BY enterprise_id, notification_status, hour_bucket;
    open http://localhost:8080
 
    # Check worker logs
-   docker logs xnovu-daemon
+   docker logs xnovu-worker
 
    # Verify Temporal connection
    temporal operator namespace describe --namespace default
@@ -1073,14 +1073,14 @@ npm run dev
 # Check application status
 curl -f http://localhost:3000/api/health
 
-# Check daemon status
+# Check worker status
 curl -f http://localhost:8090/health
 
 # Monitor application logs
 kubectl logs -f deployment/xnovu-deployment
 
-# Monitor daemon logs
-kubectl logs -f deployment/xnovu-daemon-deployment
+# Monitor worker logs
+kubectl logs -f deployment/xnovu-worker-deployment
 
 # Database status
 npx supabase status

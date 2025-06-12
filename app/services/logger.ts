@@ -118,9 +118,9 @@ class Logger {
     });
   }
 
-  daemon(message: string, context?: LogContext): void {
+  worker(message: string, context?: LogContext): void {
     this.info(message, {
-      component: 'DaemonManager',
+      component: 'WorkerManager',
       ...context,
     });
   }

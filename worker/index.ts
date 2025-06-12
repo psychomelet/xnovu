@@ -1,16 +1,16 @@
 #!/usr/bin/env tsx
 
 /**
- * XNovu Unified Daemon
+ * XNovu Unified Worker
  * 
- * Master daemon that orchestrates all notification services:
+ * Master worker that orchestrates all notification services:
  * - Realtime subscriptions (EnhancedSubscriptionManager)
  * - Temporal workflows for notification processing
  * - Health monitoring and status endpoints
  */
 
 import { config } from 'dotenv';
-import { DaemonManager } from './services/DaemonManager';
+import { WorkerManager } from './services/WorkerManager';
 import { logger } from './utils/logging';
 import { setupSignalHandlers } from './utils/signals';
 
@@ -19,7 +19,7 @@ config();
 
 async function main() {
   try {
-    logger.info('🚀 Starting XNovu Unified Daemon...');
+    logger.info('🚀 Starting XNovu Unified Worker...');
 
     // Validate required environment variables
     const requiredVars = [
@@ -35,16 +35,16 @@ async function main() {
     }
 
     // Parse enterprise IDs from environment
-    const enterpriseIds = process.env.DAEMON_ENTERPRISE_IDS?.split(',').map(id => id.trim()) || [];
+    const enterpriseIds = process.env.WORKER_ENTERPRISE_IDS?.split(',').map(id => id.trim()) || [];
     if (enterpriseIds.length === 0) {
-      logger.warn('No enterprise IDs specified in DAEMON_ENTERPRISE_IDS, daemon will run without realtime subscriptions');
+      logger.warn('No enterprise IDs specified in WORKER_ENTERPRISE_IDS, worker will run without realtime subscriptions');
     }
 
-    // Initialize daemon manager
-    const daemonManager = new DaemonManager({
+    // Initialize worker manager
+    const workerManager = new WorkerManager({
       enterpriseIds,
-      healthPort: parseInt(process.env.DAEMON_HEALTH_PORT || '3001'),
-      logLevel: process.env.DAEMON_LOG_LEVEL || 'info',
+      healthPort: parseInt(process.env.WORKER_HEALTH_PORT || '3001'),
+      logLevel: process.env.WORKER_LOG_LEVEL || 'info',
       supabase: {
         url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
         serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -61,19 +61,19 @@ async function main() {
 
     // Setup graceful shutdown
     setupSignalHandlers(async (signal) => {
-      logger.info(`📋 Received ${signal}, shutting down daemon gracefully...`);
-      await daemonManager.shutdown();
+      logger.info(`📋 Received ${signal}, shutting down worker gracefully...`);
+      await workerManager.shutdown();
       process.exit(0);
     });
 
-    // Start daemon
-    await daemonManager.start();
+    // Start worker
+    await workerManager.start();
 
-    logger.info('✅ XNovu Unified Daemon started successfully');
-    logger.info(`🏥 Health check available at http://localhost:${daemonManager.getHealthPort()}/health`);
+    logger.info('✅ XNovu Unified Worker started successfully');
+    logger.info(`🏥 Health check available at http://localhost:${workerManager.getHealthPort()}/health`);
 
   } catch (error) {
-    logger.error('❌ Failed to start XNovu Unified Daemon:', error instanceof Error ? error : new Error(String(error)));
+    logger.error('❌ Failed to start XNovu Unified Worker:', error instanceof Error ? error : new Error(String(error)));
     process.exit(1);
   }
 }
@@ -92,7 +92,7 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Start the daemon
+// Start the worker
 main().catch((error) => {
   logger.error('Fatal error in main:', error instanceof Error ? error : new Error(String(error)));
   process.exit(1);

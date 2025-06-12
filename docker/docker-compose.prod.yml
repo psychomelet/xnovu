@@ -43,16 +43,16 @@ services:
     networks:
       - xnovu
 
-  # XNovu Daemon
-  daemon:
+  # XNovu Worker
+  worker:
     build:
       context: ..
       dockerfile: Dockerfile
     image: xnovu:latest
     restart: unless-stopped
-    command: ["pnpm", "xnovu", "daemon", "start", "--enterprises", "${DAEMON_ENTERPRISE_IDS}"]
+    command: ["pnpm", "xnovu", "worker", "start", "--enterprises", "${WORKER_ENTERPRISE_IDS}"]
     ports:
-      - "${DAEMON_HEALTH_PORT:-3001}:3001"
+      - "${WORKER_HEALTH_PORT:-3001}:3001"
     environment:
       NODE_ENV: production
       # Database
@@ -67,10 +67,10 @@ services:
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-xnovu-notification-processing}
       TEMPORAL_MAX_CONCURRENT_ACTIVITIES: ${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-100}
       TEMPORAL_MAX_CONCURRENT_WORKFLOWS: ${TEMPORAL_MAX_CONCURRENT_WORKFLOWS:-50}
-      # Daemon config
-      DAEMON_ENTERPRISE_IDS: ${DAEMON_ENTERPRISE_IDS}
-      DAEMON_HEALTH_PORT: 3001
-      DAEMON_LOG_LEVEL: ${DAEMON_LOG_LEVEL:-info}
+      # Worker config
+      WORKER_ENTERPRISE_IDS: ${WORKER_ENTERPRISE_IDS}
+      WORKER_HEALTH_PORT: 3001
+      WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
       interval: 30s
@@ -94,7 +94,7 @@ services:
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - app
-      - daemon
+      - worker
     networks:
       - xnovu
 
@@ -108,4 +108,4 @@ networks:
 # 3. Ensure all required environment variables are set
 # 4. Use proper SSL certificates in production
 # 5. Consider using a managed database service for PostgreSQL
-# 6. Monitor daemon health endpoint for operational status
+# 6. Monitor worker health endpoint for operational status

@@ -6,12 +6,12 @@
 
 import { createServer, Server, IncomingMessage, ServerResponse } from 'http';
 import { URL } from 'url';
-import type { DaemonManager } from './DaemonManager';
+import type { WorkerManager } from './WorkerManager';
 import { logger } from '../utils/logging';
 
 interface HealthMonitorConfig {
   port: number;
-  daemonManager: DaemonManager;
+  workerManager: WorkerManager;
 }
 
 export class HealthMonitor {
@@ -139,7 +139,7 @@ export class HealthMonitor {
    */
   private async handleHealthCheck(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const healthStatus = await this.config.daemonManager.getHealthStatus();
+      const healthStatus = await this.config.workerManager.getHealthStatus();
       const statusCode = healthStatus.status === 'healthy' ? 200 : 
                          healthStatus.status === 'degraded' ? 200 : 503;
 
@@ -165,7 +165,7 @@ export class HealthMonitor {
    */
   private async handleDetailedHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const healthStatus = await this.config.daemonManager.getHealthStatus();
+      const healthStatus = await this.config.workerManager.getHealthStatus();
       const statusCode = healthStatus.status === 'healthy' ? 200 : 
                          healthStatus.status === 'degraded' ? 200 : 503;
 
@@ -196,7 +196,7 @@ export class HealthMonitor {
    */
   private async handleSubscriptionHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const subscriptionManager = this.config.daemonManager.getSubscriptionManager();
+      const subscriptionManager = this.config.workerManager.getSubscriptionManager();
       
       if (!subscriptionManager) {
         this.sendResponse(res, 200, {
@@ -237,17 +237,17 @@ export class HealthMonitor {
    */
   private async handleMetrics(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const healthStatus = await this.config.daemonManager.getHealthStatus();
-      const subscriptionManager = this.config.daemonManager.getSubscriptionManager();
+      const healthStatus = await this.config.workerManager.getHealthStatus();
+      const subscriptionManager = this.config.workerManager.getSubscriptionManager();
       
       let metrics = [
-        `# HELP xnovu_daemon_uptime_seconds Daemon uptime in seconds`,
-        `# TYPE xnovu_daemon_uptime_seconds gauge`,
-        `xnovu_daemon_uptime_seconds ${healthStatus.uptime}`,
+        `# HELP xnovu_worker_uptime_seconds Worker uptime in seconds`,
+        `# TYPE xnovu_worker_uptime_seconds gauge`,
+        `xnovu_worker_uptime_seconds ${healthStatus.uptime}`,
         ``,
-        `# HELP xnovu_daemon_healthy Daemon health status (1 = healthy, 0 = unhealthy)`,
-        `# TYPE xnovu_daemon_healthy gauge`,
-        `xnovu_daemon_healthy ${healthStatus.status === 'healthy' ? 1 : 0}`,
+        `# HELP xnovu_worker_healthy Worker health status (1 = healthy, 0 = unhealthy)`,
+        `# TYPE xnovu_worker_healthy gauge`,
+        `xnovu_worker_healthy ${healthStatus.status === 'healthy' ? 1 : 0}`,
         ``,
         `# HELP xnovu_subscriptions_total Total number of configured subscriptions`,
         `# TYPE xnovu_subscriptions_total gauge`,
