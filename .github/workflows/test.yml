@@ -57,6 +57,8 @@ jobs:
 
     - name: Run type check
       run: pnpm build
+      env:
+        NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
 
     - name: Verify Redis connection
       run: |
