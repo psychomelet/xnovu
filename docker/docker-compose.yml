@@ -1,0 +1,163 @@
+# Development Docker Compose Configuration
+# For unified daemon and worker system with BullMQ
+
+version: '3.8'
+
+services:
+  # Redis - Queue backend for BullMQ
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - xnovu-network
+
+  # XNovu Unified Daemon - Single instance orchestrator
+  daemon:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.daemon
+    ports:
+      - "3001:3001"  # Health check endpoint
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      
+      # Supabase configuration
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # Novu configuration
+      - NOVU_SECRET_KEY=${NOVU_SECRET_KEY}
+      
+      # Daemon configuration
+      - DAEMON_ENTERPRISE_IDS=${DAEMON_ENTERPRISE_IDS:-ent1,ent2}
+      - DAEMON_HEALTH_PORT=3001
+      - DAEMON_LOG_LEVEL=info
+      
+      # Subscription configuration
+      - SUBSCRIPTION_RECONNECT_DELAY=1000
+      - SUBSCRIPTION_MAX_RETRIES=10
+      - SUBSCRIPTION_HEALTH_CHECK_INTERVAL=30000
+      
+      # Queue priorities
+      - REALTIME_QUEUE_PRIORITY=10
+      - SCHEDULED_QUEUE_PRIORITY=5
+      - CRON_QUEUE_PRIORITY=1
+      
+      # Rule engine configuration
+      - RULE_ENGINE_TIMEZONE=UTC
+      - RULE_ENGINE_MAX_CONCURRENT_JOBS=10
+      - RULE_ENGINE_RETRY_ATTEMPTS=3
+      - RULE_ENGINE_RETRY_DELAY=5000
+      - RULE_ENGINE_SCHEDULED_INTERVAL=60000
+      - RULE_ENGINE_SCHEDULED_BATCH_SIZE=100
+      
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - xnovu-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # XNovu Workers - Multiple instances for processing jobs
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      
+      # Supabase configuration
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # Novu configuration
+      - NOVU_SECRET_KEY=${NOVU_SECRET_KEY}
+      
+      # Worker configuration
+      - WORKER_CONCURRENCY=5
+      - WORKER_LOG_LEVEL=info
+      
+      # Queue configuration (same as daemon)
+      - RULE_ENGINE_MAX_CONCURRENT_JOBS=10
+      - RULE_ENGINE_RETRY_ATTEMPTS=3
+      - RULE_ENGINE_RETRY_DELAY=5000
+      
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2  # Scale workers as needed
+    networks:
+      - xnovu-network
+
+  # Bull Board - Queue monitoring dashboard
+  bull-board:
+    image: deadly0/bull-board
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - xnovu-network
+
+  # Prometheus - Metrics collection (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - xnovu-network
+
+  # Grafana - Metrics visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - xnovu-network
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  xnovu-network:
+    driver: bridge
