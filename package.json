@@ -16,6 +16,10 @@
     "test:setup": "bash scripts/test-setup.sh",
     "test:teardown": "bash scripts/test-teardown.sh",
     "test:ci": "pnpm test:connections && pnpm test:unit && pnpm test:integration",
+    "test:all": "bash scripts/test-setup.sh && jest && bash scripts/test-teardown.sh",
+    "test:debug": "bash scripts/test-setup.sh && node --inspect-brk node_modules/.bin/jest --runInBand",
+    "test:lint": "eslint __tests__/**/*.{ts,tsx}",
+    "test:type-check": "tsc --noEmit",
     "xnovu": "tsx cli/index.ts"
   },
   "dependencies": {

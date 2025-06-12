@@ -31,8 +31,8 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres.your-project-id:password@aws-0-region.pooler.supabase.com:6543/postgres'
 }
 
-// Configure Redis for tests - use Docker Redis on port 6380
-process.env.REDIS_URL = 'redis://localhost:6380'
+// Configure Redis for tests - use Docker Redis on port 6379
+process.env.REDIS_URL = 'redis://localhost:6379'
 process.env.RULE_ENGINE_ENABLED = 'true'
 process.env.RULE_ENGINE_TIMEZONE = 'UTC'
 process.env.RULE_ENGINE_MAX_CONCURRENT_JOBS = '5'
