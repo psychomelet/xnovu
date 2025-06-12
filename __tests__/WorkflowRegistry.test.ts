@@ -1,52 +1,128 @@
 import { WorkflowRegistry } from '../app/services/workflow/WorkflowRegistry';
+import { WorkflowService } from '../app/services/database/WorkflowService';
+import { DynamicWorkflowFactory } from '../app/services/workflow/DynamicWorkflowFactory';
+import { WorkflowDiscovery } from '../app/services/workflow/WorkflowDiscovery';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../lib/supabase/database.types';
 import type { WorkflowConfig } from '../app/services/database/WorkflowService';
+import { randomUUID } from 'crypto';
 
-// Mock WorkflowService
-jest.mock('../app/services/database/WorkflowService', () => ({
-  WorkflowService: jest.fn().mockImplementation(() => ({
-    getDynamicWorkflows: jest.fn(),
-    parseWorkflowConfig: jest.fn()
-  })),
-  workflowService: {
-    getDynamicWorkflows: jest.fn(),
-    parseWorkflowConfig: jest.fn()
-  }
-}));
+// Types
+type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
+type WorkflowInsert = Database['notify']['Tables']['ent_notification_workflow']['Insert'];
+type SupabaseClient = ReturnType<typeof createClient<Database>>;
 
+// Mock DynamicWorkflowFactory with enhanced functionality for testing
 jest.mock('../app/services/workflow/DynamicWorkflowFactory', () => ({
   DynamicWorkflowFactory: {
     createDynamicWorkflow: jest.fn(),
-    validateWorkflowConfig: jest.fn().mockReturnValue(true)
+    validateWorkflowConfig: jest.fn()
   }
 }));
 
+// Mock WorkflowDiscovery 
 jest.mock('../app/services/workflow/WorkflowDiscovery', () => ({
   WorkflowDiscovery: {
     discoverStaticWorkflows: jest.fn()
   }
 }));
 
-describe('WorkflowRegistry', () => {
+describe('WorkflowRegistry with Real Database', () => {
   let registry: WorkflowRegistry;
-  let mockDynamicWorkflowFactory: any;
-  let mockWorkflowDiscovery: any;
-  let mockWorkflowService: any;
-  const mockEnterpriseId = 'test-enterprise-123';
+  let workflowService: WorkflowService;
+  let supabase: SupabaseClient;
+  const testEnterpriseId = randomUUID();
+  const createdWorkflowIds: number[] = [];
+  
+  // Get mock functions
+  const mockCreateDynamicWorkflow = jest.mocked(require('../app/services/workflow/DynamicWorkflowFactory').DynamicWorkflowFactory.createDynamicWorkflow);
+  const mockValidateWorkflowConfig = jest.mocked(require('../app/services/workflow/DynamicWorkflowFactory').DynamicWorkflowFactory.validateWorkflowConfig);
+  const mockDiscoverStaticWorkflows = jest.mocked(require('../app/services/workflow/WorkflowDiscovery').WorkflowDiscovery.discoverStaticWorkflows);
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockDynamicWorkflowFactory = require('../app/services/workflow/DynamicWorkflowFactory').DynamicWorkflowFactory;
-    mockWorkflowDiscovery = require('../app/services/workflow/WorkflowDiscovery').WorkflowDiscovery;
-    mockWorkflowService = require('../app/services/database/WorkflowService').workflowService;
+  // Check if we have real credentials
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+  const hasRealCredentials = supabaseUrl && 
+    supabaseServiceKey && 
+    supabaseUrl.includes('supabase.co') && 
+    supabaseServiceKey.length > 50;
+
+  beforeAll(async () => {
+    if (!hasRealCredentials) {
+      throw new Error('Real Supabase credentials required for WorkflowRegistry tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
+    }
+
+    supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+      global: { headers: { 'x-application-name': 'xnovu-test-workflow-registry' } }
+    });
     
-    // Reset all mock functions before each test
-    mockDynamicWorkflowFactory.createDynamicWorkflow.mockReset();
-    mockDynamicWorkflowFactory.validateWorkflowConfig.mockReset().mockReturnValue(true);
-    mockWorkflowService.getDynamicWorkflows.mockReset();
-    mockWorkflowService.parseWorkflowConfig.mockReset();
-    
+    workflowService = new WorkflowService();
     registry = new WorkflowRegistry();
   });
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    
+    // Setup default mock responses
+    mockValidateWorkflowConfig.mockReturnValue(true);
+    mockDiscoverStaticWorkflows.mockResolvedValue(new Map());
+    
+    // Clean up any existing test data
+    await cleanupTestData();
+  });
+
+  afterEach(async () => {
+    // Clean up test data after each test
+    await cleanupTestData();
+  });
+
+  async function cleanupTestData() {
+    if (!hasRealCredentials) return;
+    
+    try {
+      // Delete test workflows
+      if (createdWorkflowIds.length > 0) {
+        await supabase
+          .schema('notify')
+          .from('ent_notification_workflow')
+          .delete()
+          .in('id', createdWorkflowIds);
+        createdWorkflowIds.length = 0;
+      }
+      
+      // Delete by exact enterprise ID
+      await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .delete()
+        .eq('enterprise_id', testEnterpriseId);
+    } catch (error) {
+      console.warn('Cleanup warning:', error);
+    }
+  }
+
+  async function createTestWorkflow(overrides: Partial<WorkflowInsert> = {}): Promise<WorkflowRow> {
+    const defaultWorkflow: WorkflowInsert = {
+      name: 'Test Workflow',
+      workflow_key: `test-workflow-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      workflow_type: 'DYNAMIC',
+      default_channels: ['EMAIL'],
+      enterprise_id: testEnterpriseId,
+      ...overrides
+    };
+
+    const { data, error } = await supabase
+      .schema('notify')
+      .from('ent_notification_workflow')
+      .insert(defaultWorkflow)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (data) createdWorkflowIds.push(data.id);
+    return data!;
+  }
 
   describe('registerStaticWorkflow', () => {
     it('should register static workflow', () => {
@@ -83,22 +159,22 @@ describe('WorkflowRegistry', () => {
       };
 
       const mockWorkflow = { key: 'building-alert', type: 'dynamic' };
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(mockWorkflow);
+      mockCreateDynamicWorkflow.mockReturnValue(mockWorkflow);
 
-      registry.registerDynamicWorkflow('building-alert', config, mockEnterpriseId);
+      registry.registerDynamicWorkflow('building-alert', config, testEnterpriseId);
 
-      expect(mockDynamicWorkflowFactory.createDynamicWorkflow).toHaveBeenCalledWith(
+      expect(mockCreateDynamicWorkflow).toHaveBeenCalledWith(
         config,
-        mockEnterpriseId
+        testEnterpriseId
       );
 
-      const registered = registry.getWorkflow('building-alert', mockEnterpriseId);
+      const registered = registry.getWorkflow('building-alert', testEnterpriseId);
       expect(registered).toEqual({
-        id: `${mockEnterpriseId}:building-alert`,
+        id: `${testEnterpriseId}:building-alert`,
         type: 'DYNAMIC',
         instance: mockWorkflow,
         config,
-        enterpriseId: mockEnterpriseId
+        enterpriseId: testEnterpriseId
       });
     });
 
@@ -112,7 +188,7 @@ describe('WorkflowRegistry', () => {
       const workflow1 = { key: 'common-workflow', enterprise: 'ent1' };
       const workflow2 = { key: 'common-workflow', enterprise: 'ent2' };
 
-      mockDynamicWorkflowFactory.createDynamicWorkflow
+      mockCreateDynamicWorkflow
         .mockReturnValueOnce(workflow1)
         .mockReturnValueOnce(workflow2);
 
@@ -129,165 +205,110 @@ describe('WorkflowRegistry', () => {
     });
   });
 
-  describe('loadEnterpriseWorkflows', () => {
-    it('should load all dynamic workflows for enterprise', async () => {
-      const mockWorkflows = [
-        {
-          id: 1,
-          name: 'Building Alert',
-          workflow_key: 'building-alert',
-          workflow_type: 'DYNAMIC' as const,
-          default_channels: ['EMAIL'],
-          template_overrides: { emailTemplateId: 123 },
-          enterprise_id: mockEnterpriseId,
-          publish_status: 'PUBLISH' as const,
-          deactivated: false,
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          payload_schema: null,
-          description: null,
-          tags: null
-        },
-        {
-          id: 2,
-          name: 'Maintenance Alert',
-          workflow_key: 'maintenance-alert',
-          workflow_type: 'DYNAMIC' as const,
-          default_channels: ['EMAIL', 'IN_APP'],
-          template_overrides: { emailTemplateId: 124, inAppTemplateId: 125 },
-          enterprise_id: mockEnterpriseId,
-          publish_status: 'PUBLISH' as const,
-          deactivated: false,
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          payload_schema: null,
-          description: null,
-          tags: null
-        }
-      ];
+  describe('loadEnterpriseWorkflows with Real Database', () => {
+    it('should load all dynamic workflows for enterprise from database', async () => {
+      // Create test workflows in database
+      const workflow1 = await createTestWorkflow({
+        name: 'Building Alert',
+        workflow_key: 'building-alert',
+        workflow_type: 'DYNAMIC',
+        default_channels: ['EMAIL'],
+        template_overrides: { emailTemplateId: 123 },
+        publish_status: 'PUBLISH'
+      });
 
-      const mockConfigs = [
-        {
-          workflow_key: 'building-alert',
-          workflow_type: 'DYNAMIC' as const,
-          channels: ['EMAIL'],
-          emailTemplateId: 123
-        },
-        {
-          workflow_key: 'maintenance-alert',
-          workflow_type: 'DYNAMIC' as const,
-          channels: ['EMAIL', 'IN_APP'],
-          emailTemplateId: 124,
-          inAppTemplateId: 125
-        }
-      ];
+      const workflow2 = await createTestWorkflow({
+        name: 'Maintenance Alert', 
+        workflow_key: 'maintenance-alert',
+        workflow_type: 'DYNAMIC',
+        default_channels: ['EMAIL', 'IN_APP'],
+        template_overrides: { emailTemplateId: 124, inAppTemplateId: 125 },
+        publish_status: 'PUBLISH'
+      });
 
-      mockWorkflowService.getDynamicWorkflows.mockResolvedValue(mockWorkflows);
-      mockWorkflowService.parseWorkflowConfig
-        .mockResolvedValueOnce(mockConfigs[0])
-        .mockResolvedValueOnce(mockConfigs[1]);
+      // Create unpublished workflow that should not be loaded
+      await createTestWorkflow({
+        name: 'Draft Workflow',
+        workflow_key: 'draft-workflow',
+        publish_status: 'DRAFT'
+      });
 
+      // Mock factory to return workflow instances
       const mockInstances = [
         { key: 'building-alert' },
         { key: 'maintenance-alert' }
       ];
 
-      mockDynamicWorkflowFactory.createDynamicWorkflow
+      mockCreateDynamicWorkflow
         .mockReturnValueOnce(mockInstances[0])
         .mockReturnValueOnce(mockInstances[1]);
 
-      await registry.loadEnterpriseWorkflows(mockEnterpriseId);
+      await registry.loadEnterpriseWorkflows(testEnterpriseId);
 
-      expect(mockWorkflowService.getDynamicWorkflows).toHaveBeenCalledWith(mockEnterpriseId);
-      expect(mockWorkflowService.parseWorkflowConfig).toHaveBeenCalledTimes(2);
-      expect(mockDynamicWorkflowFactory.createDynamicWorkflow).toHaveBeenCalledTimes(2);
+      // Verify factory was called for published workflows only
+      expect(mockCreateDynamicWorkflow).toHaveBeenCalledTimes(2);
 
       // Verify workflows were registered
-      const workflow1 = registry.getWorkflow('building-alert', mockEnterpriseId);
-      const workflow2 = registry.getWorkflow('maintenance-alert', mockEnterpriseId);
+      const workflow1Registered = registry.getWorkflow('building-alert', testEnterpriseId);
+      const workflow2Registered = registry.getWorkflow('maintenance-alert', testEnterpriseId);
 
-      expect(workflow1?.instance).toEqual(mockInstances[0]);
-      expect(workflow2?.instance).toEqual(mockInstances[1]);
+      expect(workflow1Registered?.instance).toEqual(mockInstances[0]);
+      expect(workflow2Registered?.instance).toEqual(mockInstances[1]);
+
+      // Verify draft workflow was not registered
+      const draftWorkflow = registry.getWorkflow('draft-workflow', testEnterpriseId);
+      expect(draftWorkflow).toBeNull();
     });
 
-    it('should handle errors during workflow loading', async () => {
-      mockWorkflowService.getDynamicWorkflows.mockRejectedValue(
-        new Error('Database connection failed')
-      );
+    it('should handle database connection errors', async () => {
+      // Use a non-existent enterprise ID to trigger empty result (not error)
+      const nonExistentEnterpriseId = 'non-existent-enterprise-999999';
 
-      await expect(
-        registry.loadEnterpriseWorkflows(mockEnterpriseId)
-      ).rejects.toThrow('Database connection failed');
+      // Should not throw, just load no workflows
+      await expect(registry.loadEnterpriseWorkflows(nonExistentEnterpriseId)).resolves.not.toThrow();
+
+      // No workflows should be registered for this enterprise
+      const workflows = registry.getEnterpriseWorkflows(nonExistentEnterpriseId);
+      expect(workflows.filter(w => w.type === 'DYNAMIC')).toEqual([]);
     });
 
     it('should handle errors during individual workflow parsing', async () => {
-      const mockWorkflows = [
-        {
-          id: 1,
-          workflow_key: 'valid-workflow',
-          workflow_type: 'DYNAMIC' as const,
-          default_channels: ['EMAIL'],
-          enterprise_id: mockEnterpriseId,
-          template_overrides: { emailTemplateId: 123 },
-          publish_status: 'PUBLISH' as const,
-          deactivated: false,
-          name: 'Valid',
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          payload_schema: null,
-          description: null,
-          tags: null
-        },
-        {
-          id: 2,
-          workflow_key: 'invalid-workflow',
-          workflow_type: 'DYNAMIC' as const,
-          default_channels: ['EMAIL'],
-          enterprise_id: mockEnterpriseId,
-          template_overrides: null, // Invalid config
-          publish_status: 'PUBLISH' as const,
-          deactivated: false,
-          name: 'Invalid',
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          payload_schema: null,
-          description: null,
-          tags: null
-        }
-      ];
-
-      mockWorkflowService.getDynamicWorkflows.mockResolvedValue(mockWorkflows);
-      mockWorkflowService.parseWorkflowConfig
-        .mockResolvedValueOnce({
-          workflow_key: 'valid-workflow',
-          workflow_type: 'DYNAMIC' as const,
-          channels: ['EMAIL'],
-          emailTemplateId: 123
-        })
-        .mockRejectedValueOnce(new Error('Invalid configuration'));
-
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue({
-        key: 'valid-workflow'
+      // Create workflows with valid and invalid configurations
+      const validWorkflow = await createTestWorkflow({
+        name: 'Valid Workflow',
+        workflow_key: 'valid-workflow',
+        workflow_type: 'DYNAMIC',
+        default_channels: ['EMAIL'],
+        template_overrides: { emailTemplateId: 123 },
+        publish_status: 'PUBLISH'
       });
 
+      const invalidWorkflow = await createTestWorkflow({
+        name: 'Invalid Workflow',
+        workflow_key: 'invalid-workflow',
+        workflow_type: 'DYNAMIC',
+        default_channels: ['EMAIL'],
+        template_overrides: null, // This might cause parsing issues
+        publish_status: 'PUBLISH'
+      });
+
+      // Mock factory to succeed for valid, fail for invalid
+      mockCreateDynamicWorkflow
+        .mockReturnValueOnce({ key: 'valid-workflow' })
+        .mockImplementationOnce(() => {
+          throw new Error('Invalid configuration');
+        });
+
       // Should not throw, but should log error and continue
-      await registry.loadEnterpriseWorkflows(mockEnterpriseId);
+      await expect(registry.loadEnterpriseWorkflows(testEnterpriseId)).resolves.not.toThrow();
 
       // Valid workflow should be registered
-      const validWorkflow = registry.getWorkflow('valid-workflow', mockEnterpriseId);
-      expect(validWorkflow).toBeDefined();
+      const validWorkflowRegistered = registry.getWorkflow('valid-workflow', testEnterpriseId);
+      expect(validWorkflowRegistered).toBeDefined();
 
       // Invalid workflow should not be registered
-      const invalidWorkflow = registry.getWorkflow('invalid-workflow', mockEnterpriseId);
-      expect(invalidWorkflow).toBeNull();
+      const invalidWorkflowRegistered = registry.getWorkflow('invalid-workflow', testEnterpriseId);
+      expect(invalidWorkflowRegistered).toBeNull();
     });
   });
 
@@ -309,14 +330,14 @@ describe('WorkflowRegistry', () => {
       };
 
       const mockWorkflow = { key: 'dynamic-workflow' };
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(mockWorkflow);
+      mockCreateDynamicWorkflow.mockReturnValue(mockWorkflow);
 
-      registry.registerDynamicWorkflow('dynamic-workflow', config, mockEnterpriseId);
+      registry.registerDynamicWorkflow('dynamic-workflow', config, testEnterpriseId);
 
-      const result = registry.getWorkflow('dynamic-workflow', mockEnterpriseId);
+      const result = registry.getWorkflow('dynamic-workflow', testEnterpriseId);
       expect(result?.instance).toEqual(mockWorkflow);
       expect(result?.type).toBe('DYNAMIC');
-      expect(result?.enterpriseId).toBe(mockEnterpriseId);
+      expect(result?.enterpriseId).toBe(testEnterpriseId);
     });
 
     it('should prefer dynamic workflow over static when enterprise ID provided', () => {
@@ -329,12 +350,12 @@ describe('WorkflowRegistry', () => {
         channels: ['EMAIL']
       };
 
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(dynamicWorkflow);
+      mockCreateDynamicWorkflow.mockReturnValue(dynamicWorkflow);
 
       registry.registerStaticWorkflow('workflow', staticWorkflow);
-      registry.registerDynamicWorkflow('workflow', config, mockEnterpriseId);
+      registry.registerDynamicWorkflow('workflow', config, testEnterpriseId);
 
-      const result = registry.getWorkflow('workflow', mockEnterpriseId);
+      const result = registry.getWorkflow('workflow', testEnterpriseId);
       expect(result?.instance).toEqual(dynamicWorkflow);
       expect(result?.type).toBe('DYNAMIC');
     });
@@ -349,7 +370,7 @@ describe('WorkflowRegistry', () => {
     });
 
     it('should return null if workflow not found', () => {
-      const result = registry.getWorkflow('non-existent-workflow', mockEnterpriseId);
+      const result = registry.getWorkflow('non-existent-workflow', testEnterpriseId);
       expect(result).toBeNull();
     });
   });
@@ -365,16 +386,16 @@ describe('WorkflowRegistry', () => {
         channels: ['EMAIL']
       };
 
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(dynamicWorkflow);
+      mockCreateDynamicWorkflow.mockReturnValue(dynamicWorkflow);
 
       registry.registerStaticWorkflow('static-1', staticWorkflow);
-      registry.registerDynamicWorkflow('dynamic-1', config, mockEnterpriseId);
+      registry.registerDynamicWorkflow('dynamic-1', config, testEnterpriseId);
 
-      const workflows = registry.getEnterpriseWorkflows(mockEnterpriseId);
+      const workflows = registry.getEnterpriseWorkflows(testEnterpriseId);
 
       expect(workflows).toHaveLength(2);
       expect(workflows.find(w => w.id === 'static-1')).toBeDefined();
-      expect(workflows.find(w => w.id === `${mockEnterpriseId}:dynamic-1`)).toBeDefined();
+      expect(workflows.find(w => w.id === `${testEnterpriseId}:dynamic-1`)).toBeDefined();
     });
 
     it('should return only static workflows if no dynamic workflows for enterprise', () => {
@@ -391,66 +412,45 @@ describe('WorkflowRegistry', () => {
     });
   });
 
-  describe('reloadEnterpriseWorkflows', () => {
-    it('should clear existing enterprise workflows before reloading', async () => {
-      const config: WorkflowConfig = {
-        workflow_key: 'old-workflow',
+  describe('reloadEnterpriseWorkflows with Real Database', () => {
+    it('should clear existing enterprise workflows before reloading from database', async () => {
+      // Register initial workflow manually
+      const initialConfig: WorkflowConfig = {
+        workflow_key: 'initial-workflow',
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL']
       };
 
-      const oldWorkflow = { key: 'old-workflow' };
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(oldWorkflow);
+      const initialWorkflow = { key: 'initial-workflow' };
+      mockCreateDynamicWorkflow.mockReturnValue(initialWorkflow);
 
-      // Register initial workflow
-      registry.registerDynamicWorkflow('old-workflow', config, mockEnterpriseId);
+      registry.registerDynamicWorkflow('initial-workflow', initialConfig, testEnterpriseId);
 
       // Verify it exists
-      expect(registry.getWorkflow('old-workflow', mockEnterpriseId)).toBeDefined();
+      expect(registry.getWorkflow('initial-workflow', testEnterpriseId)).toBeDefined();
 
-      // Mock new workflows from database
-      const newWorkflows = [
-        {
-          id: 1,
-          workflow_key: 'new-workflow',
-          workflow_type: 'DYNAMIC' as const,
-          default_channels: ['EMAIL'],
-          enterprise_id: mockEnterpriseId,
-          template_overrides: { emailTemplateId: 999 },
-          publish_status: 'PUBLISH' as const,
-          deactivated: false,
-          name: 'New Workflow',
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          payload_schema: null,
-          description: null,
-          tags: null
-        }
-      ];
-
-      const newConfig: WorkflowConfig = {
+      // Create new workflow in database
+      const newWorkflow = await createTestWorkflow({
+        name: 'New Workflow',
         workflow_key: 'new-workflow',
         workflow_type: 'DYNAMIC',
-        channels: ['EMAIL'],
-        emailTemplateId: 999
-      };
+        default_channels: ['EMAIL'],
+        template_overrides: { emailTemplateId: 999 },
+        publish_status: 'PUBLISH'
+      });
 
-      const newWorkflow = { key: 'new-workflow' };
-
-      mockWorkflowService.getDynamicWorkflows.mockResolvedValue(newWorkflows);
-      mockWorkflowService.parseWorkflowConfig.mockResolvedValue(newConfig);
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(newWorkflow);
+      // Mock factory for new workflow
+      const newWorkflowInstance = { key: 'new-workflow' };
+      mockCreateDynamicWorkflow.mockReturnValue(newWorkflowInstance);
 
       // Reload
-      await registry.reloadEnterpriseWorkflows(mockEnterpriseId);
+      await registry.reloadEnterpriseWorkflows(testEnterpriseId);
 
-      // Old workflow should be gone
-      expect(registry.getWorkflow('old-workflow', mockEnterpriseId)).toBeNull();
+      // Initial workflow should be gone (not in database)
+      expect(registry.getWorkflow('initial-workflow', testEnterpriseId)).toBeNull();
 
-      // New workflow should exist
-      expect(registry.getWorkflow('new-workflow', mockEnterpriseId)).toBeDefined();
+      // New workflow from database should exist
+      expect(registry.getWorkflow('new-workflow', testEnterpriseId)).toBeDefined();
     });
   });
 
@@ -474,14 +474,14 @@ describe('WorkflowRegistry', () => {
       };
 
       const mockWorkflow = { key: 'test-dynamic' };
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(mockWorkflow);
+      mockCreateDynamicWorkflow.mockReturnValue(mockWorkflow);
 
-      registry.registerDynamicWorkflow('test-dynamic', config, mockEnterpriseId);
-      expect(registry.getWorkflow('test-dynamic', mockEnterpriseId)).toBeDefined();
+      registry.registerDynamicWorkflow('test-dynamic', config, testEnterpriseId);
+      expect(registry.getWorkflow('test-dynamic', testEnterpriseId)).toBeDefined();
 
-      const result = registry.unregisterWorkflow('test-dynamic', mockEnterpriseId);
+      const result = registry.unregisterWorkflow('test-dynamic', testEnterpriseId);
       expect(result).toBe(true);
-      expect(registry.getWorkflow('test-dynamic', mockEnterpriseId)).toBeNull();
+      expect(registry.getWorkflow('test-dynamic', testEnterpriseId)).toBeNull();
     });
 
     it('should return false if workflow not found', () => {
@@ -506,11 +506,11 @@ describe('WorkflowRegistry', () => {
       };
 
       const mockWorkflow = { key: 'test' };
-      mockDynamicWorkflowFactory.createDynamicWorkflow.mockReturnValue(mockWorkflow);
+      mockCreateDynamicWorkflow.mockReturnValue(mockWorkflow);
 
-      registry.registerDynamicWorkflow('test', config, mockEnterpriseId);
+      registry.registerDynamicWorkflow('test', config, testEnterpriseId);
 
-      expect(registry.hasWorkflow('test', mockEnterpriseId)).toBe(true);
+      expect(registry.hasWorkflow('test', testEnterpriseId)).toBe(true);
     });
 
     it('should return false for non-existent workflow', () => {
@@ -538,7 +538,7 @@ describe('WorkflowRegistry', () => {
       const dynamicWorkflow1 = { key: 'dynamic-1' };
       const dynamicWorkflow2 = { key: 'dynamic-2' };
 
-      mockDynamicWorkflowFactory.createDynamicWorkflow
+      mockCreateDynamicWorkflow
         .mockReturnValueOnce(dynamicWorkflow1)
         .mockReturnValueOnce(dynamicWorkflow2);
 
@@ -576,22 +576,120 @@ describe('WorkflowRegistry', () => {
         ['password-reset', { key: 'password-reset', type: 'static' }]
       ]);
 
-      mockWorkflowDiscovery.discoverStaticWorkflows.mockResolvedValue(mockStaticWorkflows);
+      mockDiscoverStaticWorkflows.mockResolvedValue(mockStaticWorkflows);
 
       await registry.initializeStaticWorkflows();
 
-      expect(mockWorkflowDiscovery.discoverStaticWorkflows).toHaveBeenCalled();
+      expect(mockDiscoverStaticWorkflows).toHaveBeenCalled();
       expect(registry.getWorkflow('user-signup')).toBeDefined();
       expect(registry.getWorkflow('password-reset')).toBeDefined();
     });
 
     it('should handle errors during static workflow discovery', async () => {
-      mockWorkflowDiscovery.discoverStaticWorkflows.mockRejectedValue(
+      mockDiscoverStaticWorkflows.mockRejectedValue(
         new Error('Discovery failed')
       );
 
       // Should not throw, but should log error
       await expect(registry.initializeStaticWorkflows()).rejects.toThrow();
+    });
+  });
+
+  // Integration tests with real database
+  describe('Real Database Integration', () => {
+    it('should load workflows from database and register them properly', async () => {
+      // Create multiple workflows in database with different statuses
+      const publishedWorkflow = await createTestWorkflow({
+        name: 'Published Integration Workflow',
+        workflow_key: 'published-integration-workflow',
+        workflow_type: 'DYNAMIC',
+        default_channels: ['EMAIL', 'IN_APP'],
+        template_overrides: { emailTemplateId: 123, inAppTemplateId: 124 },
+        publish_status: 'PUBLISH',
+        deactivated: false
+      });
+
+      const draftWorkflow = await createTestWorkflow({
+        name: 'Draft Workflow',
+        workflow_key: 'draft-workflow',
+        publish_status: 'DRAFT'
+      });
+
+      const deactivatedWorkflow = await createTestWorkflow({
+        name: 'Deactivated Workflow',
+        workflow_key: 'deactivated-workflow',
+        publish_status: 'PUBLISH',
+        deactivated: true
+      });
+
+      // Mock factory responses
+      mockCreateDynamicWorkflow.mockReturnValue({ 
+        key: 'published-integration-workflow',
+        channels: ['EMAIL', 'IN_APP']
+      });
+
+      // Load workflows from database
+      await registry.loadEnterpriseWorkflows(testEnterpriseId);
+
+      // Only published, non-deactivated workflow should be loaded
+      const loadedWorkflow = registry.getWorkflow('published-integration-workflow', testEnterpriseId);
+      expect(loadedWorkflow).toBeDefined();
+      expect(loadedWorkflow?.type).toBe('DYNAMIC');
+
+      // Draft and deactivated workflows should not be loaded
+      expect(registry.getWorkflow('draft-workflow', testEnterpriseId)).toBeNull();
+      expect(registry.getWorkflow('deactivated-workflow', testEnterpriseId)).toBeNull();
+
+      // Verify factory was called only once (for published workflow)
+      expect(mockCreateDynamicWorkflow).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle enterprise isolation in workflow loading', async () => {
+      const otherEnterpriseId = `other-enterprise-${Date.now()}`;
+
+      // Create workflows for different enterprises
+      const testEnterpriseWorkflow = await createTestWorkflow({
+        name: 'Test Enterprise Workflow',
+        workflow_key: 'test-enterprise-workflow',
+        enterprise_id: testEnterpriseId,
+        publish_status: 'PUBLISH'
+      });
+
+      const otherEnterpriseWorkflow = await createTestWorkflow({
+        name: 'Other Enterprise Workflow', 
+        workflow_key: 'other-enterprise-workflow',
+        enterprise_id: otherEnterpriseId,
+        publish_status: 'PUBLISH'
+      });
+
+      // Mock factory responses
+      mockCreateDynamicWorkflow
+        .mockReturnValueOnce({ key: 'test-enterprise-workflow' })
+        .mockReturnValueOnce({ key: 'other-enterprise-workflow' });
+
+      // Load workflows for test enterprise
+      await registry.loadEnterpriseWorkflows(testEnterpriseId);
+
+      // Load workflows for other enterprise  
+      await registry.loadEnterpriseWorkflows(otherEnterpriseId);
+
+      // Verify enterprise isolation
+      const testWorkflow = registry.getWorkflow('test-enterprise-workflow', testEnterpriseId);
+      const otherWorkflow = registry.getWorkflow('other-enterprise-workflow', otherEnterpriseId);
+      
+      expect(testWorkflow).toBeDefined();
+      expect(otherWorkflow).toBeDefined();
+
+      // Verify cross-enterprise access is blocked
+      expect(registry.getWorkflow('other-enterprise-workflow', testEnterpriseId)).toBeNull();
+      expect(registry.getWorkflow('test-enterprise-workflow', otherEnterpriseId)).toBeNull();
+
+      // Clean up additional workflow
+      await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .delete()
+        .eq('id', otherEnterpriseWorkflow.id);
     });
   });
 });

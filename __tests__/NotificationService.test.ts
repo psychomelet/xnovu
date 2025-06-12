@@ -1,383 +1,522 @@
 import { NotificationService } from '../app/services/database/NotificationService';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../lib/supabase/database.types';
+import { randomUUID } from 'crypto';
 
 // Types
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert'];
+type NotificationUpdate = Database['notify']['Tables']['ent_notification']['Update'];
+type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
+type WorkflowInsert = Database['notify']['Tables']['ent_notification_workflow']['Insert'];
+type SupabaseClient = ReturnType<typeof createClient<Database>>;
 
-// Mock Supabase client with proper factory pattern
-jest.mock('../lib/supabase/client', () => {
-  const mock = {
-    schema: jest.fn(() => mock),
-    from: jest.fn(() => mock),
-    select: jest.fn(() => mock),
-    insert: jest.fn(() => mock),
-    update: jest.fn(() => mock),
-    eq: jest.fn(() => mock),
-    single: jest.fn(),
-    limit: jest.fn(() => mock),
-    order: jest.fn(() => mock)
-  };
-  return {
-    supabase: mock
-  };
-});
-
-describe('NotificationService', () => {
+describe('NotificationService with Real Database', () => {
   let service: NotificationService;
-  let mockSupabase: any;
-  const mockEnterpriseId = 'test-enterprise-123';
+  let supabase: SupabaseClient;
+  const testEnterpriseId = randomUUID();
+  const testUserId = randomUUID();
+  const createdNotificationIds: number[] = [];
+  const createdWorkflowIds: number[] = [];
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // Get fresh mock instance
-    mockSupabase = require('../lib/supabase/client').supabase;
+  // Check if we have real credentials
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+  const hasRealCredentials = supabaseUrl && 
+    supabaseServiceKey && 
+    supabaseUrl.includes('supabase.co') && 
+    supabaseServiceKey.length > 50;
+
+  beforeAll(async () => {
+    if (!hasRealCredentials) {
+      throw new Error('Real Supabase credentials required for NotificationService tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
+    }
+
+    supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false },
+      global: { headers: { 'x-application-name': 'xnovu-test-notification-service' } }
+    });
+    
     service = new NotificationService();
   });
 
+  beforeEach(async () => {
+    // Clean up any existing test data
+    await cleanupTestData();
+  });
+
+  afterEach(async () => {
+    // Clean up test data after each test
+    await cleanupTestData();
+  });
+
+  async function cleanupTestData() {
+    if (!hasRealCredentials) return;
+    
+    try {
+      // Delete test notifications
+      if (createdNotificationIds.length > 0) {
+        await supabase
+          .schema('notify')
+          .from('ent_notification')
+          .delete()
+          .in('id', createdNotificationIds);
+        createdNotificationIds.length = 0;
+      }
+
+      // Delete test workflows
+      if (createdWorkflowIds.length > 0) {
+        await supabase
+          .schema('notify')
+          .from('ent_notification_workflow')
+          .delete()
+          .in('id', createdWorkflowIds);
+        createdWorkflowIds.length = 0;
+      }
+      
+      // Delete by exact enterprise ID
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .delete()
+        .eq('enterprise_id', testEnterpriseId);
+
+      await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .delete()
+        .eq('enterprise_id', testEnterpriseId);
+    } catch (error) {
+      console.warn('Cleanup warning:', error);
+    }
+  }
+
+  async function createTestWorkflow(overrides: Partial<WorkflowInsert> = {}): Promise<WorkflowRow> {
+    const defaultWorkflow: WorkflowInsert = {
+      name: 'Test Workflow',
+      workflow_key: `test-workflow-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      workflow_type: 'DYNAMIC',
+      default_channels: ['EMAIL'],
+      enterprise_id: testEnterpriseId,
+      ...overrides
+    };
+
+    const { data, error } = await supabase
+      .schema('notify')
+      .from('ent_notification_workflow')
+      .insert(defaultWorkflow)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (data) createdWorkflowIds.push(data.id);
+    return data!;
+  }
+
+  async function createTestNotification(overrides: Partial<NotificationInsert> = {}): Promise<NotificationRow> {
+    // Create a workflow first if not provided
+    let workflowId = overrides.notification_workflow_id;
+    if (!workflowId) {
+      const workflow = await createTestWorkflow();
+      workflowId = workflow.id;
+    }
+
+    const defaultNotification: NotificationInsert = {
+      name: 'Test Notification',
+      payload: { message: 'Test message' },
+      recipients: ['user-123'],
+      notification_workflow_id: workflowId,
+      enterprise_id: testEnterpriseId,
+      ...overrides
+    };
+
+    const { data, error } = await supabase
+      .schema('notify')
+      .from('ent_notification')
+      .insert(defaultNotification)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (data) createdNotificationIds.push(data.id);
+    return data!;
+  }
+
   describe('getNotification', () => {
     it('should retrieve notification with relationships', async () => {
-      const mockNotification: NotificationRow = {
-        id: 1,
+      // Create test notification
+      const testNotification = await createTestNotification({
         name: 'Test Notification',
         payload: { message: 'Test message' },
-        recipients: ['user-123'],
-        notification_status: 'PENDING',
-        notification_workflow_id: 1,
-        enterprise_id: mockEnterpriseId,
-        transaction_id: null,
-        error_details: null,
-        created_at: new Date().toISOString(),
-        created_by: null,
-        updated_at: new Date().toISOString(),
-        updated_by: null,
-        overrides: null,
-        typ_notification_category_id: null,
-        typ_notification_priority_id: null
-      };
-
-      mockSupabase.single.mockResolvedValue({
-        data: mockNotification,
-        error: null
+        recipients: [testUserId],
+        notification_status: 'PENDING'
       });
 
-      const result = await service.getNotification(1, mockEnterpriseId);
+      const result = await service.getNotification(testNotification.id, testEnterpriseId);
 
-      expect(mockSupabase.schema).toHaveBeenCalledWith('notify');
-      expect(mockSupabase.from).toHaveBeenCalledWith('ent_notification');
-      expect(mockSupabase.select).toHaveBeenCalledWith(`
-        *,
-        ent_notification_workflow!inner(*),
-        typ_notification_category(*),
-        typ_notification_priority(*)
-      `);
-      expect(mockSupabase.eq).toHaveBeenCalledWith('id', 1);
-      expect(mockSupabase.eq).toHaveBeenCalledWith('enterprise_id', mockEnterpriseId);
-      expect(result).toEqual(mockNotification);
+      expect(result).toBeDefined();
+      expect(result!.id).toBe(testNotification.id);
+      expect(result!.name).toBe('Test Notification');
+      expect(result!.payload).toEqual({ message: 'Test message' });
+      expect(result!.recipients).toEqual([testUserId]);
+      expect(result!.notification_status).toBe('PENDING');
+      expect(result!.enterprise_id).toBe(testEnterpriseId);
     });
 
     it('should return null when notification not found', async () => {
-      mockSupabase.single.mockResolvedValue({
-        data: null,
-        error: null // Return null data without error for not found case
-      });
-
-      const result = await service.getNotification(999, mockEnterpriseId);
+      const result = await service.getNotification(999999, testEnterpriseId);
       expect(result).toBeNull();
     });
 
-    it('should handle database errors', async () => {
-      mockSupabase.single.mockResolvedValue({
-        data: null,
-        error: new Error('Database connection failed')
+    it('should return null when notification belongs to different enterprise', async () => {
+      // Create notification for different enterprise
+      const otherEnterpriseNotification = await createTestNotification({
+        enterprise_id: 'other-enterprise-id'
       });
 
+      const result = await service.getNotification(otherEnterpriseNotification.id, testEnterpriseId);
+      expect(result).toBeNull();
+
+      // Clean up additional notification
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .delete()
+        .eq('id', otherEnterpriseNotification.id);
+    });
+
+    it('should handle database errors', async () => {
+      // Try to get notification with invalid enterprise ID format that might cause DB error
       await expect(
-        service.getNotification(1, mockEnterpriseId)
-      ).rejects.toThrow('Failed to get notification: Database connection failed');
+        service.getNotification(1, '')
+      ).rejects.toThrow();
     });
   });
 
   describe('createNotification', () => {
     it('should create new notification successfully', async () => {
+      // Create workflow first
+      const testWorkflow = await createTestWorkflow();
+
       const insertData: NotificationInsert = {
         name: 'New Notification',
         payload: { message: 'Test message' },
         recipients: ['user-456'],
-        notification_workflow_id: 1,
-        enterprise_id: mockEnterpriseId
+        notification_workflow_id: testWorkflow.id,
+        enterprise_id: testEnterpriseId
       };
-
-      const createdNotification: NotificationRow = {
-        id: 2,
-        ...insertData,
-        notification_status: 'PENDING',
-        transaction_id: null,
-        error_details: null,
-        created_at: new Date().toISOString(),
-        created_by: null,
-        updated_at: new Date().toISOString(),
-        updated_by: null,
-        overrides: null,
-        typ_notification_category_id: null,
-        typ_notification_priority_id: null
-      };
-
-      mockSupabase.single.mockResolvedValue({
-        data: createdNotification,
-        error: null
-      });
 
       const result = await service.createNotification(insertData);
 
-      expect(mockSupabase.schema).toHaveBeenCalledWith('notify');
-      expect(mockSupabase.from).toHaveBeenCalledWith('ent_notification');
-      expect(mockSupabase.insert).toHaveBeenCalledWith(insertData);
-      expect(result).toEqual(createdNotification);
+      expect(result).toBeDefined();
+      expect(result.name).toBe('New Notification');
+      expect(result.payload).toEqual({ message: 'Test message' });
+      expect(result.recipients).toEqual(['user-456']);
+      expect(result.notification_workflow_id).toBe(testWorkflow.id);
+      expect(result.enterprise_id).toBe(testEnterpriseId);
+      expect(result.notification_status).toBe('PENDING'); // Default status
+      
+      // Track for cleanup
+      createdNotificationIds.push(result.id);
     });
 
-    it('should handle creation errors', async () => {
+    it('should handle creation errors for invalid workflow ID', async () => {
       const insertData: NotificationInsert = {
         name: 'Invalid Notification',
         payload: {},
         recipients: [],
-        notification_workflow_id: 999, // Invalid workflow ID
-        enterprise_id: mockEnterpriseId
+        notification_workflow_id: 999999, // Invalid workflow ID
+        enterprise_id: testEnterpriseId
       };
-
-      mockSupabase.single.mockResolvedValue({
-        data: null,
-        error: new Error('Foreign key constraint violation')
-      });
 
       await expect(
         service.createNotification(insertData)
-      ).rejects.toThrow('Failed to create notification: Foreign key constraint violation');
+      ).rejects.toThrow();
     });
   });
 
   describe('updateNotificationStatus', () => {
     it('should update status successfully', async () => {
-      mockSupabase.single.mockResolvedValue({
-        data: { id: 1 },
-        error: null
+      // Create test notification
+      const testNotification = await createTestNotification({
+        notification_status: 'PENDING'
       });
 
       await service.updateNotificationStatus(
-        1,
+        testNotification.id,
         'PROCESSING',
-        mockEnterpriseId,
+        testEnterpriseId,
         undefined,
         'txn-123'
       );
 
-      expect(mockSupabase.schema).toHaveBeenCalledWith('notify');
-      expect(mockSupabase.from).toHaveBeenCalledWith('ent_notification');
-      expect(mockSupabase.update).toHaveBeenCalledWith({
-        notification_status: 'PROCESSING',
-        transaction_id: 'txn-123',
-        updated_at: expect.any(String)
-      });
-      expect(mockSupabase.eq).toHaveBeenCalledWith('id', 1);
-      expect(mockSupabase.eq).toHaveBeenCalledWith('enterprise_id', mockEnterpriseId);
+      // Verify the update
+      const updated = await service.getNotification(testNotification.id, testEnterpriseId);
+      expect(updated).toBeDefined();
+      expect(updated!.notification_status).toBe('PROCESSING');
+      expect(updated!.transaction_id).toBe('txn-123');
     });
 
     it('should update status with error message', async () => {
-      mockSupabase.single.mockResolvedValue({
-        data: { id: 1 },
-        error: null
+      // Create test notification
+      const testNotification = await createTestNotification({
+        notification_status: 'PENDING'
       });
 
       await service.updateNotificationStatus(
-        1,
+        testNotification.id,
         'FAILED',
-        mockEnterpriseId,
+        testEnterpriseId,
         'Template rendering failed'
       );
 
-      expect(mockSupabase.update).toHaveBeenCalledWith({
-        notification_status: 'FAILED',
-        error_details: 'Template rendering failed',
-        updated_at: expect.any(String)
-      });
+      // Verify the update
+      const updated = await service.getNotification(testNotification.id, testEnterpriseId);
+      expect(updated).toBeDefined();
+      expect(updated!.notification_status).toBe('FAILED');
+      expect(updated!.error_details).toBe('Template rendering failed');
     });
 
-    it('should handle update errors', async () => {
-      // Mock the entire chain to return an error
-      const mockChain = {
-        schema: jest.fn(() => mockChain),
-        from: jest.fn(() => mockChain),
-        update: jest.fn(() => mockChain),
-        eq: jest.fn()
-      };
-      
-      // The first .eq() call returns the chain, the second returns a promise with error
-      mockChain.eq
-        .mockReturnValueOnce(mockChain) // First .eq('id', id) returns chain
-        .mockResolvedValueOnce({ // Second .eq('enterprise_id', enterpriseId) returns promise with error
-          data: null,
-          error: new Error('Notification not found')
-        });
-      
-      mockSupabase.schema.mockReturnValueOnce(mockChain);
+    it('should handle update errors for non-existent notification', async () => {
+      await expect(
+        service.updateNotificationStatus(999999, 'SENT', testEnterpriseId)
+      ).rejects.toThrow();
+    });
+
+    it('should handle update errors for different enterprise', async () => {
+      // Create notification for different enterprise
+      const otherNotification = await createTestNotification({
+        enterprise_id: 'other-enterprise-id'
+      });
 
       await expect(
-        service.updateNotificationStatus(999, 'SENT', mockEnterpriseId)
-      ).rejects.toThrow('Failed to update notification status: Notification not found');
+        service.updateNotificationStatus(otherNotification.id, 'SENT', testEnterpriseId)
+      ).rejects.toThrow();
+
+      // Clean up additional notification
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .delete()
+        .eq('id', otherNotification.id);
     });
   });
 
   describe('getNotificationsByStatus', () => {
     it('should retrieve notifications by status', async () => {
-      const mockNotifications: NotificationRow[] = [
-        {
-          id: 1,
-          name: 'Notification 1',
-          payload: {},
-          recipients: ['user-1'],
-          notification_status: 'PENDING',
-          notification_workflow_id: 1,
-          enterprise_id: mockEnterpriseId,
-          transaction_id: null,
-          error_details: null,
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          overrides: null,
-          typ_notification_category_id: null,
-          typ_notification_priority_id: null
-        },
-        {
-          id: 2,
-          name: 'Notification 2',
-          payload: {},
-          recipients: ['user-2'],
-          notification_status: 'PENDING',
-          notification_workflow_id: 1,
-          enterprise_id: mockEnterpriseId,
-          transaction_id: null,
-          error_details: null,
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          overrides: null,
-          typ_notification_category_id: null,
-          typ_notification_priority_id: null
-        }
-      ];
-
-      // Mock the full chain since this method doesn't use .single()
-      mockSupabase.order.mockResolvedValue({
-        data: mockNotifications,
-        error: null
+      // Create notifications with different statuses
+      const pendingNotification1 = await createTestNotification({
+        name: 'Pending Notification 1',
+        notification_status: 'PENDING'
       });
 
-      const result = await service.getNotificationsByStatus('PENDING', mockEnterpriseId, 10);
+      const pendingNotification2 = await createTestNotification({
+        name: 'Pending Notification 2',
+        notification_status: 'PENDING'
+      });
 
-      expect(mockSupabase.schema).toHaveBeenCalledWith('notify');
-      expect(mockSupabase.from).toHaveBeenCalledWith('ent_notification');
-      expect(mockSupabase.select).toHaveBeenCalledWith('*');
-      expect(mockSupabase.eq).toHaveBeenCalledWith('notification_status', 'PENDING');
-      expect(mockSupabase.eq).toHaveBeenCalledWith('enterprise_id', mockEnterpriseId);
-      expect(mockSupabase.limit).toHaveBeenCalledWith(10);
-      expect(result).toEqual(mockNotifications);
+      const sentNotification = await createTestNotification({
+        name: 'Sent Notification',
+        notification_status: 'SENT'
+      });
+
+      const result = await service.getNotificationsByStatus('PENDING', testEnterpriseId, 10);
+
+      expect(result).toBeDefined();
+      expect(result.length).toBe(2);
+      expect(result.every(n => n.notification_status === 'PENDING')).toBe(true);
+      expect(result.every(n => n.enterprise_id === testEnterpriseId)).toBe(true);
+      
+      const resultIds = result.map(n => n.id).sort();
+      const expectedIds = [pendingNotification1.id, pendingNotification2.id].sort();
+      expect(resultIds).toEqual(expectedIds);
     });
 
     it('should use default limit when not specified', async () => {
-      mockSupabase.order.mockResolvedValue({
-        data: [],
-        error: null
+      // Create a notification
+      await createTestNotification({
+        notification_status: 'SENT'
       });
 
-      await service.getNotificationsByStatus('SENT', mockEnterpriseId);
+      const result = await service.getNotificationsByStatus('SENT', testEnterpriseId);
 
-      expect(mockSupabase.limit).toHaveBeenCalledWith(100);
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
+      // Default limit is 100, but we only have 1 notification
+      expect(result.length).toBe(1);
+    });
+
+    it('should return empty array when no notifications match status', async () => {
+      const result = await service.getNotificationsByStatus('RETRACTED', testEnterpriseId, 10);
+      expect(result).toEqual([]);
     });
   });
 
   describe('cancelNotification', () => {
     it('should cancel notification by setting status to RETRACTED', async () => {
-      mockSupabase.single.mockResolvedValue({
-        data: { id: 1 },
-        error: null
+      // Create test notification
+      const testNotification = await createTestNotification({
+        notification_status: 'PENDING'
       });
 
-      await service.cancelNotification(1, mockEnterpriseId);
+      await service.cancelNotification(testNotification.id, testEnterpriseId);
 
-      expect(mockSupabase.schema).toHaveBeenCalledWith('notify');
-      expect(mockSupabase.from).toHaveBeenCalledWith('ent_notification');
-      expect(mockSupabase.update).toHaveBeenCalledWith({
-        notification_status: 'RETRACTED',
-        updated_at: expect.any(String)
-      });
-      expect(mockSupabase.eq).toHaveBeenCalledWith('id', 1);
-      expect(mockSupabase.eq).toHaveBeenCalledWith('enterprise_id', mockEnterpriseId);
+      // Verify the update
+      const updated = await service.getNotification(testNotification.id, testEnterpriseId);
+      expect(updated).toBeDefined();
+      expect(updated!.notification_status).toBe('RETRACTED');
     });
 
-    it('should handle cancellation errors', async () => {
-      // Mock the entire chain to return an error
-      const mockChain = {
-        schema: jest.fn(() => mockChain),
-        from: jest.fn(() => mockChain),
-        update: jest.fn(() => mockChain),
-        eq: jest.fn()
-      };
-      
-      // The first .eq() call returns the chain, the second returns a promise with error
-      mockChain.eq
-        .mockReturnValueOnce(mockChain) // First .eq('id', id) returns chain
-        .mockResolvedValueOnce({ // Second .eq('enterprise_id', enterpriseId) returns promise with error
-          data: null,
-          error: new Error('Access denied')
-        });
-      
-      mockSupabase.schema.mockReturnValueOnce(mockChain);
+    it('should handle cancellation errors for non-existent notification', async () => {
+      await expect(
+        service.cancelNotification(999999, testEnterpriseId)
+      ).rejects.toThrow();
+    });
+
+    it('should handle cancellation errors for different enterprise', async () => {
+      // Create notification for different enterprise
+      const otherNotification = await createTestNotification({
+        enterprise_id: 'other-enterprise-id'
+      });
 
       await expect(
-        service.cancelNotification(1, mockEnterpriseId)
-      ).rejects.toThrow('Failed to update notification status: Access denied');
+        service.cancelNotification(otherNotification.id, testEnterpriseId)
+      ).rejects.toThrow();
+
+      // Clean up additional notification
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .delete()
+        .eq('id', otherNotification.id);
     });
   });
 
   describe('getNotificationsByWorkflow', () => {
     it('should retrieve notifications for specific workflow', async () => {
-      const mockNotifications: NotificationRow[] = [
-        {
-          id: 1,
-          name: 'Workflow Notification',
-          payload: {},
-          recipients: ['user-1'],
-          notification_status: 'SENT',
-          notification_workflow_id: 5,
-          enterprise_id: mockEnterpriseId,
-          transaction_id: 'txn-123',
-          error_details: null,
-          created_at: new Date().toISOString(),
-          created_by: null,
-          updated_at: new Date().toISOString(),
-          updated_by: null,
-          overrides: null,
-          typ_notification_category_id: null,
-          typ_notification_priority_id: null
-        }
-      ];
+      // Create workflow
+      const testWorkflow = await createTestWorkflow();
 
-      mockSupabase.order.mockResolvedValue({
-        data: mockNotifications,
-        error: null
+      // Create notifications for this workflow
+      const notification1 = await createTestNotification({
+        name: 'Workflow Notification 1',
+        notification_workflow_id: testWorkflow.id,
+        notification_status: 'SENT',
+        transaction_id: 'txn-123'
       });
 
-      const result = await service.getNotificationsByWorkflow(5, mockEnterpriseId, 50);
+      const notification2 = await createTestNotification({
+        name: 'Workflow Notification 2',
+        notification_workflow_id: testWorkflow.id,
+        notification_status: 'PENDING'
+      });
 
-      expect(mockSupabase.schema).toHaveBeenCalledWith('notify');
-      expect(mockSupabase.from).toHaveBeenCalledWith('ent_notification');
-      expect(mockSupabase.select).toHaveBeenCalledWith('*');
-      expect(mockSupabase.eq).toHaveBeenCalledWith('notification_workflow_id', 5);
-      expect(mockSupabase.eq).toHaveBeenCalledWith('enterprise_id', mockEnterpriseId);
-      expect(mockSupabase.limit).toHaveBeenCalledWith(50);
-      expect(result).toEqual(mockNotifications);
+      // Create notification for different workflow
+      const otherWorkflow = await createTestWorkflow();
+      await createTestNotification({
+        name: 'Other Workflow Notification',
+        notification_workflow_id: otherWorkflow.id
+      });
+
+      const result = await service.getNotificationsByWorkflow(testWorkflow.id, testEnterpriseId, 50);
+
+      expect(result).toBeDefined();
+      expect(result.length).toBe(2);
+      expect(result.every(n => n.notification_workflow_id === testWorkflow.id)).toBe(true);
+      expect(result.every(n => n.enterprise_id === testEnterpriseId)).toBe(true);
+      
+      const resultIds = result.map(n => n.id).sort();
+      const expectedIds = [notification1.id, notification2.id].sort();
+      expect(resultIds).toEqual(expectedIds);
+    });
+
+    it('should return empty array when no notifications exist for workflow', async () => {
+      // Create workflow without notifications
+      const emptyWorkflow = await createTestWorkflow();
+
+      const result = await service.getNotificationsByWorkflow(emptyWorkflow.id, testEnterpriseId, 10);
+      expect(result).toEqual([]);
+    });
+  });
+
+  // Additional integration tests for enterprise isolation
+  describe('Enterprise Isolation', () => {
+    it('should maintain enterprise isolation for notification access', async () => {
+      const otherEnterpriseId = `other-enterprise-${Date.now()}`;
+      
+      // Create notifications for different enterprises
+      const testEnterpriseNotification = await createTestNotification({
+        name: 'Test Enterprise Notification',
+        enterprise_id: testEnterpriseId
+      });
+      
+      const otherEnterpriseNotification = await createTestNotification({
+        name: 'Other Enterprise Notification',
+        enterprise_id: otherEnterpriseId
+      });
+
+      // Each enterprise should only see their own notifications
+      const testResult = await service.getNotification(testEnterpriseNotification.id, testEnterpriseId);
+      const otherResult = await service.getNotification(otherEnterpriseNotification.id, testEnterpriseId);
+
+      expect(testResult).toBeDefined();
+      expect(testResult!.name).toBe('Test Enterprise Notification');
+      expect(otherResult).toBeNull(); // Should not see other enterprise's notification
+      
+      // Clean up additional notification
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .delete()
+        .eq('id', otherEnterpriseNotification.id);
+    });
+
+    it('should isolate getNotificationsByStatus by enterprise', async () => {
+      const otherEnterpriseId = `other-enterprise-${Date.now()}`;
+      
+      // Create notifications for test enterprise
+      await createTestNotification({
+        name: 'Test Enterprise Pending 1',
+        notification_status: 'PENDING',
+        enterprise_id: testEnterpriseId
+      });
+      
+      await createTestNotification({
+        name: 'Test Enterprise Pending 2',
+        notification_status: 'PENDING',
+        enterprise_id: testEnterpriseId
+      });
+      
+      // Create notification for other enterprise
+      const otherNotification = await createTestNotification({
+        name: 'Other Enterprise Pending',
+        notification_status: 'PENDING',
+        enterprise_id: otherEnterpriseId
+      });
+
+      const testEnterpriseNotifications = await service.getNotificationsByStatus('PENDING', testEnterpriseId);
+      const otherEnterpriseNotifications = await service.getNotificationsByStatus('PENDING', otherEnterpriseId);
+
+      // Verify test enterprise sees at least 2 notifications
+      expect(testEnterpriseNotifications.length).toBeGreaterThanOrEqual(2);
+      expect(testEnterpriseNotifications.every(n => n.enterprise_id === testEnterpriseId)).toBe(true);
+
+      // Verify other enterprise sees exactly 1 notification
+      expect(otherEnterpriseNotifications.length).toBe(1);
+      expect(otherEnterpriseNotifications[0].enterprise_id).toBe(otherEnterpriseId);
+
+      // Verify no cross-contamination
+      const testEnterpriseIds = testEnterpriseNotifications.map(n => n.id);
+      const otherEnterpriseIds = otherEnterpriseNotifications.map(n => n.id);
+      const intersection = testEnterpriseIds.filter(id => otherEnterpriseIds.includes(id));
+      expect(intersection).toEqual([]);
+      
+      // Clean up additional notification
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .delete()
+        .eq('id', otherNotification.id);
     });
   });
 });

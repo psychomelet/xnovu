@@ -561,4 +561,85 @@ describe('WorkflowService', () => {
       });
     });
   });
+
+  // Additional integration tests for enterprise isolation
+  describe('Enterprise Isolation', () => {
+    it('should maintain enterprise isolation for workflow access', async () => {
+      // Create workflows for different enterprises with same key
+      const sameKey = `shared-workflow-${Date.now()}`;
+      const otherEnterpriseId = `other-enterprise-${Date.now()}`;
+      
+      const workflow1 = await createTestWorkflow({
+        workflow_key: sameKey,
+        enterprise_id: testEnterpriseId
+      });
+      
+      const workflow2 = await createTestWorkflow({
+        workflow_key: sameKey,
+        enterprise_id: otherEnterpriseId
+      });
+
+      // Each enterprise should only see their own workflow
+      const enterprise1Workflow = await service.getWorkflowByKey(sameKey, testEnterpriseId);
+      const enterprise2Workflow = await service.getWorkflowByKey(sameKey, otherEnterpriseId);
+
+      expect(enterprise1Workflow).toBeDefined();
+      expect(enterprise2Workflow).toBeDefined();
+      expect(enterprise1Workflow!.id).toBe(workflow1.id);
+      expect(enterprise2Workflow!.id).toBe(workflow2.id);
+      expect(enterprise1Workflow!.id).not.toBe(enterprise2Workflow!.id);
+      
+      // Clean up additional workflow
+      await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .delete()
+        .eq('id', workflow2.id);
+    });
+
+    it('should isolate getAllWorkflows by enterprise', async () => {
+      const otherEnterpriseId = `other-enterprise-${Date.now()}`;
+      
+      // Create workflows for test enterprise
+      await createTestWorkflow({
+        workflow_key: `test-workflow-1-${Date.now()}`,
+        enterprise_id: testEnterpriseId
+      });
+      
+      await createTestWorkflow({
+        workflow_key: `test-workflow-2-${Date.now()}`,
+        enterprise_id: testEnterpriseId
+      });
+      
+      // Create workflow for other enterprise
+      const otherWorkflow = await createTestWorkflow({
+        workflow_key: `other-workflow-${Date.now()}`,
+        enterprise_id: otherEnterpriseId
+      });
+
+      const testEnterpriseWorkflows = await service.getAllWorkflows(testEnterpriseId);
+      const otherEnterpriseWorkflows = await service.getAllWorkflows(otherEnterpriseId);
+
+      // Verify test enterprise sees at least 2 workflows (the ones we just created)
+      expect(testEnterpriseWorkflows.length).toBeGreaterThanOrEqual(2);
+      expect(testEnterpriseWorkflows.every(w => w.enterprise_id === testEnterpriseId)).toBe(true);
+
+      // Verify other enterprise sees exactly 1 workflow
+      expect(otherEnterpriseWorkflows.length).toBe(1);
+      expect(otherEnterpriseWorkflows[0].enterprise_id).toBe(otherEnterpriseId);
+
+      // Verify no cross-contamination
+      const testEnterpriseIds = testEnterpriseWorkflows.map(w => w.id);
+      const otherEnterpriseIds = otherEnterpriseWorkflows.map(w => w.id);
+      const intersection = testEnterpriseIds.filter(id => otherEnterpriseIds.includes(id));
+      expect(intersection).toEqual([]);
+      
+      // Clean up additional workflow
+      await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .delete()
+        .eq('id', otherWorkflow.id);
+    });
+  });
 });
