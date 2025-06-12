@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { logger } from '@/app/services/logger';
 
 export interface DiscoveredWorkflow {
   workflowKey: string;
@@ -27,14 +28,14 @@ export class WorkflowDiscovery {
           const workflow = await this.loadWorkflowFromDirectory(workflowDir);
           if (workflow) {
             workflows.set(workflow.workflowKey, workflow.exports);
-            console.log(`Discovered static workflow: ${workflow.workflowKey} from ${workflow.directory}`);
+            logger.workflow('Discovered static workflow', workflow.workflowKey, { directory: workflow.directory });
           }
         } catch (error) {
-          console.warn(`Failed to load workflow from ${workflowDir}:`, error);
+          logger.warn('Failed to load workflow', { workflowDir, error });
         }
       }
     } catch (error) {
-      console.error('Failed to discover static workflows:', error);
+      logger.error('Failed to discover static workflows', error as Error);
       throw error;
     }
 
@@ -55,7 +56,7 @@ export class WorkflowDiscovery {
         .filter(dir => !path.basename(dir).startsWith('_')); // Ignore private directories
     } catch (error) {
       if ((error as any).code === 'ENOENT') {
-        console.warn(`Workflows directory not found: ${this.WORKFLOWS_DIR}`);
+        logger.warn('Workflows directory not found', { directory: this.WORKFLOWS_DIR });
         return [];
       }
       throw error;
@@ -71,7 +72,7 @@ export class WorkflowDiscovery {
 
     // Check if index.ts exists (required)
     if (!(await this.fileExists(indexPath))) {
-      console.warn(`No index.ts found in ${workflowDir}, skipping`);
+      logger.warn('No index.ts found in workflow directory', { workflowDir });
       return null;
     }
 
@@ -81,7 +82,7 @@ export class WorkflowDiscovery {
       const workflowKey = this.convertToKebabCase(path.basename(workflowDir));
       
       if (!workflowKey) {
-        console.warn(`Could not determine workflow key for ${workflowDir}, skipping`);
+        logger.warn('Could not determine workflow key', { workflowDir });
         return null;
       }
 
@@ -93,7 +94,7 @@ export class WorkflowDiscovery {
         exports: null // Will be loaded dynamically at runtime
       };
     } catch (error) {
-      console.error(`Failed to process workflow from ${workflowDir}:`, error);
+      logger.error('Failed to process workflow', error as Error, { workflowDir });
       return null;
     }
   }
@@ -279,7 +280,7 @@ export class WorkflowDiscovery {
         });
       }
     } catch (error) {
-      console.error('Failed to get workflows status:', error);
+      logger.error('Failed to get workflows status', error as Error);
     }
 
     return results;

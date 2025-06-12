@@ -1,6 +1,7 @@
 import { getTemporalClient } from './client'
 import { startWorker } from './worker'
 import { Worker } from '@temporalio/worker'
+import { logger } from '@/app/services/logger'
 
 export interface TemporalServiceConfig {
   enterpriseIds: string[]
@@ -19,22 +20,22 @@ export class TemporalService {
   }
 
   async initialize(): Promise<void> {
-    console.log('Initializing Temporal service...')
+    logger.temporal('Initializing Temporal service...')
     
     try {
       // Start the Temporal worker
       this.worker = await startWorker()
       this.isRunning = true
       
-      console.log('✅ Temporal service initialized successfully')
+      logger.temporal('Temporal service initialized successfully')
     } catch (error) {
-      console.error('❌ Failed to initialize Temporal service:', error)
+      logger.error('Failed to initialize Temporal service', error as Error)
       throw error
     }
   }
 
   async shutdown(): Promise<void> {
-    console.log('Shutting down Temporal service...')
+    logger.temporal('Shutting down Temporal service...')
     
     try {
       if (this.worker) {
@@ -43,9 +44,9 @@ export class TemporalService {
       }
       
       this.isRunning = false
-      console.log('✅ Temporal service shut down successfully')
+      logger.temporal('Temporal service shut down successfully')
     } catch (error) {
-      console.error('❌ Error shutting down Temporal service:', error)
+      logger.error('Error shutting down Temporal service', error as Error)
       throw error
     }
   }
@@ -104,7 +105,7 @@ export class TemporalService {
         }
       }
     } catch (error) {
-      console.error('Error getting Temporal metrics:', error)
+      logger.error('Error getting Temporal metrics', error as Error)
       return null
     }
   }

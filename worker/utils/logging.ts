@@ -1,94 +1,90 @@
 /**
- * Structured logging utility for the worker system
+ * Winston-based structured logging for XNovu Worker
  */
+
+import winston from 'winston';
+
+// Create Winston logger instance for worker
+const winstonLogger = winston.createLogger({
+  level: process.env.WORKER_LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  defaultMeta: { 
+    service: 'xnovu-worker',
+    env: process.env.NODE_ENV || 'development'
+  },
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        // In development, use pretty print
+        process.env.NODE_ENV === 'development'
+          ? winston.format.combine(
+              winston.format.colorize(),
+              winston.format.printf(({ level, message, timestamp, ...metadata }) => {
+                let msg = `${timestamp} [${level}] ${message}`;
+                if (Object.keys(metadata).length > 0) {
+                  msg += ` ${JSON.stringify(metadata)}`;
+                }
+                return msg;
+              })
+            )
+          : winston.format.json()
+      )
+    })
+  ],
+});
+
+// Add file transport in production
+if (process.env.NODE_ENV === 'production' && process.env.WORKER_LOG_FILE_PATH) {
+  winstonLogger.add(new winston.transports.File({
+    filename: process.env.WORKER_LOG_FILE_PATH,
+    maxsize: 5242880, // 5MB
+    maxFiles: 5,
+  }));
+}
 
 interface LogContext {
   component?: string;
   enterpriseId?: string;
   notificationId?: number;
   subscriptionId?: string;
-  jobId?: string;
-  jobType?: string;
+  workflowId?: string;
   duration?: number;
-  error?: string;
   [key: string]: any;
 }
 
 class Logger {
-  private logLevel: string;
-
-  constructor() {
-    this.logLevel = process.env.WORKER_LOG_LEVEL || 'info';
-  }
-
-  private shouldLog(level: string): boolean {
-    const levels = ['debug', 'info', 'warn', 'error'];
-    const currentLevelIndex = levels.indexOf(this.logLevel);
-    const targetLevelIndex = levels.indexOf(level);
-    return targetLevelIndex >= currentLevelIndex;
-  }
-
-  private formatLog(level: string, message: string, context: LogContext = {}): void {
-    if (!this.shouldLog(level)) {
-      return;
-    }
-
-    const logData = {
-      level,
-      message,
-      timestamp: new Date().toISOString(),
-      component: 'worker',
-      ...context,
-    };
-
-    const output = JSON.stringify(logData);
-
-    switch (level) {
-      case 'error':
-        console.error(output);
-        break;
-      case 'warn':
-        console.warn(output);
-        break;
-      case 'debug':
-        console.debug(output);
-        break;
-      default:
-        console.log(output);
-    }
-  }
-
   debug(message: string, context?: LogContext): void {
-    this.formatLog('debug', message, context);
+    winstonLogger.debug(message, context);
   }
 
   info(message: string, context?: LogContext): void {
-    this.formatLog('info', message, context);
+    winstonLogger.info(message, context);
   }
 
   warn(message: string, context?: LogContext): void {
-    this.formatLog('warn', message, context);
+    winstonLogger.warn(message, context);
   }
 
-  error(message: string, context?: LogContext): void;
-  error(message: string, error: Error, context?: LogContext): void;
   error(message: string, errorOrContext?: Error | LogContext, context?: LogContext): void {
-    let finalContext: LogContext = {};
-    
     if (errorOrContext instanceof Error) {
-      finalContext = {
+      winstonLogger.error(message, {
         ...context,
-        error: errorOrContext.message,
-        stack: errorOrContext.stack,
-      };
+        error: {
+          message: errorOrContext.message,
+          stack: errorOrContext.stack,
+          name: errorOrContext.name
+        }
+      });
     } else {
-      finalContext = errorOrContext || {};
+      winstonLogger.error(message, errorOrContext);
     }
-
-    this.formatLog('error', message, finalContext);
   }
 
-  // Specialized logging methods for common scenarios
+  // Specialized logging methods
   subscription(message: string, enterpriseId: string, context?: LogContext): void {
     this.info(message, {
       component: 'SubscriptionManager',
@@ -97,16 +93,9 @@ class Logger {
     });
   }
 
-  queue(message: string, context?: LogContext): void {
+  temporal(message: string, context?: LogContext): void {
     this.info(message, {
-      component: 'NotificationQueue',
-      ...context,
-    });
-  }
-
-  ruleEngine(message: string, context?: LogContext): void {
-    this.info(message, {
-      component: 'RuleEngine',
+      component: 'Temporal',
       ...context,
     });
   }
@@ -129,24 +118,21 @@ class Logger {
 export const logger = new Logger();
 
 // Performance measurement utility
-export function measureTime<T>(
+export async function measureTime<T>(
   operation: () => Promise<T>, 
-  logger: Logger, 
-  message: string, 
+  operationName: string, 
   context?: LogContext
 ): Promise<T> {
   const startTime = Date.now();
   
-  return operation().then(
-    (result) => {
-      const duration = Date.now() - startTime;
-      logger.info(message, { ...context, duration, status: 'success' });
-      return result;
-    },
-    (error) => {
-      const duration = Date.now() - startTime;
-      logger.error(message, { ...context, duration, status: 'failed', error: error.message });
-      throw error;
-    }
-  );
+  try {
+    const result = await operation();
+    const duration = Date.now() - startTime;
+    logger.info(`${operationName} completed`, { ...context, duration, status: 'success' });
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error(`${operationName} failed`, error as Error, { ...context, duration, status: 'failed' });
+    throw error;
+  }
 }

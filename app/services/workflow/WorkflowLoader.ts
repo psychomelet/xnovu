@@ -1,5 +1,6 @@
 import { workflowRegistry } from './WorkflowRegistry';
 import { welcomeOnboardingEmail, yogoEmail } from '../../novu/workflows';
+import { logger } from '@/app/services/logger';
 
 export class WorkflowLoader {
   private static initialized = false;
@@ -12,7 +13,7 @@ export class WorkflowLoader {
       return;
     }
 
-    console.log('🚀 Initializing XNovu Workflow System...');
+    logger.info('Initializing XNovu Workflow System...');
 
     try {
       // 1. Initialize static workflows from filesystem
@@ -26,11 +27,11 @@ export class WorkflowLoader {
       // For now we'll skip this as it requires enterprise context
 
       const stats = workflowRegistry.getStats();
-      console.log(`✅ Workflow system initialized with ${stats.total} workflows (${stats.static} static, ${stats.dynamic} dynamic)`);
+      logger.info('Workflow system initialized', { total: stats.total, static: stats.static, dynamic: stats.dynamic });
 
       this.initialized = true;
     } catch (error) {
-      console.error('❌ Failed to initialize workflow system:', error);
+      logger.error('Failed to initialize workflow system', error as Error);
       throw error;
     }
   }

@@ -1,6 +1,7 @@
 import { Worker, NativeConnection } from '@temporalio/worker'
 import { workerConfig } from './config'
 import * as activities from '../activities'
+import { logger } from '@/app/services/logger'
 
 let worker: Worker | null = null
 let workerConnection: NativeConnection | null = null
@@ -29,13 +30,13 @@ export async function createWorker(): Promise<Worker> {
 
 export async function startWorker(): Promise<void> {
   const w = await createWorker()
-  console.log('Starting Temporal worker...')
+  logger.temporal('Starting Temporal worker...')
   await w.run()
 }
 
 export async function stopWorker(): Promise<void> {
   if (worker) {
-    console.log('Stopping Temporal worker...')
+    logger.temporal('Stopping Temporal worker...')
     worker.shutdown()
     await worker.runUntil(Date.now() + 10000) // Give 10 seconds for graceful shutdown
     worker = null
