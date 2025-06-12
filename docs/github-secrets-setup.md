@@ -13,7 +13,7 @@ The following secrets need to be configured in your GitHub repository for the co
 ### Supabase Secrets
 - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL (e.g., `https://xxxxx.supabase.co`)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous/public key
-- `NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
 - `DATABASE_URL` - Your Supabase database connection string
 
 ## How to Add Secrets
@@ -34,7 +34,7 @@ If you don't have the secrets configured:
 
 ## Local Development
 
-For local development, create a `.env.local` file with these same variables:
+For local development, create a `.env` file with these same variables:
 
 ```bash
 # Novu
@@ -44,7 +44,7 @@ NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER=your_novu_app_id
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 DATABASE_URL=postgresql://...
 ```
 

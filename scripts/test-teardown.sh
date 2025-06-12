@@ -4,6 +4,12 @@
 
 set -e
 
+# Skip teardown in CI environment
+if [ "$CI" = "true" ]; then
+  echo "🚀 Running in CI environment - skipping Docker teardown"
+  exit 0
+fi
+
 echo "🧹 Cleaning up test environment..."
 
 # Stop and remove Redis container

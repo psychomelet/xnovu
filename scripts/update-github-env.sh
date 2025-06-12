@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Script to update GitHub environment secrets from .env.local file
+# Script to update GitHub environment secrets from .env file
 # Usage: ./scripts/update-github-env.sh
 
-ENV_FILE=".env.local"
+ENV_FILE=".env"
 GITHUB_ENV="Test"
 
-# Check if .env.local exists
+# Check if .env exists
 if [ ! -f "$ENV_FILE" ]; then
     echo "Error: $ENV_FILE not found!"
     exit 1
@@ -29,26 +29,26 @@ fi
 echo "Updating GitHub environment '$GITHUB_ENV' with secrets from $ENV_FILE..."
 echo ""
 
-# Read .env.local file line by line
+# Read .env file line by line
 while IFS= read -r line || [ -n "$line" ]; do
     # Skip empty lines and comments
     if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
         continue
     fi
-    
+
     # Parse key=value pairs
     if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
         key="${BASH_REMATCH[1]}"
         value="${BASH_REMATCH[2]}"
-        
+
         # Remove surrounding quotes if present
         value="${value%\"}"
         value="${value#\"}"
         value="${value%\'}"
         value="${value#\'}"
-        
+
         echo "Setting secret: $key"
-        
+
         # Use gh CLI to set the secret
         if gh secret set "$key" -e "$GITHUB_ENV" --body "$value" 2>/dev/null; then
             echo "✓ Successfully set $key"
