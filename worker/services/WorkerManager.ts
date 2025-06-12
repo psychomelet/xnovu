@@ -2,12 +2,10 @@
  * Main worker orchestration service
  * 
  * Coordinates all notification services using Temporal workflows:
- * - EnhancedSubscriptionManager (single shared realtime subscription for all enterprises)
+ * - Notification polling workflow (outbox pattern for reliable processing)
  * - Temporal workflows (notification processing, scheduling, orchestration)
  * - HealthMonitor (health checks and monitoring)
  */
-
-import { EnhancedSubscriptionManager } from '@/app/services/realtime/EnhancedSubscriptionManager';
 import { HealthMonitor } from './HealthMonitor';
 import type { WorkerConfig, WorkerHealthStatus } from '../types/worker';
 import { logger, measureTime } from '../utils/logging';
@@ -16,12 +14,12 @@ import { getTemporalClient } from '@/lib/temporal/client';
 
 export class WorkerManager {
   private config: WorkerConfig;
-  private subscriptionManager: EnhancedSubscriptionManager | null = null;
   private healthMonitor: HealthMonitor | null = null;
   private isStarted = false;
   private isShuttingDown = false;
   private startTime: Date = new Date();
   private orchestrationWorkflowId: string | null = null;
+  private pollingWorkflowIds: Map<string, string> = new Map();
 
   constructor(config: WorkerConfig) {
     this.config = config;
@@ -46,7 +44,6 @@ export class WorkerManager {
 
       await measureTime(
         () => this.initializeServices(),
-        logger,
         'Worker services initialization completed',
         { component: 'WorkerManager' }
       );
@@ -74,11 +71,11 @@ export class WorkerManager {
     // 2. Start Temporal Orchestration Workflow
     await this.startOrchestrationWorkflow();
 
-    // 3. Start Subscription Manager (single realtime subscription for all enterprises)
+    // 3. Start Notification Polling Workflows
     if (this.config.enterpriseIds.length > 0) {
-      await this.startSubscriptionManager();
+      await this.startPollingWorkflows();
     } else {
-      logger.warn('No enterprise IDs configured, skipping subscription manager');
+      logger.warn('No enterprise IDs configured, skipping polling workflows');
     }
 
     // 4. Start Health Monitor (health checks + HTTP server)
@@ -114,7 +111,7 @@ export class WorkerManager {
       // Start the master orchestration workflow
       this.orchestrationWorkflowId = `orchestration-${Date.now()}`;
       
-      await client.workflow.start('masterOrchestrationWorkflow', {
+      await client.start('notificationOrchestrationWorkflow', {
         workflowId: this.orchestrationWorkflowId,
         taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notification-processing',
         args: [{
@@ -137,40 +134,49 @@ export class WorkerManager {
   }
 
   /**
-   * Start the subscription manager for realtime subscriptions (single shared subscription)
+   * Start notification polling workflows (outbox pattern)
    */
-  private async startSubscriptionManager(): Promise<void> {
+  private async startPollingWorkflows(): Promise<void> {
     try {
-      logger.subscription('Initializing Subscription Manager...', 'worker', {
+      logger.worker('Starting notification polling workflows...', {
         enterpriseCount: this.config.enterpriseIds.length
       });
 
-      // Create a single subscription manager that handles all enterprises
-      this.subscriptionManager = new EnhancedSubscriptionManager({
-        enterpriseId: 'shared', // Special identifier for shared subscription
-        enterpriseIds: this.config.enterpriseIds, // Pass the list of enterprises to monitor
-        events: ['INSERT', 'UPDATE'],
-        reconnectDelay: this.config.subscription.reconnectDelay,
-        maxRetries: this.config.subscription.maxRetries,
-        onNotification: async (notification, eventType) => {
-          logger.subscription(`Notification received via callback (${eventType})`, 'shared', {
-            notificationId: notification.id,
-            enterpriseId: notification.enterprise_id,
-            eventType
-          });
-        },
-        onError: (error) => {
-          logger.error(`Subscription error for shared subscription:`, error);
-        }
-      });
+      const client = await getTemporalClient();
+      const taskQueue = process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notification-processing';
 
-      await this.subscriptionManager.start();
+      // Start a polling workflow for each enterprise
+      for (const enterpriseId of this.config.enterpriseIds) {
+        const workflowId = `notification-polling-${enterpriseId}-${Date.now()}`;
+        
+        await client.start('notificationPollingWorkflow', {
+          workflowId,
+          taskQueue,
+          args: [{
+            enterpriseId,
+            pollInterval: this.config.subscription?.pollInterval || 5000, // Default 5 seconds
+            batchSize: this.config.subscription?.batchSize || 100,
+            includeProcessed: false,
+            processFailedNotifications: true,
+            processScheduledNotifications: true
+          }],
+          // Run until explicitly cancelled
+          workflowExecutionTimeout: undefined,
+        });
 
-      logger.subscription('Subscription Manager started successfully', 'worker', {
+        this.pollingWorkflowIds.set(enterpriseId, workflowId);
+        
+        logger.worker('Started polling workflow for enterprise', {
+          enterpriseId,
+          workflowId
+        });
+      }
+
+      logger.worker('All polling workflows started successfully', {
         enterpriseCount: this.config.enterpriseIds.length
       });
     } catch (error) {
-      logger.error('Failed to start Subscription Manager:', error instanceof Error ? error : new Error(String(error)));
+      logger.error('Failed to start polling workflows:', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -222,11 +228,11 @@ export class WorkerManager {
         );
       }
 
-      // Shutdown subscription manager (stop receiving new realtime events)
-      if (this.subscriptionManager) {
+      // Cancel polling workflows
+      for (const [enterpriseId, workflowId] of this.pollingWorkflowIds) {
         shutdownPromises.push(
-          this.subscriptionManager.stop().catch(error => 
-            logger.error('Error shutting down Subscription Manager:', error)
+          this.cancelPollingWorkflow(enterpriseId, workflowId).catch(error => 
+            logger.error('Error cancelling polling workflow:', error)
           )
         );
       }
@@ -277,7 +283,7 @@ export class WorkerManager {
 
     try {
       const client = await getTemporalClient();
-      const handle = client.workflow.getHandle(this.orchestrationWorkflowId);
+      const handle = client.getHandle(this.orchestrationWorkflowId);
       
       // Signal the workflow to stop gracefully
       await handle.signal('stopOrchestration');
@@ -300,6 +306,40 @@ export class WorkerManager {
   }
 
   /**
+   * Cancel a polling workflow
+   */
+  private async cancelPollingWorkflow(enterpriseId: string, workflowId: string): Promise<void> {
+    try {
+      const client = await getTemporalClient();
+      const handle = client.getHandle(workflowId);
+      
+      // Signal the workflow to pause
+      await handle.signal('pause');
+      
+      // Wait a bit for graceful pause
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Cancel the workflow
+      try {
+        await handle.cancel();
+      } catch (error) {
+        // Workflow might have already completed
+        logger.debug('Polling workflow cancellation error:', { 
+          enterpriseId,
+          workflowId,
+          error: error instanceof Error ? error.message : String(error) 
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to cancel polling workflow:', {
+        enterpriseId,
+        workflowId,
+        error: error instanceof Error ? error : new Error(String(error))
+      });
+    }
+  }
+
+  /**
    * Force cleanup (used in error scenarios)
    */
   private async cleanup(): Promise<void> {
@@ -307,7 +347,11 @@ export class WorkerManager {
 
     const cleanupTasks = [
       () => this.healthMonitor?.stop(),
-      () => this.subscriptionManager?.stop(),
+      async () => {
+        for (const [enterpriseId, workflowId] of this.pollingWorkflowIds) {
+          await this.cancelPollingWorkflow(enterpriseId, workflowId).catch(() => {});
+        }
+      },
       () => this.cancelOrchestrationWorkflow(),
       () => temporalService.shutdown(),
     ];
@@ -330,22 +374,34 @@ export class WorkerManager {
     const uptime = this.getUptime();
     
     try {
-      // Get subscription manager status
-      const subscriptionStatus = this.subscriptionManager 
-        ? {
-            total: this.config.enterpriseIds.length,
-            active: this.subscriptionManager.isHealthy() ? this.config.enterpriseIds.length : 0,
-            failed: this.subscriptionManager.isHealthy() ? 0 : this.config.enterpriseIds.length,
-            reconnecting: 0
-          }
-        : { total: 0, active: 0, failed: 0, reconnecting: 0 };
+      // Get polling workflow status
+      const pollingStatus = {
+        total: this.pollingWorkflowIds.size,
+        active: 0,
+        failed: 0,
+        reconnecting: 0
+      };
 
       const enterpriseStatus: Record<string, string> = {};
-      if (this.subscriptionManager) {
-        const status = this.subscriptionManager.getStatus();
-        this.config.enterpriseIds.forEach(enterpriseId => {
-          enterpriseStatus[enterpriseId] = status.isActive ? 'subscribed' : 'error';
-        });
+      
+      // Check status of each polling workflow
+      for (const [enterpriseId, workflowId] of this.pollingWorkflowIds) {
+        try {
+          const client = await getTemporalClient();
+          const handle = client.getHandle(workflowId);
+          const description = await handle.describe();
+          
+          if (description.status.name === 'RUNNING') {
+            pollingStatus.active++;
+            enterpriseStatus[enterpriseId] = 'polling';
+          } else {
+            pollingStatus.failed++;
+            enterpriseStatus[enterpriseId] = 'error';
+          }
+        } catch (error) {
+          pollingStatus.failed++;
+          enterpriseStatus[enterpriseId] = 'error';
+        }
       }
 
       // Get Temporal status
@@ -361,7 +417,7 @@ export class WorkerManager {
       if (this.orchestrationWorkflowId) {
         try {
           const client = await getTemporalClient();
-          const handle = client.workflow.getHandle(this.orchestrationWorkflowId);
+          const handle = client.getHandle(this.orchestrationWorkflowId);
           const description = await handle.describe();
           orchestrationStatus = description.status.name;
         } catch (error) {
@@ -374,22 +430,21 @@ export class WorkerManager {
         this.isStarted && 
         !this.isShuttingDown &&
         temporalStatus?.status === 'healthy' &&
-        subscriptionStatus.failed === 0 &&
+        pollingStatus.failed === 0 &&
         orchestrationStatus === 'RUNNING';
 
       const isDegraded = 
         this.isStarted &&
         !this.isShuttingDown &&
-        (subscriptionStatus.reconnecting > 0 || subscriptionStatus.failed > 0);
+        pollingStatus.failed > 0;
 
       return {
         status: isHealthy ? 'healthy' : isDegraded ? 'degraded' : 'unhealthy',
         uptime,
         components: {
-          subscriptions: subscriptionStatus,
+          subscriptions: pollingStatus,
           ruleEngine: temporalStatus?.status === 'healthy' ? 'healthy' : 'unhealthy',
-          queue: temporalStatus?.status === 'healthy' ? 'healthy' : 'unhealthy',
-          temporal: temporalStatus ? temporalStatus.status : 'unhealthy',
+          temporal: temporalStatus ? (temporalStatus.status === 'disabled' ? 'not_initialized' : temporalStatus.status) : 'unhealthy',
         },
         enterprise_status: enterpriseStatus,
         temporal_status: {
@@ -407,7 +462,6 @@ export class WorkerManager {
         components: {
           subscriptions: { total: 0, active: 0, failed: 0, reconnecting: 0 },
           ruleEngine: 'unhealthy',
-          queue: 'unhealthy',
           temporal: 'unhealthy',
         },
         enterprise_status: {},
@@ -437,9 +491,9 @@ export class WorkerManager {
   }
 
   /**
-   * Get subscription manager (for testing/debugging)
+   * Get polling workflow IDs (for testing/debugging)
    */
-  getSubscriptionManager(): EnhancedSubscriptionManager | null {
-    return this.subscriptionManager;
+  getPollingWorkflowIds(): Map<string, string> {
+    return this.pollingWorkflowIds;
   }
 }

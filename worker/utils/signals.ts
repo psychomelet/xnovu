@@ -2,7 +2,7 @@
  * Signal handling utilities for graceful shutdown
  */
 
-import type { SignalHandler } from '../types/daemon';
+import type { SignalHandler } from '../types/worker';
 import { logger } from './logging';
 
 export function setupSignalHandlers(shutdownHandler: SignalHandler): void {
@@ -46,7 +46,7 @@ export function setupSignalHandlers(shutdownHandler: SignalHandler): void {
 }
 
 async function handleSignal(signal: string, handler: SignalHandler): Promise<void> {
-  logger.daemon(`Received ${signal} signal`);
+  logger.info(`Received ${signal} signal`);
   
   try {
     await handler(signal);

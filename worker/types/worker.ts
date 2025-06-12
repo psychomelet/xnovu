@@ -17,6 +17,8 @@ export interface WorkerConfig {
     reconnectDelay: number;
     maxRetries: number;
     healthCheckInterval: number;
+    pollInterval?: number; // Polling interval in milliseconds
+    batchSize?: number; // Number of notifications to poll per batch
   };
 }
 

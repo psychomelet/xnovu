@@ -22,4 +22,26 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
 })
 
+export function createSupabaseAdmin() {
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase service role key')
+  }
+  
+  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        'x-application-name': 'xnovu-admin',
+      },
+    },
+    db: {
+      schema: 'notify',
+    },
+  })
+}
+
 export type SupabaseClient = typeof supabase

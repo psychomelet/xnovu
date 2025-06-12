@@ -8,7 +8,7 @@ Runtime.install({
     console.log(`[${level}] ${new Date(Number(timestampNanos / 1000000n)).toISOString()} ${message}`)
   }),
   telemetryOptions: {
-    tracingFilter: makeTelemetryFilterString({ core: true, api: true, workflow: true }),
+    tracingFilter: makeTelemetryFilterString({ core: 'INFO', other: 'INFO' }),
   },
 })
 

@@ -38,7 +38,20 @@ export async function stopWorker(): Promise<void> {
   if (worker) {
     logger.temporal('Stopping Temporal worker...')
     worker.shutdown()
-    await worker.runUntil(Date.now() + 10000) // Give 10 seconds for graceful shutdown
+    // Wait for shutdown to complete
+    await new Promise<void>((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (!worker || worker.getState() === 'STOPPED') {
+          clearInterval(checkInterval)
+          resolve()
+        }
+      }, 100)
+      // Force resolve after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkInterval)
+        resolve()
+      }, 10000)
+    })
     worker = null
   }
   if (workerConnection) {

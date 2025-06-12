@@ -68,7 +68,7 @@ export async function pollSupabaseNotifications(
   return (data || []).map(notification => ({
     id: notification.id,
     enterpriseId: notification.enterprise_id || '',
-    workflowId: notification.notification_workflow_id,
+    workflowId: notification.notification_workflow_id || 0,
     payload: notification.payload,
     recipients: notification.recipients || [],
     overrides: notification.overrides || {},
@@ -101,10 +101,10 @@ export async function fetchWorkflowConfig(
   return {
     id: data.id,
     key: data.workflow_key,
-    type: data.type,
+    type: data.workflow_type.toLowerCase() as 'static' | 'dynamic',
     name: data.name,
     description: data.description || undefined,
-    configuration: data.configuration
+    configuration: data.control_schema as any
   }
 }
 
@@ -118,8 +118,8 @@ export async function fetchTemplates(
     .schema('notify')
     .from('ent_notification_template')
     .select('*')
-    .eq('notification_workflow_id', workflowId)
-    .eq('is_active', true)
+    .eq('deactivated', false)
+    .eq('publish_status', 'PUBLISH')
 
   if (error) {
     throw new Error(`Failed to fetch templates: ${error.message}`)
@@ -127,10 +127,13 @@ export async function fetchTemplates(
 
   return (data || []).map(template => ({
     id: template.id,
-    workflowId: template.notification_workflow_id,
-    channel: template.channel,
-    content: template.content,
-    metadata: template.metadata
+    workflowId: workflowId, // Use the passed workflowId since templates don't have direct reference
+    channel: template.channel_type,
+    content: {
+      subject: template.subject_template,
+      body: template.body_template
+    },
+    metadata: template.variables_description || {}
   }))
 }
 

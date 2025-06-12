@@ -192,32 +192,31 @@ export class HealthMonitor {
   }
 
   /**
-   * Handle subscription-specific health endpoint
+   * Handle subscription-specific health endpoint (now polling workflows)
    */
   private async handleSubscriptionHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const subscriptionManager = this.config.workerManager.getSubscriptionManager();
+      const pollingWorkflowIds = this.config.workerManager.getPollingWorkflowIds();
       
-      if (!subscriptionManager) {
+      if (!pollingWorkflowIds || pollingWorkflowIds.size === 0) {
         this.sendResponse(res, 200, {
-          status: 'no_subscriptions',
-          message: 'No subscription manager configured',
+          status: 'no_polling_workflows',
+          message: 'No polling workflows configured',
           timestamp: new Date().toISOString()
         });
         return;
       }
 
-      const managerStatus = subscriptionManager.getStatus();
-      const isHealthy = subscriptionManager.isHealthy();
+      const workflowStatuses: Record<string, string> = {};
+      for (const [enterpriseId, workflowId] of pollingWorkflowIds) {
+        workflowStatuses[enterpriseId] = `workflow: ${workflowId}`;
+      }
       
       this.sendResponse(res, 200, {
-        status: isHealthy ? 'healthy' : 'degraded',
-        subscription_manager: {
-          isActive: managerStatus.isActive,
-          isHealthy,
-          retryCount: managerStatus.retryCount,
-          maxRetries: managerStatus.maxRetries,
-          events: managerStatus.events
+        status: 'healthy',
+        polling_workflows: {
+          total: pollingWorkflowIds.size,
+          workflows: workflowStatuses
         },
         timestamp: new Date().toISOString()
       });
@@ -238,7 +237,7 @@ export class HealthMonitor {
   private async handleMetrics(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const healthStatus = await this.config.workerManager.getHealthStatus();
-      const subscriptionManager = this.config.workerManager.getSubscriptionManager();
+      const pollingWorkflowIds = this.config.workerManager.getPollingWorkflowIds();
       
       let metrics = [
         `# HELP xnovu_worker_uptime_seconds Worker uptime in seconds`,
@@ -265,32 +264,6 @@ export class HealthMonitor {
         `# TYPE xnovu_subscriptions_reconnecting gauge`,
         `xnovu_subscriptions_reconnecting ${healthStatus.components.subscriptions.reconnecting}`,
       ];
-
-      // Add queue metrics if available
-      if (healthStatus.queue_stats) {
-        const queueStats = healthStatus.queue_stats;
-        
-        if (queueStats.notification) {
-          metrics.push(
-            ``,
-            `# HELP xnovu_queue_notification_waiting Jobs waiting in notification queue`,
-            `# TYPE xnovu_queue_notification_waiting gauge`,
-            `xnovu_queue_notification_waiting ${queueStats.notification.waiting || 0}`,
-            ``,
-            `# HELP xnovu_queue_notification_active Jobs active in notification queue`,
-            `# TYPE xnovu_queue_notification_active gauge`,
-            `xnovu_queue_notification_active ${queueStats.notification.active || 0}`,
-            ``,
-            `# HELP xnovu_queue_notification_completed Completed jobs in notification queue`,
-            `# TYPE xnovu_queue_notification_completed gauge`,
-            `xnovu_queue_notification_completed ${queueStats.notification.completed || 0}`,
-            ``,
-            `# HELP xnovu_queue_notification_failed Failed jobs in notification queue`,
-            `# TYPE xnovu_queue_notification_failed gauge`,
-            `xnovu_queue_notification_failed ${queueStats.notification.failed || 0}`
-          );
-        }
-      }
 
       res.setHeader('Content-Type', 'text/plain');
       res.statusCode = 200;

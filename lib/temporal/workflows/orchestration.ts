@@ -7,15 +7,12 @@ import {
   sleep,
   condition
 } from '@temporalio/workflow'
-import { realtimeMonitoringWorkflow } from './realtime-monitoring'
 import { cronSchedulingWorkflow, scheduledNotificationWorkflow } from './scheduling'
 
 export interface OrchestrationConfig {
   enterpriseIds: string[]
-  monitoringInterval?: string
   cronInterval?: string
   scheduledCheckInterval?: string
-  enableRealtime?: boolean
   enableCron?: boolean
   enableScheduled?: boolean
 }
@@ -23,7 +20,6 @@ export interface OrchestrationConfig {
 export interface OrchestrationState {
   isRunning: boolean
   startedAt: number
-  realtimeWorkflowId?: string
   cronWorkflowId?: string
   scheduledWorkflowId?: string
 }
@@ -45,7 +41,6 @@ export async function notificationOrchestrationWorkflow(
 
   // Apply defaults
   const currentConfig = {
-    enableRealtime: true,
     enableCron: true,
     enableScheduled: true,
     ...config
@@ -68,19 +63,8 @@ export async function notificationOrchestrationWorkflow(
     // Start child workflows based on configuration
     const childWorkflows = []
 
-    // Start realtime monitoring workflow
-    if (currentConfig.enableRealtime) {
-      const realtimeHandle = await startChild(realtimeMonitoringWorkflow, {
-        workflowId: `realtime-monitor-${Date.now()}`,
-        args: [{
-          enterpriseIds: currentConfig.enterpriseIds,
-          pollingInterval: currentConfig.monitoringInterval
-        }],
-      })
-      state.realtimeWorkflowId = realtimeHandle.workflowId
-      childWorkflows.push(realtimeHandle)
-      console.log('Started realtime monitoring workflow')
-    }
+    // Note: Polling workflows are now started separately by WorkerManager
+    // for each enterprise ID to enable better scalability and monitoring
 
     // Start cron scheduling workflow
     if (currentConfig.enableCron) {
@@ -125,15 +109,10 @@ export async function notificationOrchestrationWorkflow(
       }
     }
 
-    // Clean shutdown - terminate all child workflows
+    // Clean shutdown - signal all child workflows to stop
     console.log('Stopping orchestration workflow...')
-    for (const handle of childWorkflows) {
-      try {
-        await handle.terminate()
-      } catch (error) {
-        console.error('Error terminating child workflow:', error)
-      }
-    }
+    // Child workflows will complete on their own or be cancelled by Temporal
+    // when the parent workflow completes
 
   } catch (error) {
     console.error('Fatal error in orchestration workflow:', error)

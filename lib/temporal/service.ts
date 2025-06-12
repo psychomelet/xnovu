@@ -1,5 +1,5 @@
 import { getTemporalClient } from './client'
-import { startWorker } from './worker'
+import { createWorker } from './worker'
 import { Worker } from '@temporalio/worker'
 import { logger } from '@/app/services/logger'
 
@@ -23,8 +23,15 @@ export class TemporalService {
     logger.temporal('Initializing Temporal service...')
     
     try {
-      // Start the Temporal worker
-      this.worker = await startWorker()
+      // Create the Temporal worker
+      this.worker = await createWorker()
+      
+      // Start the worker in the background
+      this.worker.run().catch(error => {
+        logger.error('Worker stopped unexpectedly', error as Error)
+        this.isRunning = false
+      })
+      
       this.isRunning = true
       
       logger.temporal('Temporal service initialized successfully')

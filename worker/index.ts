@@ -4,7 +4,7 @@
  * XNovu Unified Worker
  * 
  * Master worker that orchestrates all notification services:
- * - Realtime subscriptions (EnhancedSubscriptionManager)
+ * - Notification polling workflows (outbox pattern)
  * - Temporal workflows for notification processing
  * - Health monitoring and status endpoints
  */
@@ -37,7 +37,7 @@ async function main() {
     // Parse enterprise IDs from environment
     const enterpriseIds = process.env.WORKER_ENTERPRISE_IDS?.split(',').map(id => id.trim()) || [];
     if (enterpriseIds.length === 0) {
-      logger.warn('No enterprise IDs specified in WORKER_ENTERPRISE_IDS, worker will run without realtime subscriptions');
+      logger.warn('No enterprise IDs specified in WORKER_ENTERPRISE_IDS, worker will run without polling workflows');
     }
 
     // Initialize worker manager
@@ -56,11 +56,13 @@ async function main() {
         reconnectDelay: parseInt(process.env.SUBSCRIPTION_RECONNECT_DELAY || '1000'),
         maxRetries: parseInt(process.env.SUBSCRIPTION_MAX_RETRIES || '10'),
         healthCheckInterval: parseInt(process.env.SUBSCRIPTION_HEALTH_CHECK_INTERVAL || '30000'),
+        pollInterval: parseInt(process.env.NOTIFICATION_POLL_INTERVAL || '5000'),
+        batchSize: parseInt(process.env.NOTIFICATION_BATCH_SIZE || '100'),
       }
     });
 
     // Setup graceful shutdown
-    setupSignalHandlers(async (signal) => {
+    setupSignalHandlers(async (signal: string) => {
       logger.info(`📋 Received ${signal}, shutting down worker gracefully...`);
       await workerManager.shutdown();
       process.exit(0);

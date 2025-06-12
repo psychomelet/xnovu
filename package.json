@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
+    "test:connection": "jest __tests__/services/",
     "test:unit": "jest __tests__/unit/",
     "test:integration": "TEST_INTEGRATION=true jest __tests__/integration/",
     "test:watch": "jest --watch",

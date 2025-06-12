@@ -1,5 +1,5 @@
 // Export all workflows
 export * from './notification-processing'
-export * from './realtime-monitoring'
+export * from './notification-polling-workflow'
 export * from './scheduling'
 export * from './orchestration'

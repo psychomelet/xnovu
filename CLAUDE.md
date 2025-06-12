@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 XNovu is an internal notification system for smart building management platforms, built on top of Novu.co. It manages notifications for campus/park environments with hundreds of buildings, thousands of people, and devices.
 
-The system integrates with a larger smart buildings management platform via Supabase realtime subscriptions. When notification rows are inserted into the management database, XNovu subscribes to these changes and triggers predefined workflows.
+The system integrates with a larger smart buildings management platform using an outbox pattern with Temporal workflows. XNovu polls the notification table for new entries based on the updated_at timestamp and triggers predefined workflows.
 
 ## Development Guidelines
 
@@ -17,9 +17,9 @@ The system integrates with a larger smart buildings management platform via Supa
 
 ### System Integration Flow
 1. Management platform inserts notifications into their database
-2. XNovu uses Supabase SDK to subscribe to realtime changes
-3. When a notification row is inserted, XNovu queries the complete notification data
-4. XNovu triggers the appropriate workflow with the queried data
+2. XNovu uses Temporal workflows to poll the notification table at regular intervals
+3. When new or updated notifications are found (based on updated_at timestamp), XNovu retrieves the complete data
+4. XNovu triggers the appropriate workflow with the retrieved data
 
 ### Workflow Types
 1. **Static Workflows** - Critical system workflows (e.g., user-signup) that are hardcoded and not user-configurable
@@ -70,7 +70,7 @@ Each workflow module follows this structure:
 - `types.ts` - TypeScript type definitions
 
 ### Key Components
-- **Supabase Integration** - Real-time subscription to notification insertions
+- **Temporal Polling Workflows** - Reliable notification processing using outbox pattern
 - **Novu Bridge** - Serves workflows to Novu instance
 - **In-App Notifications** - Uses Novu's Inbox component (`app/components/NotificationToast/`)
 

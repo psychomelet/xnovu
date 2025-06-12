@@ -362,10 +362,8 @@ export class RuleService {
     try {
       // Supabase JS client v2 does not have a dedicated method to close
       // connections, as it's designed for serverless environments.
-      // For long-running apps, realtime subscriptions should be disconnected.
-      // This may help in test environments for a graceful exit.
       console.log('Shutting down RuleService...');
-      await this.supabase.realtime.disconnect();
+      // No realtime connections to disconnect - using polling pattern now
       console.log('RuleService shutdown complete.');
     } catch (error) {
       console.error('Error during RuleService shutdown:', error);

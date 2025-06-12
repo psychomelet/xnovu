@@ -164,7 +164,7 @@ export async function processScheduledNotificationWorkflow(
     const notificationData = {
       id: notification.id,
       enterpriseId: notification.enterprise_id || '',
-      workflowId: notification.notification_workflow_id,
+      workflowId: notification.notification_workflow_id || 0,
       payload: notification.payload,
       recipients: notification.recipients || [],
       overrides: notification.overrides || {},
