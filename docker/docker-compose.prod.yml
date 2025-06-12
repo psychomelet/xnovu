@@ -82,22 +82,6 @@ services:
     networks:
       - xnovu
 
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - app
-      - worker
-    networks:
-      - xnovu
-
 networks:
   xnovu:
     driver: bridge
@@ -106,6 +90,6 @@ networks:
 # 1. Temporal is expected to be running as an external service
 # 2. Configure TEMPORAL_ADDRESS to point to your Temporal cluster
 # 3. Ensure all required environment variables are set
-# 4. Use proper SSL certificates in production
+# 4. Configure your load balancer/reverse proxy for SSL termination
 # 5. Consider using a managed database service for PostgreSQL
 # 6. Monitor worker health endpoint for operational status

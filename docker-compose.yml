@@ -1,8 +1,0 @@
-# XNovu Development Services
-# 
-# This file is for local development dependencies only.
-# Temporal is configured as an external service via environment variables.
-
-version: '3.8'
-
-# Empty for now - add development services as needed

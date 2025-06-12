@@ -7,8 +7,6 @@ const createJestConfig = nextJest({
 
 // Add any custom config to be passed to Jest
 const customJestConfig = {
-  globalSetup: '<rootDir>/jest.globalSetup.js',
-  globalTeardown: '<rootDir>/jest.globalTeardown.js',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js', '<rootDir>/jest.console.setup.js'],
   testEnvironment: 'jest-environment-node', // Use node environment for server-side tests
   testEnvironmentOptions: {

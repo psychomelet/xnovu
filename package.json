@@ -16,11 +16,7 @@
     "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
     "test:lint": "eslint __tests__/**/*.{ts,tsx}",
     "test:type-check": "tsc --noEmit",
-    "xnovu": "tsx cli/index.ts",
-    "temporal:start": "bash scripts/start-temporal.sh",
-    "temporal:stop": "docker-compose down",
-    "temporal:logs": "docker-compose logs -f temporal",
-    "temporal:ui": "open http://localhost:8080 || xdg-open http://localhost:8080 || start http://localhost:8080"
+    "xnovu": "tsx cli/index.ts"
   },
   "dependencies": {
     "@novu/api": "^1.0.0",
