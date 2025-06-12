@@ -13,6 +13,6 @@ fi
 echo "🧹 Cleaning up test environment..."
 
 # Stop and remove Redis container
-docker-compose -f docker-compose.test.yml down
+docker-compose -f docker-compose.test.yml down >/dev/null 2>&1
 
 echo "✅ Test environment cleaned up!"
