@@ -22,11 +22,11 @@ const mockNotification = {
 describe('SubscriptionManager Integration', () => {
   beforeEach(() => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const novuSecretKey = process.env.NOVU_SECRET_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
-      throw new Error('Integration tests require real Supabase credentials. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
+      throw new Error('Integration tests require real Supabase credentials. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     }
 
     if (!novuSecretKey || novuSecretKey.includes('test-secret-key') || novuSecretKey.length <= 20) {
@@ -36,32 +36,32 @@ describe('SubscriptionManager Integration', () => {
 
   it('should handle notification processing flow with real connections', async () => {
     const mockOnNotification = jest.fn()
-    
+
     const manager = new SubscriptionManager({
       enterpriseId: 'test-enterprise',
       onNotification: mockOnNotification
     })
-    
+
     // Start the manager with real APIs
     await manager.start()
-    
+
     // Wait for subscription to establish
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     // Verify it's active
     const status = manager.getStatus()
     expect(status.isActive).toBe(true)
     expect(status.queueLength).toBe(0)
-    
+
     // Test queue functionality with real connections
     const addToQueueMethod = (manager as any).addToQueue.bind(manager)
     addToQueueMethod(mockNotification)
-    
+
     const queueStatus = manager.getStatus()
     expect(queueStatus.queueLength).toBe(1)
-    
+
     await manager.stop()
-    
+
     console.log('✅ SubscriptionManager integration test with real APIs completed')
   }, 15000)
 
@@ -69,17 +69,17 @@ describe('SubscriptionManager Integration', () => {
     const manager = new SubscriptionManager({
       enterpriseId: 'test-enterprise'
     })
-    
+
     // Test start/stop cycle
     await manager.start()
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     const activeStatus = manager.getStatus()
     expect(activeStatus.isActive).toBe(true)
     expect(manager.isHealthy()).toBe(true)
-    
+
     await manager.stop()
-    
+
     const stoppedStatus = manager.getStatus()
     expect(stoppedStatus.isActive).toBe(false)
     expect(stoppedStatus.isShuttingDown).toBe(true)

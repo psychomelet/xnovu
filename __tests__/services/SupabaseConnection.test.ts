@@ -7,7 +7,7 @@ const execAsync = promisify(exec);
 
 describe('Supabase Connection', () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const databaseUrl = process.env.DATABASE_URL || '';
 
   // Validate credentials before each test
@@ -15,7 +15,7 @@ describe('Supabase Connection', () => {
   describe('Supabase JS SDK', () => {
     it('should connect to Supabase with service role key', async () => {
       if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
-        throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY environment variables.');
+        throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
       const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
@@ -68,7 +68,7 @@ describe('Supabase Connection', () => {
   describe('Schema Access', () => {
     it('should be able to query from notify.ent_notification table', async () => {
       if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
-        throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY environment variables.');
+        throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
       const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {

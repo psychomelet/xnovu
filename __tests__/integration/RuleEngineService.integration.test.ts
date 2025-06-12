@@ -10,7 +10,7 @@ describe('RuleEngineService - Integration Tests', () => {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const novuSecretKey = process.env.NOVU_SECRET_KEY || '';
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  
+
   // Integration tests use whatever credentials are available
   // Run `pnpm test:connections` first to validate credentials
 
@@ -46,16 +46,16 @@ describe('RuleEngineService - Integration Tests', () => {
 
       expect(instance1).toBe(instance2);
       expect(instance1).toBeInstanceOf(RuleEngineService);
-      
+
       ruleEngine = instance1; // Store for cleanup
     });
 
     it('should get status with real database connection', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
-      
+
       // This will make real database calls
       const status = await ruleEngine.getStatus();
-      
+
       expect(status).toHaveProperty('initialized');
       expect(status).toHaveProperty('cronJobs');
       expect(status).toHaveProperty('scheduledNotifications');
@@ -70,27 +70,27 @@ describe('RuleEngineService - Integration Tests', () => {
 
     it('should initialize and shutdown with real database', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
-      
+
       // Initialize will load real cron rules from database
       await expect(ruleEngine.initialize()).resolves.not.toThrow();
-      
+
       // Should be marked as initialized
       const status = await ruleEngine.getStatus();
       expect(status.initialized).toBe(true);
-      
+
       // Shutdown should not throw
       await expect(ruleEngine.shutdown()).resolves.not.toThrow();
     }, 30000); // Longer timeout for database operations
 
     it('should handle service orchestration with real database', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
-      
+
       await ruleEngine.initialize();
-      
+
       // Test pause and resume
       await expect(ruleEngine.pause()).resolves.not.toThrow();
       await expect(ruleEngine.resume()).resolves.not.toThrow();
-      
+
       // Test health check
       const health = await ruleEngine.healthCheck();
       expect(health).toHaveProperty('status');
@@ -100,10 +100,10 @@ describe('RuleEngineService - Integration Tests', () => {
       expect(health.details).toHaveProperty('cronManager');
       expect(health.details).toHaveProperty('scheduledManager');
       expect(health.details).toHaveProperty('queue');
-      
+
       // Test cron rule reload - will query real database
       await expect(ruleEngine.reloadCronRules()).resolves.not.toThrow();
-      
+
       // Test with specific enterprise ID
       await expect(ruleEngine.reloadCronRules('test-enterprise-id')).resolves.not.toThrow();
     }, 30000);
@@ -122,7 +122,7 @@ describe('RuleEngineService - Integration Tests', () => {
         .from('ent_notification_rule')
         .select('id')
         .limit(1);
-      
+
       // Should not throw an error (even if no data exists)
       expect(error).toBeNull();
       expect(Array.isArray(data)).toBe(true);

@@ -1,16 +1,8 @@
 import '@testing-library/jest-dom'
 import { config } from 'dotenv'
-import { existsSync } from 'fs'
-import { join } from 'path'
 
 // Load .env first (defaults)
 config()
-
-// Then load .env.local if it exists (overrides)
-const envLocalPath = join(process.cwd(), '.env.local')
-if (existsSync(envLocalPath)) {
-  config({ path: envLocalPath, override: true })
-}
 
 // Test environment configuration
 process.env.NODE_ENV = 'test'
