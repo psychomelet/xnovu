@@ -1,113 +1,129 @@
 import { WorkflowService } from '../../app/services/database/WorkflowService';
-import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../../lib/supabase/database.types';
-import { randomUUID } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 
 // Types
 type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
 type WorkflowInsert = Database['notify']['Tables']['ent_notification_workflow']['Insert'];
-type SupabaseClient = ReturnType<typeof createClient<Database>>;
 
-describe('WorkflowService Unit Tests with Real Database', () => {
+// Check for required environment variables
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  throw new Error('Missing required Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set');
+}
+
+describe('WorkflowService Unit Tests', () => {
   let service: WorkflowService;
-  let supabase: SupabaseClient;
-  const testEnterpriseId = randomUUID();
-  const createdWorkflowIds: number[] = [];
+  const testEnterpriseId = uuidv4(); // Use proper UUID
+  let testWorkflowId: number | null = null;
+  let testWorkflowKey: string;
 
-  // Check if we have real credentials
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
-  const hasRealCredentials = supabaseUrl && 
-    supabaseServiceKey && 
-    supabaseUrl.includes('supabase.co') && 
-    supabaseServiceKey.length > 50;
-
-  beforeAll(async () => {
-    if (!hasRealCredentials) {
-      throw new Error('Real Supabase credentials required for WorkflowService unit tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
-    }
-
-    supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
-      global: { headers: { 'x-application-name': 'xnovu-test-workflow-service-unit' } }
-    });
-    
+  beforeAll(() => {
     service = new WorkflowService();
+    testWorkflowKey = 'test-workflow-' + Date.now();
   });
 
-  beforeEach(async () => {
-    // Clean up any existing test data
-    await cleanupTestData();
-  });
-
-  afterEach(async () => {
-    // Clean up test data after each test
-    await cleanupTestData();
-  });
-
-  async function cleanupTestData() {
-    if (!hasRealCredentials) return;
-    
-    try {
-      // Delete test workflows
-      if (createdWorkflowIds.length > 0) {
-        await supabase
-          .schema('notify')
-          .from('ent_notification_workflow')
-          .delete()
-          .in('id', createdWorkflowIds);
-        createdWorkflowIds.length = 0;
+  afterAll(async () => {
+    // Clean up test data
+    if (testWorkflowId) {
+      try {
+        await service.deactivateWorkflow(testWorkflowId, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
       }
-      
-      // Delete by exact enterprise ID
-      await supabase
-        .schema('notify')
-        .from('ent_notification_workflow')
-        .delete()
-        .eq('enterprise_id', testEnterpriseId);
-    } catch (error) {
-      console.warn('Cleanup warning:', error);
     }
-  }
+  });
 
-  async function createTestWorkflow(overrides: Partial<WorkflowInsert> = {}): Promise<WorkflowRow> {
-    const defaultWorkflow: WorkflowInsert = {
-      name: 'Test Workflow',
-      workflow_key: `test-workflow-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function createTestWorkflowInsert(overrides: Partial<WorkflowInsert> = {}): WorkflowInsert {
+    return {
+      name: 'Test Workflow Unit',
+      workflow_key: testWorkflowKey + '-' + Math.random().toString(36).substring(7),
       workflow_type: 'DYNAMIC',
       default_channels: ['EMAIL'],
       enterprise_id: testEnterpriseId,
+      publish_status: 'DRAFT',
+      deactivated: false,
       ...overrides
-    };
-
-    const { data, error } = await supabase
-      .schema('notify')
-      .from('ent_notification_workflow')
-      .insert(defaultWorkflow)
-      .select()
-      .single();
-
-    if (error) throw error;
-    if (data) createdWorkflowIds.push(data.id);
-    return data!;
+    } as WorkflowInsert;
   }
 
-  describe('getWorkflow', () => {
-    it('should retrieve workflow by ID', async () => {
-      const testWorkflow = await createTestWorkflow({
-        name: 'Test Workflow Unit',
+  describe('createWorkflow', () => {
+    it('should create new workflow successfully', async () => {
+      const insertData = createTestWorkflowInsert({
+        name: 'New Workflow Unit Test',
         workflow_type: 'DYNAMIC',
         default_channels: ['EMAIL', 'IN_APP'],
-        template_overrides: { emailTemplateId: 123 }
+        template_overrides: { emailTemplateId: 456 }
       });
 
-      const result = await service.getWorkflow(testWorkflow.id, testEnterpriseId);
+      const result = await service.createWorkflow(insertData);
+      testWorkflowId = result.id;
 
       expect(result).toBeDefined();
-      expect(result!.id).toBe(testWorkflow.id);
-      expect(result!.name).toBe('Test Workflow Unit');
+      expect(result.name).toBe('New Workflow Unit Test');
+      expect(result.workflow_key).toBe(insertData.workflow_key);
+      expect(result.workflow_type).toBe('DYNAMIC');
+      expect(result.default_channels).toEqual(['EMAIL', 'IN_APP']);
+      expect(result.enterprise_id).toBe(testEnterpriseId);
+      expect(result.publish_status).toBe('DRAFT');
+    });
+
+    it('should handle creation errors for duplicate workflow key', async () => {
+      // First create a workflow
+      const firstInsert = createTestWorkflowInsert({ 
+        name: 'First Workflow',
+        workflow_key: 'duplicate-test-key-' + Date.now()
+      });
+      const firstResult = await service.createWorkflow(firstInsert);
+
+      // Try to create another with the same key
+      const duplicateData = createTestWorkflowInsert({
+        name: 'Duplicate Workflow',
+        workflow_key: firstResult.workflow_key // Use the same key
+      });
+
+      await expect(
+        service.createWorkflow(duplicateData)
+      ).rejects.toThrow('Failed to create workflow');
+
+      // Clean up
+      await service.deactivateWorkflow(firstResult.id, testEnterpriseId);
+    });
+  });
+
+  describe('getWorkflow', () => {
+    let createdWorkflowId: number;
+
+    beforeAll(async () => {
+      // Create a workflow for testing retrieval
+      const insertData = createTestWorkflowInsert({
+        name: 'Test Retrieval Workflow',
+        template_overrides: { emailTemplateId: 123 }
+      });
+      const created = await service.createWorkflow(insertData);
+      createdWorkflowId = created.id;
+    });
+
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(createdWorkflowId, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('should retrieve workflow by ID', async () => {
+      const result = await service.getWorkflow(createdWorkflowId, testEnterpriseId);
+
+      expect(result).toBeDefined();
+      expect(result!.id).toBe(createdWorkflowId);
+      expect(result!.name).toBe('Test Retrieval Workflow');
       expect(result!.workflow_type).toBe('DYNAMIC');
-      expect(result!.default_channels).toEqual(['EMAIL', 'IN_APP']);
+      expect(result!.default_channels).toEqual(['EMAIL']);
       expect(result!.enterprise_id).toBe(testEnterpriseId);
     });
 
@@ -117,26 +133,18 @@ describe('WorkflowService Unit Tests with Real Database', () => {
     });
 
     it('should return null when workflow belongs to different enterprise', async () => {
-      const testWorkflow = await createTestWorkflow({
-        enterprise_id: 'other-enterprise-id'
-      });
-
-      const result = await service.getWorkflow(testWorkflow.id, testEnterpriseId);
+      const result = await service.getWorkflow(createdWorkflowId, uuidv4()); // Use different UUID
       expect(result).toBeNull();
-
-      // Clean up additional workflow
-      await supabase
-        .schema('notify')
-        .from('ent_notification_workflow')
-        .delete()
-        .eq('id', testWorkflow.id);
     });
   });
 
   describe('getWorkflowByKey', () => {
-    it('should retrieve workflow by key', async () => {
-      const uniqueKey = `building-alert-${Date.now()}`;
-      const testWorkflow = await createTestWorkflow({
+    let createdWorkflow: WorkflowRow;
+
+    beforeAll(async () => {
+      // Create a workflow for testing key-based retrieval
+      const uniqueKey = 'building-alert-' + Date.now();
+      const insertData = createTestWorkflowInsert({
         name: 'Building Alert',
         workflow_key: uniqueKey,
         workflow_type: 'DYNAMIC',
@@ -147,13 +155,26 @@ describe('WorkflowService Unit Tests with Real Database', () => {
           smsTemplateId: 125
         }
       });
+      createdWorkflow = await service.createWorkflow(insertData);
+    });
 
-      const result = await service.getWorkflowByKey(uniqueKey, testEnterpriseId);
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(createdWorkflow.id, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('should retrieve workflow by key', async () => {
+      const result = await service.getWorkflowByKey(createdWorkflow.workflow_key, testEnterpriseId);
 
       expect(result).toBeDefined();
-      expect(result!.workflow_key).toBe(uniqueKey);
+      expect(result!.workflow_key).toBe(createdWorkflow.workflow_key);
       expect(result!.name).toBe('Building Alert');
       expect(result!.enterprise_id).toBe(testEnterpriseId);
+      expect(result!.default_channels).toEqual(['EMAIL', 'IN_APP', 'SMS']);
     });
 
     it('should return null when workflow key not found', async () => {
@@ -162,63 +183,35 @@ describe('WorkflowService Unit Tests with Real Database', () => {
     });
   });
 
-  describe('createWorkflow', () => {
-    it('should create new workflow successfully', async () => {
-      const insertData: WorkflowInsert = {
-        name: 'New Workflow Unit Test',
-        workflow_key: `new-workflow-${Date.now()}`,
-        workflow_type: 'DYNAMIC',
-        default_channels: ['EMAIL', 'IN_APP'],
-        template_overrides: { emailTemplateId: 456 },
-        enterprise_id: testEnterpriseId
-      };
-
-      const result = await service.createWorkflow(insertData);
-
-      expect(result).toBeDefined();
-      expect(result.name).toBe('New Workflow Unit Test');
-      expect(result.workflow_key).toBe(insertData.workflow_key);
-      expect(result.workflow_type).toBe('DYNAMIC');
-      expect(result.default_channels).toEqual(['EMAIL', 'IN_APP']);
-      expect(result.enterprise_id).toBe(testEnterpriseId);
-      expect(result.publish_status).toBe('DRAFT'); // Default status
-      
-      // Track for cleanup
-      createdWorkflowIds.push(result.id);
-    });
-
-    it('should handle creation errors for duplicate workflow key', async () => {
-      const uniqueKey = `duplicate-key-${Date.now()}`;
-      
-      // Create first workflow
-      await createTestWorkflow({
-        workflow_key: uniqueKey
-      });
-
-      const duplicateData: WorkflowInsert = {
-        name: 'Duplicate Workflow',
-        workflow_key: uniqueKey, // Same key
-        workflow_type: 'DYNAMIC',
-        default_channels: ['EMAIL'],
-        enterprise_id: testEnterpriseId
-      };
-
-      await expect(
-        service.createWorkflow(duplicateData)
-      ).rejects.toThrow();
-    });
-  });
 
   describe('updateWorkflow', () => {
+    let workflowToUpdate: WorkflowRow;
+
+    beforeAll(async () => {
+      // Create a workflow for testing updates
+      const insertData = createTestWorkflowInsert({
+        name: 'Workflow for Updates',
+        description: 'Original description'
+      });
+      workflowToUpdate = await service.createWorkflow(insertData);
+    });
+
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(workflowToUpdate.id, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
     it('should update workflow successfully', async () => {
-      const testWorkflow = await createTestWorkflow();
-      
       const updateData = {
         template_overrides: { emailTemplateId: 999, inAppTemplateId: 1000 },
         description: 'Updated description'
       };
 
-      const result = await service.updateWorkflow(testWorkflow.id, updateData, testEnterpriseId);
+      const result = await service.updateWorkflow(workflowToUpdate.id, updateData, testEnterpriseId);
 
       expect(result).toBeDefined();
       expect(result.template_overrides).toEqual({ emailTemplateId: 999, inAppTemplateId: 1000 });
@@ -230,17 +223,32 @@ describe('WorkflowService Unit Tests with Real Database', () => {
 
       await expect(
         service.updateWorkflow(999999, updateData, testEnterpriseId)
-      ).rejects.toThrow();
+      ).rejects.toThrow('Failed to update workflow');
     });
   });
 
   describe('publishWorkflow', () => {
-    it('should publish workflow', async () => {
-      const testWorkflow = await createTestWorkflow({
-        publish_status: 'DRAFT'
-      });
+    let workflowToPublish: WorkflowRow;
 
-      const result = await service.publishWorkflow(testWorkflow.id, testEnterpriseId);
+    beforeAll(async () => {
+      // Create a workflow for testing publishing
+      const insertData = createTestWorkflowInsert({
+        name: 'Workflow for Publishing'
+      });
+      workflowToPublish = await service.createWorkflow(insertData);
+    });
+
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(workflowToPublish.id, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('should publish workflow', async () => {
+      const result = await service.publishWorkflow(workflowToPublish.id, testEnterpriseId);
 
       expect(result).toBeDefined();
       expect(result.publish_status).toBe('PUBLISH');
@@ -248,12 +256,28 @@ describe('WorkflowService Unit Tests with Real Database', () => {
   });
 
   describe('unpublishWorkflow', () => {
-    it('should unpublish workflow', async () => {
-      const testWorkflow = await createTestWorkflow({
-        publish_status: 'PUBLISH'
-      });
+    let workflowToUnpublish: WorkflowRow;
 
-      const result = await service.unpublishWorkflow(testWorkflow.id, testEnterpriseId);
+    beforeAll(async () => {
+      // Create and publish a workflow for testing unpublishing
+      const insertData = createTestWorkflowInsert({
+        name: 'Workflow for Unpublishing'
+      });
+      const created = await service.createWorkflow(insertData);
+      workflowToUnpublish = await service.publishWorkflow(created.id, testEnterpriseId);
+    });
+
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(workflowToUnpublish.id, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('should unpublish workflow', async () => {
+      const result = await service.unpublishWorkflow(workflowToUnpublish.id, testEnterpriseId);
 
       expect(result).toBeDefined();
       expect(result.publish_status).toBe('DRAFT');
@@ -261,12 +285,18 @@ describe('WorkflowService Unit Tests with Real Database', () => {
   });
 
   describe('deactivateWorkflow', () => {
-    it('should deactivate workflow', async () => {
-      const testWorkflow = await createTestWorkflow({
-        deactivated: false
-      });
+    let workflowToDeactivate: WorkflowRow;
 
-      const result = await service.deactivateWorkflow(testWorkflow.id, testEnterpriseId);
+    beforeAll(async () => {
+      // Create a workflow for testing deactivation
+      const insertData = createTestWorkflowInsert({
+        name: 'Workflow for Deactivation'
+      });
+      workflowToDeactivate = await service.createWorkflow(insertData);
+    });
+
+    it('should deactivate workflow', async () => {
+      const result = await service.deactivateWorkflow(workflowToDeactivate.id, testEnterpriseId);
 
       expect(result).toBeDefined();
       expect(result.deactivated).toBe(true);
@@ -274,29 +304,54 @@ describe('WorkflowService Unit Tests with Real Database', () => {
   });
 
   describe('parseWorkflowConfig', () => {
-    it('should parse workflow row to config object', async () => {
-      const testWorkflow = await createTestWorkflow({
+    let testWorkflowFull: WorkflowRow;
+    let testWorkflowMinimal: WorkflowRow;
+
+    beforeAll(async () => {
+      // Create workflows for testing config parsing
+      const fullInsert = createTestWorkflowInsert({
         name: 'Test Workflow Parse',
-        workflow_key: 'test-workflow-parse',
+        workflow_key: 'test-workflow-parse-' + Date.now(),
         workflow_type: 'DYNAMIC',
         default_channels: ['EMAIL', 'IN_APP', 'SMS'],
         template_overrides: {
           emailTemplateId: 123,
           inAppTemplateId: 124,
-          smsTemplateId: 125
+          smsTemplateId: 125,
+          tags: ['test', 'building']
         },
         payload_schema: {
           message: { type: 'string', required: true },
           priority: { type: 'string', enum: ['low', 'medium', 'high'] }
         },
-        description: 'Test workflow description',
-        tags: ['test', 'building']
+        description: 'Test workflow description'
       });
+      testWorkflowFull = await service.createWorkflow(fullInsert);
 
-      const result = await service.parseWorkflowConfig(testWorkflow);
+      const minimalInsert = createTestWorkflowInsert({
+        name: 'Minimal Workflow',
+        workflow_key: 'minimal-workflow-' + Date.now(),
+        workflow_type: 'STATIC',
+        default_channels: ['EMAIL']
+      });
+      testWorkflowMinimal = await service.createWorkflow(minimalInsert);
+    });
+
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(testWorkflowFull.id, testEnterpriseId);
+        await service.deactivateWorkflow(testWorkflowMinimal.id, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
+    it('should parse workflow row to config object', async () => {
+      const result = await service.parseWorkflowConfig(testWorkflowFull);
 
       expect(result).toEqual({
-        workflow_key: 'test-workflow-parse',
+        workflow_key: testWorkflowFull.workflow_key,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL', 'IN_APP', 'SMS'],
         emailTemplateId: 123,
@@ -313,21 +368,10 @@ describe('WorkflowService Unit Tests with Real Database', () => {
     });
 
     it('should handle workflow with minimal configuration', async () => {
-      const testWorkflow = await createTestWorkflow({
-        name: 'Minimal Workflow',
-        workflow_key: 'minimal-workflow',
-        workflow_type: 'STATIC',
-        default_channels: ['EMAIL'],
-        template_overrides: null,
-        payload_schema: null,
-        description: null,
-        tags: null
-      });
-
-      const result = await service.parseWorkflowConfig(testWorkflow);
+      const result = await service.parseWorkflowConfig(testWorkflowMinimal);
 
       expect(result).toEqual({
-        workflow_key: 'minimal-workflow',
+        workflow_key: testWorkflowMinimal.workflow_key,
         workflow_type: 'STATIC',
         channels: ['EMAIL'],
         name: 'Minimal Workflow'
