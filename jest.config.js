@@ -20,9 +20,14 @@ const customJestConfig = {
   silent: false, // Allow console output
   collectCoverageFrom: [
     'app/**/*.{ts,tsx}',
+    'lib/**/*.{ts,tsx}',
+    'cli/**/*.{ts,tsx}',
     '!app/**/*.d.ts',
-    '!app/**/page.tsx',
-    '!app/**/layout.tsx',
+    '!**/*.config.{ts,tsx}',
+    '!**/node_modules/**',
+    '!**/.next/**',
+    '!**/coverage/**',
+    '!**/dist/**',
   ],
   coverageThreshold: {
     global: {

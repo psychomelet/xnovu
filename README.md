@@ -33,23 +33,10 @@ The rule engine provides automated notification processing with:
 
 ## Environment Variables
 
-Create a `.env.local` file with:
+Create a `.env` file with:
 
-```env
-# Novu Configuration
-NOVU_SECRET_KEY=your_novu_secret_key
-NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER=your_app_identifier
-NEXT_PUBLIC_NOVU_SUBSCRIBER_ID=your_subscriber_id
-
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
-
-# Rule Engine Configuration
-REDIS_URL=redis://localhost:6379
-RULE_ENGINE_ENABLED=true
-RULE_ENGINE_TIMEZONE=UTC
-RULE_ENGINE_MAX_CONCURRENT_JOBS=10
+```bash
+cp .env.example .env
 ```
 
 ## Installation

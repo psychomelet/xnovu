@@ -7,18 +7,14 @@ const execAsync = promisify(exec);
 
 describe('Supabase Connection', () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const databaseUrl = process.env.DATABASE_URL || '';
 
-  // Check if we have real credentials (not test defaults)
-  const hasRealCredentials = supabaseUrl &&
-    supabaseServiceKey &&
-    supabaseUrl.includes('supabase.co') &&
-    supabaseServiceKey.length > 50;
+  // Validate credentials before each test
 
   describe('Supabase JS SDK', () => {
     it('should connect to Supabase with service role key', async () => {
-      if (!hasRealCredentials) {
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
         throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
@@ -45,13 +41,8 @@ describe('Supabase Connection', () => {
       const { error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
 
       if (error) {
-        // Don't fail the test if it's just a permission issue - service role might have restricted permissions
-        if (error.message.includes('permission') || error.message.includes('insufficient')) {
-          console.log('✅ Supabase JS SDK Test - Connection successful, service role key is valid but has restricted permissions (expected)');
-        } else {
-          console.log('⚠️  Supabase JS SDK Test - Service role key verification failed:', error.message);
-          throw error;
-        }
+        // Service role key validation failed
+        throw new Error(`Service role key verification failed: ${error.message}`);
       } else {
         console.log('✅ Supabase JS SDK Test - Connection successful, service role key verified successfully');
       }
@@ -67,13 +58,16 @@ describe('Supabase Connection', () => {
       expect(invalidSupabase).toBeDefined();
       expect(invalidSupabase.from).toBeDefined();
 
-      console.log('✅ Invalid Credentials Test - Client creation handled gracefully (validation occurs on first use)');
+      // Test that invalid credentials fail on first use
+      const { error } = await invalidSupabase.auth.admin.listUsers();
+      expect(error).toBeDefined();
+      expect(error?.message).toContain('fetch failed');
     }, 10000);
   });
 
   describe('Schema Access', () => {
     it('should be able to query from notify.ent_notification table', async () => {
-      if (!hasRealCredentials) {
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
         throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
@@ -100,14 +94,11 @@ describe('Supabase Connection', () => {
 
       // Handle different possible outcomes
       if (error && error.code === 'PGRST116') {
-        console.log('⚠️  Schema Access Test - notify.ent_notification table not found (schema may not be set up yet)');
-        expect(error.code).toBe('PGRST116');
+        throw new Error('Schema Access Test failed - notify.ent_notification table not found. Ensure the notify schema is properly set up.');
       } else if (error && error.message.includes('permission')) {
-        console.log('⚠️  Schema Access Test - Permission denied accessing notify.ent_notification (service role may need additional permissions)');
-        throw new Error(`Permission denied: ${error.message}`);
+        throw new Error(`Permission denied accessing notify.ent_notification: ${error.message}`);
       } else if (error) {
-        console.log('⚠️  Schema Access Test - Connection completed with error:', error.message);
-        // Don't fail the test - log for debugging
+        throw new Error(`Schema Access Test failed: ${error.message}`);
       } else {
         // Query succeeded
         expect(Array.isArray(data)).toBe(true);
@@ -143,17 +134,11 @@ describe('Supabase Connection', () => {
       } catch (error: any) {
         // Check if psql is available
         if (error.message.includes('psql: command not found') || error.code === 'ENOENT') {
-          console.log('⚠️  DB Access Test - psql command not found (install postgresql-client to run this test)');
-          return;
+          throw new Error('psql command not found. Install postgresql-client to run database connection tests.');
         }
 
-        // Connection or authentication error
-        if (error.message.includes('connection') || error.message.includes('authentication')) {
-          console.log('⚠️  DB Access Test - Database connection failed (may be expected in test environment):', error.message);
-        } else {
-          console.log('⚠️  DB Access Test - Database connection failed:', error.message);
-          throw error;
-        }
+        // Connection or authentication error - always fail
+        throw new Error(`Database connection failed: ${error.message}`);
       }
     }, 20000);
   });

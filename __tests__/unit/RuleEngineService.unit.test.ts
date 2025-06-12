@@ -22,7 +22,7 @@ describe('RuleEngineService - Unit Tests', () => {
     it('should have default configuration values', () => {
       // Values come from jest.setup.js environment variables
       expect(defaultRuleEngineConfig).toEqual({
-        redisUrl: 'redis://localhost:6380', // From jest.setup.js
+        redisUrl: 'redis://localhost:6379', // From jest.setup.js
         defaultTimezone: 'UTC',
         maxConcurrentJobs: 5, // From jest.setup.js
         jobRetryAttempts: 2, // From jest.setup.js

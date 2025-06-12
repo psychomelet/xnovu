@@ -13,6 +13,26 @@ The system integrates with a larger smart buildings management platform via Supa
 - Always use pnpm for package management
 - Always prefer to use rg
 
+## Environment Variables
+
+### Environment Files Relationship
+- **`.env.example`** - Contains default/placeholder values. This file is committed to git and serves as a template showing all required environment variables.
+- **`.env`** - Contains actual values (secrets, API keys, etc.). This file is gitignored and overrides values from .env.example.
+
+### Loading Order
+1. `.env.example` is loaded first (provides defaults)
+2. `.env` is loaded second with `override: true` (overrides defaults with actual values)
+
+This pattern ensures:
+- All required variables are documented in `.env.example`
+- Actual secrets stay in `.env` and are never committed
+- Tests and code can rely on `.env.example` always being present
+
+### Important: Supabase Service Role Key Naming
+The project uses **`SUPABASE_SERVICE_ROLE_KEY`** in .env (not `SUPABASE_SERVICE_ROLE_KEY`). This is the actual environment variable name used in production and tests.
+
+**DO NOT** change test files to use `SUPABASE_SERVICE_ROLE_KEY` - they should always use `SUPABASE_SERVICE_ROLE_KEY` to match the actual environment configuration.
+
 ## Architecture Overview
 
 ### System Integration Flow
@@ -909,3 +929,7 @@ workflow('critical-alert-escalation', async ({ step, payload }) => {
   }
 });
 ```
+
+## Testing
+
+For all testing documentation, see `__tests__/CLAUDE.md`.

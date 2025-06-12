@@ -2,12 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import type {
   NotificationRule,
-  NotificationRuleInsert,
-  NotificationRuleUpdate,
   Notification,
   NotificationInsert,
   NotificationUpdate,
-  TriggerType
 } from '@/types/rule-engine';
 import { RuleEngineError } from '@/types/rule-engine';
 
@@ -355,6 +352,23 @@ export class RuleService {
         `Unexpected error batch updating notification statuses: ${error}`,
         'UNKNOWN_ERROR'
       );
+    }
+  }
+
+  /**
+   * Gracefully shut down the service and its connections
+   */
+  async shutdown(): Promise<void> {
+    try {
+      // Supabase JS client v2 does not have a dedicated method to close
+      // connections, as it's designed for serverless environments.
+      // For long-running apps, realtime subscriptions should be disconnected.
+      // This may help in test environments for a graceful exit.
+      console.log('Shutting down RuleService...');
+      await this.supabase.realtime.disconnect();
+      console.log('RuleService shutdown complete.');
+    } catch (error) {
+      console.error('Error during RuleService shutdown:', error);
     }
   }
 }
