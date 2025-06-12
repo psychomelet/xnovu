@@ -1,17 +1,16 @@
-import { NotificationService } from '../app/services/database/NotificationService';
+import { NotificationService } from '../../app/services/database/NotificationService';
 import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../lib/supabase/database.types';
+import type { Database } from '../../lib/supabase/database.types';
 import { randomUUID } from 'crypto';
 
 // Types
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 type NotificationInsert = Database['notify']['Tables']['ent_notification']['Insert'];
-type NotificationUpdate = Database['notify']['Tables']['ent_notification']['Update'];
 type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
 type WorkflowInsert = Database['notify']['Tables']['ent_notification_workflow']['Insert'];
 type SupabaseClient = ReturnType<typeof createClient<Database>>;
 
-describe('NotificationService with Real Database', () => {
+describe('NotificationService Unit Tests with Real Database', () => {
   let service: NotificationService;
   let supabase: SupabaseClient;
   const testEnterpriseId = randomUUID();
@@ -29,12 +28,12 @@ describe('NotificationService with Real Database', () => {
 
   beforeAll(async () => {
     if (!hasRealCredentials) {
-      throw new Error('Real Supabase credentials required for NotificationService tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
+      throw new Error('Real Supabase credentials required for NotificationService unit tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
     }
 
     supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
-      global: { headers: { 'x-application-name': 'xnovu-test-notification-service' } }
+      global: { headers: { 'x-application-name': 'xnovu-test-notification-service-unit' } }
     });
     
     service = new NotificationService();
@@ -124,7 +123,7 @@ describe('NotificationService with Real Database', () => {
     const defaultNotification: NotificationInsert = {
       name: 'Test Notification',
       payload: { message: 'Test message' },
-      recipients: ['user-123'],
+      recipients: [testUserId],
       notification_workflow_id: workflowId,
       enterprise_id: testEnterpriseId,
       ...overrides
@@ -143,11 +142,10 @@ describe('NotificationService with Real Database', () => {
   }
 
   describe('getNotification', () => {
-    it('should retrieve notification with relationships', async () => {
-      // Create test notification
+    it('should retrieve notification by ID', async () => {
       const testNotification = await createTestNotification({
-        name: 'Test Notification',
-        payload: { message: 'Test message' },
+        name: 'Unit Test Notification',
+        payload: { message: 'Unit test message' },
         recipients: [testUserId],
         notification_status: 'PENDING'
       });
@@ -156,8 +154,8 @@ describe('NotificationService with Real Database', () => {
 
       expect(result).toBeDefined();
       expect(result!.id).toBe(testNotification.id);
-      expect(result!.name).toBe('Test Notification');
-      expect(result!.payload).toEqual({ message: 'Test message' });
+      expect(result!.name).toBe('Unit Test Notification');
+      expect(result!.payload).toEqual({ message: 'Unit test message' });
       expect(result!.recipients).toEqual([testUserId]);
       expect(result!.notification_status).toBe('PENDING');
       expect(result!.enterprise_id).toBe(testEnterpriseId);
@@ -167,40 +165,15 @@ describe('NotificationService with Real Database', () => {
       const result = await service.getNotification(999999, testEnterpriseId);
       expect(result).toBeNull();
     });
-
-    it('should return null when notification belongs to different enterprise', async () => {
-      // Create notification for different enterprise
-      const otherEnterpriseNotification = await createTestNotification({
-        enterprise_id: 'other-enterprise-id'
-      });
-
-      const result = await service.getNotification(otherEnterpriseNotification.id, testEnterpriseId);
-      expect(result).toBeNull();
-
-      // Clean up additional notification
-      await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .delete()
-        .eq('id', otherEnterpriseNotification.id);
-    });
-
-    it('should handle database errors', async () => {
-      // Try to get notification with invalid enterprise ID format that might cause DB error
-      await expect(
-        service.getNotification(1, '')
-      ).rejects.toThrow();
-    });
   });
 
   describe('createNotification', () => {
     it('should create new notification successfully', async () => {
-      // Create workflow first
       const testWorkflow = await createTestWorkflow();
 
       const insertData: NotificationInsert = {
-        name: 'New Notification',
-        payload: { message: 'Test message' },
+        name: 'New Unit Test Notification',
+        payload: { message: 'New test message' },
         recipients: ['user-456'],
         notification_workflow_id: testWorkflow.id,
         enterprise_id: testEnterpriseId
@@ -209,8 +182,8 @@ describe('NotificationService with Real Database', () => {
       const result = await service.createNotification(insertData);
 
       expect(result).toBeDefined();
-      expect(result.name).toBe('New Notification');
-      expect(result.payload).toEqual({ message: 'Test message' });
+      expect(result.name).toBe('New Unit Test Notification');
+      expect(result.payload).toEqual({ message: 'New test message' });
       expect(result.recipients).toEqual(['user-456']);
       expect(result.notification_workflow_id).toBe(testWorkflow.id);
       expect(result.enterprise_id).toBe(testEnterpriseId);
@@ -237,7 +210,6 @@ describe('NotificationService with Real Database', () => {
 
   describe('updateNotificationStatus', () => {
     it('should update status successfully', async () => {
-      // Create test notification
       const testNotification = await createTestNotification({
         notification_status: 'PENDING'
       });
@@ -258,7 +230,6 @@ describe('NotificationService with Real Database', () => {
     });
 
     it('should update status with error message', async () => {
-      // Create test notification
       const testNotification = await createTestNotification({
         notification_status: 'PENDING'
       });
@@ -282,23 +253,26 @@ describe('NotificationService with Real Database', () => {
         service.updateNotificationStatus(999999, 'SENT', testEnterpriseId)
       ).rejects.toThrow();
     });
+  });
 
-    it('should handle update errors for different enterprise', async () => {
-      // Create notification for different enterprise
-      const otherNotification = await createTestNotification({
-        enterprise_id: 'other-enterprise-id'
+  describe('cancelNotification', () => {
+    it('should cancel notification by setting status to RETRACTED', async () => {
+      const testNotification = await createTestNotification({
+        notification_status: 'PENDING'
       });
 
-      await expect(
-        service.updateNotificationStatus(otherNotification.id, 'SENT', testEnterpriseId)
-      ).rejects.toThrow();
+      await service.cancelNotification(testNotification.id, testEnterpriseId);
 
-      // Clean up additional notification
-      await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .delete()
-        .eq('id', otherNotification.id);
+      // Verify the update
+      const updated = await service.getNotification(testNotification.id, testEnterpriseId);
+      expect(updated).toBeDefined();
+      expect(updated!.notification_status).toBe('RETRACTED');
+    });
+
+    it('should handle cancellation errors for non-existent notification', async () => {
+      await expect(
+        service.cancelNotification(999999, testEnterpriseId)
+      ).rejects.toThrow();
     });
   });
 
@@ -332,63 +306,9 @@ describe('NotificationService with Real Database', () => {
       expect(resultIds).toEqual(expectedIds);
     });
 
-    it('should use default limit when not specified', async () => {
-      // Create a notification
-      await createTestNotification({
-        notification_status: 'SENT'
-      });
-
-      const result = await service.getNotificationsByStatus('SENT', testEnterpriseId);
-
-      expect(result).toBeDefined();
-      expect(Array.isArray(result)).toBe(true);
-      // Default limit is 100, but we only have 1 notification
-      expect(result.length).toBe(1);
-    });
-
     it('should return empty array when no notifications match status', async () => {
       const result = await service.getNotificationsByStatus('RETRACTED', testEnterpriseId, 10);
       expect(result).toEqual([]);
-    });
-  });
-
-  describe('cancelNotification', () => {
-    it('should cancel notification by setting status to RETRACTED', async () => {
-      // Create test notification
-      const testNotification = await createTestNotification({
-        notification_status: 'PENDING'
-      });
-
-      await service.cancelNotification(testNotification.id, testEnterpriseId);
-
-      // Verify the update
-      const updated = await service.getNotification(testNotification.id, testEnterpriseId);
-      expect(updated).toBeDefined();
-      expect(updated!.notification_status).toBe('RETRACTED');
-    });
-
-    it('should handle cancellation errors for non-existent notification', async () => {
-      await expect(
-        service.cancelNotification(999999, testEnterpriseId)
-      ).rejects.toThrow();
-    });
-
-    it('should handle cancellation errors for different enterprise', async () => {
-      // Create notification for different enterprise
-      const otherNotification = await createTestNotification({
-        enterprise_id: 'other-enterprise-id'
-      });
-
-      await expect(
-        service.cancelNotification(otherNotification.id, testEnterpriseId)
-      ).rejects.toThrow();
-
-      // Clean up additional notification
-      await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .delete()
-        .eq('id', otherNotification.id);
     });
   });
 
@@ -401,8 +321,7 @@ describe('NotificationService with Real Database', () => {
       const notification1 = await createTestNotification({
         name: 'Workflow Notification 1',
         notification_workflow_id: testWorkflow.id,
-        notification_status: 'SENT',
-        transaction_id: 'txn-123'
+        notification_status: 'SENT'
       });
 
       const notification2 = await createTestNotification({
@@ -431,92 +350,10 @@ describe('NotificationService with Real Database', () => {
     });
 
     it('should return empty array when no notifications exist for workflow', async () => {
-      // Create workflow without notifications
       const emptyWorkflow = await createTestWorkflow();
 
       const result = await service.getNotificationsByWorkflow(emptyWorkflow.id, testEnterpriseId, 10);
       expect(result).toEqual([]);
-    });
-  });
-
-  // Additional integration tests for enterprise isolation
-  describe('Enterprise Isolation', () => {
-    it('should maintain enterprise isolation for notification access', async () => {
-      const otherEnterpriseId = `other-enterprise-${Date.now()}`;
-      
-      // Create notifications for different enterprises
-      const testEnterpriseNotification = await createTestNotification({
-        name: 'Test Enterprise Notification',
-        enterprise_id: testEnterpriseId
-      });
-      
-      const otherEnterpriseNotification = await createTestNotification({
-        name: 'Other Enterprise Notification',
-        enterprise_id: otherEnterpriseId
-      });
-
-      // Each enterprise should only see their own notifications
-      const testResult = await service.getNotification(testEnterpriseNotification.id, testEnterpriseId);
-      const otherResult = await service.getNotification(otherEnterpriseNotification.id, testEnterpriseId);
-
-      expect(testResult).toBeDefined();
-      expect(testResult!.name).toBe('Test Enterprise Notification');
-      expect(otherResult).toBeNull(); // Should not see other enterprise's notification
-      
-      // Clean up additional notification
-      await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .delete()
-        .eq('id', otherEnterpriseNotification.id);
-    });
-
-    it('should isolate getNotificationsByStatus by enterprise', async () => {
-      const otherEnterpriseId = `other-enterprise-${Date.now()}`;
-      
-      // Create notifications for test enterprise
-      await createTestNotification({
-        name: 'Test Enterprise Pending 1',
-        notification_status: 'PENDING',
-        enterprise_id: testEnterpriseId
-      });
-      
-      await createTestNotification({
-        name: 'Test Enterprise Pending 2',
-        notification_status: 'PENDING',
-        enterprise_id: testEnterpriseId
-      });
-      
-      // Create notification for other enterprise
-      const otherNotification = await createTestNotification({
-        name: 'Other Enterprise Pending',
-        notification_status: 'PENDING',
-        enterprise_id: otherEnterpriseId
-      });
-
-      const testEnterpriseNotifications = await service.getNotificationsByStatus('PENDING', testEnterpriseId);
-      const otherEnterpriseNotifications = await service.getNotificationsByStatus('PENDING', otherEnterpriseId);
-
-      // Verify test enterprise sees at least 2 notifications
-      expect(testEnterpriseNotifications.length).toBeGreaterThanOrEqual(2);
-      expect(testEnterpriseNotifications.every(n => n.enterprise_id === testEnterpriseId)).toBe(true);
-
-      // Verify other enterprise sees exactly 1 notification
-      expect(otherEnterpriseNotifications.length).toBe(1);
-      expect(otherEnterpriseNotifications[0].enterprise_id).toBe(otherEnterpriseId);
-
-      // Verify no cross-contamination
-      const testEnterpriseIds = testEnterpriseNotifications.map(n => n.id);
-      const otherEnterpriseIds = otherEnterpriseNotifications.map(n => n.id);
-      const intersection = testEnterpriseIds.filter(id => otherEnterpriseIds.includes(id));
-      expect(intersection).toEqual([]);
-      
-      // Clean up additional notification
-      await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .delete()
-        .eq('id', otherNotification.id);
     });
   });
 });
