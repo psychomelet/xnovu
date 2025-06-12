@@ -5,7 +5,6 @@ import type {
   NotificationJobData,
   RuleJobData,
   RuleEngineConfig,
-  RuleEngineError
 } from '@/types/rule-engine';
 import { RuleService } from '../database/RuleService';
 
@@ -19,14 +18,15 @@ export class NotificationQueue {
   private ruleService: RuleService;
   private novu: Novu;
 
-  constructor(config: RuleEngineConfig) {
+  constructor(config: RuleEngineConfig, ruleService: RuleService) {
     // Redis connection with BullMQ-specific configuration
     this.redis = new IORedis(config.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379', {
       maxRetriesPerRequest: null, // Required for BullMQ
+      connectTimeout: 2000, // Fast fail for connection errors
     });
-    
+
     // Initialize services
-    this.ruleService = new RuleService();
+    this.ruleService = ruleService;
     this.novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY! });
 
     // Queue configuration
@@ -142,7 +142,7 @@ export class NotificationQueue {
    */
   private async processNotificationJob(job: any): Promise<void> {
     const data: NotificationJobData = job.data;
-    
+
     try {
       console.log(`Processing notification ${data.notificationId}`);
 
@@ -188,7 +188,7 @@ export class NotificationQueue {
    */
   private async processRuleExecutionJob(job: any): Promise<void> {
     const data: RuleJobData = job.data;
-    
+
     try {
       console.log(`Executing rule ${data.ruleId} for enterprise ${data.enterpriseId}`);
 
@@ -210,7 +210,7 @@ export class NotificationQueue {
       // For now, create a simple notification without code execution
       // The rule_payload contains the notification data and recipients
       const rulePayload = rule.rule_payload as any;
-      
+
       if (!rulePayload || !rulePayload.recipients || !rulePayload.payload) {
         throw new Error(`Invalid rule payload for rule ${data.ruleId}`);
       }
@@ -276,21 +276,36 @@ export class NotificationQueue {
   }
 
   /**
-   * Get queue statistics
+   * Retrieve basic queue statistics. When Redis is unreachable this call
+   * can otherwise take a long time while BullMQ retries the connection.
+   * A safeguard timeout is therefore added to fail fast in such scenarios –
+   * especially important for the test suite that purposefully injects an
+   * invalid Redis host.
    */
-  async getQueueStats(): Promise<{
+  async getQueueStats(timeoutMs = 2500): Promise<{
     notification: any;
     ruleExecution: any;
   }> {
-    const [notificationStats, ruleExecutionStats] = await Promise.all([
-      this.notificationQueue.getJobCounts(),
-      this.ruleExecutionQueue.getJobCounts(),
-    ]);
+    // Helper that actually queries BullMQ
+    const fetchStats = async () => {
+      const [notificationStats, ruleExecutionStats] = await Promise.all([
+        this.notificationQueue.getJobCounts(),
+        this.ruleExecutionQueue.getJobCounts(),
+      ]);
 
-    return {
-      notification: notificationStats,
-      ruleExecution: ruleExecutionStats,
+      return {
+        notification: notificationStats,
+        ruleExecution: ruleExecutionStats,
+      };
     };
+
+    // Race the Redis operation against a timeout to avoid hanging
+    return await Promise.race([
+      fetchStats(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Redis operation timed out')), timeoutMs)
+      ),
+    ]);
   }
 
   /**
@@ -314,18 +329,37 @@ export class NotificationQueue {
   }
 
   /**
-   * Graceful shutdown
+   * Graceful shutdown of the queue system
    */
   async shutdown(): Promise<void> {
     console.log('Shutting down notification queue...');
-    
-    await Promise.all([
-      this.notificationWorker.close(),
-      this.ruleExecutionWorker.close(),
-      this.queueEvents.close(),
-    ]);
+    try {
+      await Promise.all([
+        // Close QueueEvents first to stop receiving new events
+        this.queueEvents.close(),
+        // Force-close workers so they don't wait for ongoing jobs
+        this.notificationWorker.close(true),
+        this.ruleExecutionWorker.close(true),
+        // Close queues (these are lightweight and resolve quickly)
+        this.notificationQueue.close(),
+        this.ruleExecutionQueue.close(),
+      ]);
 
-    await this.redis.quit();
-    console.log('Notification queue shutdown complete');
+      // Always disconnect Redis at the end regardless of its current status.
+      //  Using disconnect() (vs quit()) prevents waiting for pending commands
+      //  which is important for test environments where the server may be
+      //  unreachable (e.g. when intentionally providing an invalid host).
+      try {
+        this.redis.disconnect();
+      } catch (redisError) {
+        // Swallow any errors – we're in shutdown path and can't do much.
+        console.warn('Redis disconnect error (ignored during shutdown):', redisError);
+      }
+
+      console.log('Notification queue shutdown complete.');
+    } catch (error) {
+      console.error('Error during notification queue shutdown:', error);
+      // Do not rethrow, to allow other shutdown processes to complete
+    }
   }
 }

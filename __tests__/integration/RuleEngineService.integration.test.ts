@@ -32,11 +32,18 @@ describe('RuleEngineService - Integration Tests', () => {
     if (ruleEngine) {
       try {
         await ruleEngine.shutdown();
+        // Give extra time for connections to fully close
+        await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         // Ignore shutdown errors in tests
       }
       (RuleEngineService as any).instance = null;
     }
+  });
+
+  afterAll(async () => {
+    // Final cleanup to ensure all handles are closed
+    await new Promise(resolve => setTimeout(resolve, 200));
   });
 
   describe('basic functionality', () => {
@@ -105,7 +112,7 @@ describe('RuleEngineService - Integration Tests', () => {
       await expect(ruleEngine.reloadCronRules()).resolves.not.toThrow();
 
       // Test with specific enterprise ID
-      await expect(ruleEngine.reloadCronRules('test-enterprise-id')).resolves.not.toThrow();
+      await expect(ruleEngine.reloadCronRules('123e4567-e89b-12d3-a456-426614174000')).resolves.not.toThrow();
     }, 30000);
 
     it('should work with real API connections', async () => {

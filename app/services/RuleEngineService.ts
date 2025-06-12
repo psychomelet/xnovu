@@ -6,19 +6,19 @@ import { ScheduledNotificationManager } from './scheduler/ScheduledNotificationM
 
 export class RuleEngineService {
   private static instance: RuleEngineService | null = null;
-  
+
   public ruleService: RuleService;
   public notificationQueue: NotificationQueue;
   public cronManager: CronManager;
   public scheduledNotificationManager: ScheduledNotificationManager;
-  
+
   private isInitialized = false;
   private isShuttingDown = false;
 
   private constructor(config: RuleEngineConfig) {
     // Initialize services
     this.ruleService = new RuleService();
-    this.notificationQueue = new NotificationQueue(config);
+    this.notificationQueue = new NotificationQueue(config, this.ruleService);
     this.cronManager = new CronManager(
       this.ruleService,
       this.notificationQueue,
@@ -133,13 +133,13 @@ export class RuleEngineService {
     }
 
     console.log('Pausing RuleEngineService...');
-    
+
     // Pause queues
     await this.notificationQueue.pauseQueues();
-    
+
     // Stop scheduled notification manager
     this.scheduledNotificationManager.stop();
-    
+
     console.log('RuleEngineService paused');
   }
 
@@ -152,13 +152,13 @@ export class RuleEngineService {
     }
 
     console.log('Resuming RuleEngineService...');
-    
+
     // Resume queues
     await this.notificationQueue.resumeQueues();
-    
+
     // Start scheduled notification manager
     this.scheduledNotificationManager.start();
-    
+
     console.log('RuleEngineService resumed');
   }
 
@@ -183,6 +183,9 @@ export class RuleEngineService {
 
       // Shutdown notification queue
       await this.notificationQueue.shutdown();
+
+      // Shutdown rule service (closes database connections)
+      await this.ruleService.shutdown();
 
       this.isInitialized = false;
       RuleEngineService.instance = null;
