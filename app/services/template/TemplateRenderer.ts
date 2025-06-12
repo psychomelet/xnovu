@@ -292,6 +292,30 @@ export class TemplateRenderer {
   }
 
   /**
+   * Render a template by ID with variables
+   */
+  async renderTemplate(
+    templateId: string,
+    enterpriseId: string,
+    variables: Record<string, any>
+  ): Promise<{ subject?: string; body: string }> {
+    const template = await this.loadTemplate(templateId, enterpriseId);
+    
+    const context: TemplateContext = {
+      enterpriseId,
+      variables
+    };
+
+    const subject = template.subject_template
+      ? await this.render(template.subject_template, context)
+      : undefined;
+
+    const body = await this.render(template.body_template, context);
+
+    return { subject, body };
+  }
+
+  /**
    * Validate template syntax without rendering
    */
   async validateTemplate(

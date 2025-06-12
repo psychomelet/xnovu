@@ -22,7 +22,7 @@
 **Run:** First (fail fast on misconfiguration)
 
 ### 2. Unit Tests (`pnpm test:unit`)
-**Location:** All tests except `services/` and `integration/`
+**Location:** `__tests__/unit/`
 **Purpose:** Business logic validation with real services
 **Run:** After connection tests pass
 

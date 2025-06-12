@@ -9,7 +9,7 @@
     "lint": "next lint",
     "test": "bash scripts/test-setup.sh && jest",
     "test:connections": "jest __tests__/services/",
-    "test:unit": "bash scripts/test-setup.sh && jest --testPathIgnorePatterns='(services|integration)' && bash scripts/test-teardown.sh",
+    "test:unit": "bash scripts/test-setup.sh && jest __tests__/unit/ && bash scripts/test-teardown.sh",
     "test:integration": "bash scripts/test-setup.sh && jest __tests__/integration/ && bash scripts/test-teardown.sh",
     "test:watch": "bash scripts/test-setup.sh && jest --watch",
     "test:coverage": "jest --coverage",
@@ -21,10 +21,10 @@
     "xnovu": "tsx cli/index.ts"
   },
   "dependencies": {
+    "@novu/api": "^1.0.0",
     "@novu/framework": "latest",
     "@novu/js": "^3.5.0",
     "@novu/nextjs": "^2.6.6",
-    "@novu/api": "^1.0.0",
     "@react-email/components": "^0.0.41",
     "@react-email/tailwind": "^1.0.5",
     "@supabase/supabase-js": "^2.50.0",
@@ -47,6 +47,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/react": "19.1.7",
     "@types/react-dom": "19.1.6",
+    "@types/uuid": "^10.0.0",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "eslint": "^9.28.0",
@@ -57,7 +58,8 @@
     "supabase": "^2.24.3",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "uuid": "^11.1.0"
   },
   "overrides": {
     "@types/react": "19.1.7",

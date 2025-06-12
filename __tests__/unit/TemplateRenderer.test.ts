@@ -1,6 +1,4 @@
-import { TemplateRenderer } from '../../app/services/template/TemplateRenderer';
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '@/lib/supabase/database.types';
+import { TemplateRenderer } from '@/app/services/template/TemplateRenderer';
 
 describe('TemplateRenderer', () => {
   let renderer: TemplateRenderer;

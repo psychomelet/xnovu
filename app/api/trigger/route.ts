@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { welcomeOnboardingEmail, yogoEmail } from "../../novu/workflows";
-
-const workflows = {
-  "welcome-onboarding-email": welcomeOnboardingEmail,
-  "yogo-email": yogoEmail,
-};
+import { workflowLoader } from "../../services/workflow";
+import { notificationService } from "../../services/database";
 
 export async function POST(request: NextRequest) {
   const secretKey = process.env.NOVU_SECRET_KEY;
@@ -33,7 +29,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { workflowId, payload = {} } = body;
+    const { 
+      workflowId, 
+      payload = {}, 
+      enterpriseId,
+      subscriberId: customSubscriberId,
+      notificationId 
+    } = body;
 
     if (!workflowId) {
       return NextResponse.json(
@@ -44,24 +46,74 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const workflow = workflows[workflowId as keyof typeof workflows];
+    // Load enterprise workflows if enterpriseId is provided
+    if (enterpriseId) {
+      await workflowLoader.loadEnterpriseWorkflows(enterpriseId);
+    }
+
+    // Get workflow from registry
+    const workflow = workflowLoader.getWorkflow(workflowId, enterpriseId);
     if (!workflow) {
+      const stats = workflowLoader.getStats();
       return NextResponse.json(
         {
-          message: `Workflow '${workflowId}' not found. Available workflows: ${Object.keys(workflows).join(', ')}`,
+          message: `Workflow '${workflowId}' not found${enterpriseId ? ` for enterprise '${enterpriseId}'` : ''}`,
+          available: {
+            total: stats.total,
+            static: stats.static,
+            dynamic: stats.dynamic
+          }
         },
         { status: 404 }
       );
     }
 
+    // Determine subscriber ID
+    const targetSubscriberId = customSubscriberId || subscriberId;
+
+    // Prepare enhanced payload
+    const enhancedPayload = {
+      ...payload,
+      notificationId,
+      enterprise_id: enterpriseId,
+      subscriberId: targetSubscriberId,
+      timestamp: new Date().toISOString()
+    };
+
+    // Update notification status to PENDING if notificationId is provided
+    if (notificationId && enterpriseId) {
+      const parsedNotificationId = typeof notificationId === 'string' ? parseInt(notificationId) : notificationId;
+      await notificationService.updateNotificationStatus(
+        parsedNotificationId,
+        'PENDING',
+        enterpriseId
+      );
+    }
+
+    // Trigger the workflow
     const result = await workflow.trigger({
-      to: subscriberId,
-      payload,
+      to: targetSubscriberId,
+      payload: enhancedPayload,
     });
+
+    // Store transaction ID if available
+    if (result?.transactionId && notificationId && enterpriseId) {
+      const parsedNotificationId = typeof notificationId === 'string' ? parseInt(notificationId) : notificationId;
+      await notificationService.updateNotificationStatus(
+        parsedNotificationId,
+        'PROCESSING',
+        enterpriseId,
+        undefined,
+        result.transactionId
+      );
+    }
 
     return NextResponse.json({
       message: "Notification triggered successfully",
       workflowId,
+      enterpriseId,
+      notificationId,
+      transactionId: result?.transactionId,
       result: result,
     });
   } catch (error: unknown) {
