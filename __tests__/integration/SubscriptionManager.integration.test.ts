@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { SubscriptionManager } from '../../app/services/realtime/SubscriptionManager'
+import { SubscriptionManager } from '@/app/services/realtime/SubscriptionManager'
 
 const mockNotification = {
   id: 1,
