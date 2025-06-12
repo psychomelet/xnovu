@@ -5,12 +5,8 @@ describe('Novu API Connection', () => {
   const novuAppId = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER;
 
   // Validate credentials are real (not test defaults)
-  const hasRealCredentials = novuSecretKey &&
-    !novuSecretKey.includes('test-secret-key') &&
-    novuSecretKey.length > 20;
-
   beforeEach(() => {
-    if (!hasRealCredentials) {
+    if (!novuSecretKey || novuSecretKey.includes('test-secret-key') || novuSecretKey.length <= 20) {
       throw new Error('Novu connection tests require real credentials. Set NOVU_SECRET_KEY in your environment.');
     }
   });

@@ -7,19 +7,14 @@ describe('TemplateRenderer', () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
   
-  // Check if we have real credentials (not test defaults)
-  const hasRealCredentials = supabaseUrl && 
-    supabaseServiceKey && 
-    supabaseUrl.includes('supabase.co') && 
-    supabaseServiceKey.length > 50;
+  // Validate credentials for tests that require real API
 
   beforeEach(() => {
-    if (hasRealCredentials) {
-      renderer = new TemplateRenderer(supabaseUrl, supabaseServiceKey);
-    } else {
-      // Use test defaults for unit tests that don't require real DB
-      renderer = new TemplateRenderer('http://localhost:54321', 'test-key');
-    }
+    // Always use provided credentials or fail if they're missing
+    renderer = new TemplateRenderer(
+      supabaseUrl || 'http://localhost:54321',
+      supabaseServiceKey || 'test-key'
+    );
   });
 
   afterEach(() => {
@@ -188,9 +183,8 @@ describe('TemplateRenderer', () => {
     });
 
     it('should handle template with xnovu_render calls', async () => {
-      if (!hasRealCredentials) {
-        console.log('⚠️  Skipping xnovu_render test - no real credentials configured');
-        return;
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
+        throw new Error('Real Supabase credentials required for xnovu_render tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
       // This test would need a real template in the database
@@ -206,9 +200,8 @@ describe('TemplateRenderer', () => {
     });
 
     it('should handle template loading errors gracefully', async () => {
-      if (!hasRealCredentials) {
-        console.log('⚠️  Skipping template error test - no real credentials configured');
-        return;
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
+        throw new Error('Real Supabase credentials required for template error tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
       const template = 'Before {{ xnovu_render("nonexistent-key", {}) }} After';
@@ -224,9 +217,8 @@ describe('TemplateRenderer', () => {
 
   describe('validateTemplate', () => {
     it('should validate template with valid syntax', async () => {
-      if (!hasRealCredentials) {
-        console.log('⚠️  Skipping template validation test - no real credentials configured');
-        return;
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
+        throw new Error('Real Supabase credentials required for template validation tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
       const template = 'Hello {{ name }}! Basic template validation.';
@@ -237,9 +229,8 @@ describe('TemplateRenderer', () => {
     });
 
     it('should detect invalid template references', async () => {
-      if (!hasRealCredentials) {
-        console.log('⚠️  Skipping invalid template test - no real credentials configured');
-        return;
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
+        throw new Error('Real Supabase credentials required for invalid template tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY environment variables.');
       }
 
       const template = 'Hello {{ xnovu_render("nonexistent-key", {}) }}';
@@ -260,10 +251,7 @@ describe('TemplateRenderer', () => {
 
   describe('cache management', () => {
     it('should cache loaded templates', async () => {
-      if (!hasRealCredentials) {
-        console.log('⚠️  Skipping cache test - no real credentials configured');
-        return;
-      }
+      // This test doesn't require real credentials as it tests internal cache functionality
 
       // Test basic caching functionality without requiring specific templates
       const initialCacheStats = renderer.getCacheStats();

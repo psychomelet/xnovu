@@ -6,9 +6,7 @@
 import { RuleEngineService } from '@/app/services/RuleEngineService';
 import type { RuleEngineConfig } from '@/types/rule-engine';
 
-// Skip these tests if Redis is not available
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const SKIP_INTEGRATION_TESTS = !process.env.CI && !process.env.REDIS_URL;
 
 const testConfig: RuleEngineConfig = {
   redisUrl: REDIS_URL,
@@ -19,10 +17,9 @@ const testConfig: RuleEngineConfig = {
 };
 
 describe('Rule Engine Integration Tests', () => {
-  // Skip if Redis is not available
   beforeAll(() => {
-    if (SKIP_INTEGRATION_TESTS) {
-      console.log('⏭️ Skipping integration tests - Redis not available');
+    if (!process.env.REDIS_URL && !process.env.CI) {
+      throw new Error('Redis URL required for integration tests. Set REDIS_URL environment variable or run in CI environment.');
     }
   });
 
@@ -42,7 +39,7 @@ describe('Rule Engine Integration Tests', () => {
   });
 
   describe('Redis Integration', () => {
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should connect to Redis and initialize successfully', async () => {
+    it('should connect to Redis and initialize successfully', async () => {
       // This test only runs in CI or when Redis is explicitly available
       ruleEngine = RuleEngineService.getInstance(testConfig);
       
@@ -52,7 +49,7 @@ describe('Rule Engine Integration Tests', () => {
       expect(status.initialized).toBe(true);
     }, 10000);
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should perform health check with Redis', async () => {
+    it('should perform health check with Redis', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
@@ -61,7 +58,7 @@ describe('Rule Engine Integration Tests', () => {
       expect(health.details.initialized).toBe(true);
     }, 10000);
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should handle queue operations with Redis', async () => {
+    it('should handle queue operations with Redis', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
@@ -74,7 +71,7 @@ describe('Rule Engine Integration Tests', () => {
       expect(typeof stats.ruleExecution).toBe('object');
     }, 10000);
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should pause and resume with Redis', async () => {
+    it('should pause and resume with Redis', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
@@ -88,7 +85,7 @@ describe('Rule Engine Integration Tests', () => {
       expect(status.initialized).toBe(true);
     }, 10000);
 
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should reload cron rules', async () => {
+    it('should reload cron rules', async () => {
       ruleEngine = RuleEngineService.getInstance(testConfig);
       await ruleEngine.initialize();
       
@@ -99,7 +96,7 @@ describe('Rule Engine Integration Tests', () => {
   });
 
   describe('Error Handling', () => {
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should handle Redis connection errors gracefully', async () => {
+    it('should handle Redis connection errors gracefully', async () => {
       // Test with invalid Redis URL
       const badConfig = {
         ...testConfig,
@@ -117,7 +114,7 @@ describe('Rule Engine Integration Tests', () => {
   });
 
   describe('Performance', () => {
-    (SKIP_INTEGRATION_TESTS ? it.skip : it)('should initialize within reasonable time', async () => {
+    it('should initialize within reasonable time', async () => {
       const startTime = Date.now();
       
       ruleEngine = RuleEngineService.getInstance(testConfig);

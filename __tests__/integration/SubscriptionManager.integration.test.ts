@@ -20,17 +20,17 @@ const mockNotification = {
 }
 
 describe('SubscriptionManager Integration', () => {
-  const hasRealCredentials = process.env.NEXT_PUBLIC_SUPABASE_URL && 
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY && 
-    process.env.NEXT_PUBLIC_SUPABASE_URL.includes('supabase.co') && 
-    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY.length > 50 &&
-    process.env.NOVU_SECRET_KEY &&
-    !process.env.NOVU_SECRET_KEY.includes('test-secret-key') &&
-    process.env.NOVU_SECRET_KEY.length > 20
-
   beforeEach(() => {
-    if (!hasRealCredentials) {
-      throw new Error('Integration tests require real credentials. Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY, and NOVU_SECRET_KEY')
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+    const novuSecretKey = process.env.NOVU_SECRET_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
+      throw new Error('Integration tests require real Supabase credentials. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
+    }
+
+    if (!novuSecretKey || novuSecretKey.includes('test-secret-key') || novuSecretKey.length <= 20) {
+      throw new Error('Integration tests require real Novu credentials. Set NOVU_SECRET_KEY');
     }
   })
 

@@ -11,14 +11,7 @@ describe('RuleEngineService - Integration Tests', () => {
   const novuSecretKey = process.env.NOVU_SECRET_KEY || '';
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
   
-  // Check if we have real credentials
-  const hasRealCredentials = supabaseUrl && 
-    supabaseServiceKey && 
-    supabaseUrl.includes('supabase.co') && 
-    supabaseServiceKey.length > 50 &&
-    novuSecretKey &&
-    !novuSecretKey.includes('test-secret-key') &&
-    novuSecretKey.length > 20;
+  // Credentials will be validated in tests that require them
 
   const testConfig: RuleEngineConfig = {
     ...defaultRuleEngineConfig,
@@ -81,10 +74,11 @@ describe('RuleEngineService - Integration Tests', () => {
     }, 15000); // Longer timeout for Redis operations
 
     it('should work with real API connections when available', async () => {
-      if (!hasRealCredentials) {
-        console.log('⚠️  Skipping real API test - no real credentials configured');
-        console.log('   To run these tests, set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY, and NOVU_SECRET_KEY');
-        return;
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
+        throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
+      }
+      if (!novuSecretKey || novuSecretKey.includes('test-secret-key') || novuSecretKey.length <= 20) {
+        throw new Error('Real Novu credentials required. Set NOVU_SECRET_KEY');
       }
 
       // Test that real API clients can be created
