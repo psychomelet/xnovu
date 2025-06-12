@@ -1,4 +1,4 @@
-import { TemplateRenderer } from '../app/services/template/TemplateRenderer';
+import { TemplateRenderer } from '../../app/services/template/TemplateRenderer';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 

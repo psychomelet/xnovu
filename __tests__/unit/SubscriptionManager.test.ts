@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { SubscriptionManager } from '../app/services/realtime/SubscriptionManager'
+import { SubscriptionManager } from '../../app/services/realtime/SubscriptionManager'
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
