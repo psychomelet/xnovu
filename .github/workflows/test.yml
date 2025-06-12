@@ -72,8 +72,8 @@ jobs:
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
 
-    - name: Run connection integration tests
-      run: pnpm test -- __tests__/services/
+    - name: Run connection tests
+      run: pnpm test:connections
       env:
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
@@ -82,8 +82,8 @@ jobs:
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
 
-    - name: Run tests
-      run: pnpm test
+    - name: Run all tests
+      run: pnpm test:ci
       env:
         CI: true
         REDIS_URL: redis://localhost:6379

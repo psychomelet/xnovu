@@ -7,13 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest --testPathIgnorePatterns='.*integration.*'",
+    "test": "bash scripts/test-setup.sh && jest",
+    "test:connections": "jest __tests__/services/",
+    "test:unit": "jest --testPathIgnorePatterns='(services|integration)'",
+    "test:integration": "jest __tests__/integration/",
     "test:watch": "bash scripts/test-setup.sh && jest --watch",
     "test:coverage": "bash scripts/test-setup.sh && jest --coverage && bash scripts/test-teardown.sh",
-    "test:integration": "bash scripts/test-setup.sh && jest --testPathPatterns='.*integration.*' && bash scripts/test-teardown.sh",
     "test:setup": "bash scripts/test-setup.sh",
     "test:teardown": "bash scripts/test-teardown.sh",
-    "test:only": "jest",
+    "test:ci": "pnpm test:connections && pnpm test:unit && pnpm test:integration",
     "xnovu": "tsx cli/index.ts"
   },
   "dependencies": {
