@@ -44,7 +44,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
   // Check if we have real credentials
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const hasRealCredentials = supabaseUrl && 
     supabaseServiceKey && 
     supabaseUrl.includes('supabase.co') && 
@@ -52,7 +52,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
   beforeAll(async () => {
     if (!hasRealCredentials) {
-      throw new Error('Real Supabase credentials required for DynamicWorkflowFactory integration tests. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY');
+      throw new Error('Real Supabase credentials required for DynamicWorkflowFactory integration tests. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     }
 
     supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
@@ -127,7 +127,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
   async function createTestWorkflow(overrides: Partial<WorkflowInsert> = {}): Promise<WorkflowRow> {
     const defaultWorkflow: WorkflowInsert = {
-      name: 'Test Workflow',
+      name: `Test Workflow ${Date.now()}-${Math.random().toString(36).substring(7)}`,
       workflow_key: `test-workflow-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       workflow_type: 'DYNAMIC',
       default_channels: ['EMAIL'],
@@ -156,7 +156,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
     }
 
     const defaultNotification: NotificationInsert = {
-      name: 'Test Notification',
+      name: `Test Notification ${Date.now()}-${Math.random().toString(36).substring(7)}`,
       payload: { message: 'Test message' },
       recipients: [testUserId],
       notification_workflow_id: workflowId,
@@ -197,9 +197,12 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       // Get the step function that was passed to workflow()
       const stepFunction = mockWorkflow.mock.calls[0][1];
 
-      // Mock step object
+      // Mock step object that actually calls the step function
       const mockStep = {
-        email: jest.fn().mockResolvedValue({ success: true })
+        email: jest.fn().mockImplementation(async (stepId, stepFunc) => {
+          const result = await stepFunc();
+          return { success: true, ...result };
+        })
       };
 
       // Mock payload
@@ -256,9 +259,12 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       // Get the step function
       const stepFunction = mockWorkflow.mock.calls[0][1];
 
-      // Mock step object
+      // Mock step object that executes the step function
       const mockStep = {
-        email: jest.fn()
+        email: jest.fn().mockImplementation(async (stepId, stepFunc) => {
+          const result = await stepFunc();
+          return { success: true, ...result };
+        })
       };
 
       const payload = {
@@ -302,8 +308,14 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Mock successful step execution
       const mockStep = {
-        email: jest.fn().mockResolvedValue({ success: true }),
-        inApp: jest.fn().mockResolvedValue({ success: true })
+        email: jest.fn().mockImplementation(async (stepId, stepFunc) => {
+          const result = await stepFunc();
+          return { success: true, ...result };
+        }),
+        inApp: jest.fn().mockImplementation(async (stepId, stepFunc) => {
+          const result = await stepFunc();
+          return { success: true, ...result };
+        })
       };
 
       // Execute workflow for email notification
@@ -363,8 +375,14 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       const stepFunction = mockWorkflow.mock.calls[0][1];
 
       const mockStep = {
-        email: jest.fn().mockResolvedValue({ success: true }),
-        sms: jest.fn().mockResolvedValue({ success: true })
+        email: jest.fn().mockImplementation(async (stepId, stepFunc) => {
+          const result = await stepFunc();
+          return { success: true, ...result };
+        }),
+        sms: jest.fn().mockImplementation(async (stepId, stepFunc) => {
+          const result = await stepFunc();
+          return { success: true, ...result };
+        })
       };
 
       // Execute workflow - should fail on SMS template rendering
