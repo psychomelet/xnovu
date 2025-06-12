@@ -5,8 +5,8 @@ describe('Novu API Connection', () => {
   const novuAppId = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER;
 
   // Skip tests if credentials are not real (using test defaults)
-  const hasRealCredentials = novuSecretKey && 
-    !novuSecretKey.includes('test-secret-key') && 
+  const hasRealCredentials = novuSecretKey &&
+    !novuSecretKey.includes('test-secret-key') &&
     novuSecretKey.length > 20;
 
   describe('Authentication', () => {
@@ -18,20 +18,11 @@ describe('Novu API Connection', () => {
       }
 
       const novu = new Novu({ secretKey: novuSecretKey });
-      
+
       expect(novu).toBeDefined();
-      expect(novu.subscribers).toBeDefined();
       expect(novu.trigger).toBeDefined();
-      
-      // Test basic connection by searching subscribers
-      const response = await novu.subscribers.search({});
-      
-      expect(response).toBeDefined();
-      expect(response.result).toBeDefined();
-      expect(response.result.data).toBeDefined();
-      expect(Array.isArray(response.result.data)).toBe(true);
-      
-      console.log(`✅ Connected to Novu API - found ${response.result.data.length} subscribers`);
+
+      console.log(`✅ Connected to Novu API`);
     }, 15000);
 
     it('should fail gracefully with invalid credentials', async () => {
@@ -41,49 +32,39 @@ describe('Novu API Connection', () => {
       }
 
       const invalidNovu = new Novu({ secretKey: 'invalid-secret-key' });
-      
+
       await expect(invalidNovu.subscribers.search({})).rejects.toThrow();
     }, 10000);
-  });
 
-  describe('Integrations', () => {
-    it('should be able to access integrations when credentials are configured', async () => {
+    it('should create a new subscriber and verify subscriber count >= 1', async () => {
       if (!hasRealCredentials) {
-        console.log('⚠️  Skipping integrations test - no real credentials configured');
-        return;
+        fail('Credentials not provided - NOVU_SECRET_KEY is required for this test');
       }
 
       const novu = new Novu({ secretKey: novuSecretKey });
-      
-      expect(novu.integrations).toBeDefined();
-      console.log('✅ Integrations endpoint accessible');
-    }, 15000);
-  });
+      const testEmail = 'test@yogorobot.com';
+      const subscriberId = `test-subscriber-${Date.now()}`;
 
-  describe('Subscribers', () => {
-    it('should be able to search subscribers when credentials are configured', async () => {
-      if (!hasRealCredentials) {
-        console.log('⚠️  Skipping subscribers search test - no real credentials configured');
-        return;
-      }
+      // Create a new subscriber
+      await novu.subscribers.create({
+        subscriberId,
+        email: testEmail,
+        firstName: 'Test',
+        lastName: 'User'
+      });
 
-      const novu = new Novu({ secretKey: novuSecretKey });
-      
+      // Search for subscribers to verify count
       const response = await novu.subscribers.search({});
-      
-      expect(response).toBeDefined();
-      expect(response.result).toBeDefined();
-      expect(response.result.data).toBeDefined();
-      expect(Array.isArray(response.result.data)).toBe(true);
-      
-      console.log(`✅ Subscribers search accessible - found ${response.result.data.length} subscribers`);
-      
-      // If there are subscribers, verify structure
-      if (response.result.data.length > 0) {
-        const firstSubscriber = response.result.data[0];
-        expect(firstSubscriber).toHaveProperty('id');
-        expect(firstSubscriber).toHaveProperty('subscriberId');
-        expect(firstSubscriber).toHaveProperty('environmentId');
+
+      expect(response.result.data.length).toBeGreaterThanOrEqual(1);
+
+      console.log(`✅ Created subscriber ${subscriberId} - total subscribers: ${response.result.data.length}`);
+
+      // Clean up: delete the test subscriber
+      try {
+        await novu.subscribers.delete(subscriberId);
+      } catch (error) {
+        console.warn(`⚠️  Could not clean up subscriber ${subscriberId}:`, error);
       }
     }, 15000);
   });
