@@ -1,0 +1,95 @@
+# XNovu Production Docker Compose
+#
+# This file defines the production deployment configuration for XNovu.
+# Temporal is configured as an external service via environment variables.
+
+version: '3.8'
+
+services:
+  # XNovu Next.js Application
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    image: xnovu:latest
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      # Database
+      DATABASE_URL: ${DATABASE_URL}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Novu
+      NOVU_SECRET_KEY: ${NOVU_SECRET_KEY}
+      NEXT_PUBLIC_NOVU_APP_ID: ${NEXT_PUBLIC_NOVU_APP_ID}
+      NEXT_PUBLIC_NOVU_BACKEND_URL: ${NEXT_PUBLIC_NOVU_BACKEND_URL}
+      NEXT_PUBLIC_NOVU_SOCKET_URL: ${NEXT_PUBLIC_NOVU_SOCKET_URL}
+      # Temporal (External)
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-xnovu-notification-processing}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - xnovu
+
+  # XNovu Worker
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: xnovu:latest
+    restart: unless-stopped
+    command: ["pnpm", "xnovu", "worker", "start", "--enterprises", "${WORKER_ENTERPRISE_IDS}"]
+    ports:
+      - "${WORKER_HEALTH_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      # Database
+      DATABASE_URL: ${DATABASE_URL}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Novu
+      NOVU_SECRET_KEY: ${NOVU_SECRET_KEY}
+      # Temporal (External)
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-xnovu-notification-processing}
+      TEMPORAL_MAX_CONCURRENT_ACTIVITIES: ${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-100}
+      TEMPORAL_MAX_CONCURRENT_WORKFLOWS: ${TEMPORAL_MAX_CONCURRENT_WORKFLOWS:-50}
+      # Worker config
+      WORKER_ENTERPRISE_IDS: ${WORKER_ENTERPRISE_IDS}
+      WORKER_HEALTH_PORT: 3001
+      WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - app
+    networks:
+      - xnovu
+
+networks:
+  xnovu:
+    driver: bridge
+
+# Production Notes:
+# 1. Temporal is expected to be running as an external service
+# 2. Configure TEMPORAL_ADDRESS to point to your Temporal cluster
+# 3. Ensure all required environment variables are set
+# 4. Configure your load balancer/reverse proxy for SSL termination
+# 5. Consider using a managed database service for PostgreSQL
+# 6. Monitor worker health endpoint for operational status

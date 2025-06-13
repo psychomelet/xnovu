@@ -38,36 +38,6 @@ export interface RuleExecutionContext {
   rulePayload?: any;
 }
 
-// Queue job data
-export interface NotificationJobData {
-  notificationId: number;
-  ruleId?: number;
-  enterpriseId: string;
-  workflowId: string;
-  recipients: string[];
-  payload: any;
-  overrides?: any;
-  scheduledFor?: Date;
-}
-
-export interface RuleJobData {
-  ruleId: number;
-  enterpriseId: string;
-  triggerType: TriggerType;
-  executionTime: Date;
-}
-
-// Service interfaces
-export interface RuleEngineConfig {
-  redisUrl?: string;
-  defaultTimezone: string;
-  maxConcurrentJobs: number;
-  jobRetryAttempts: number;
-  jobRetryDelay: number;
-  scheduledNotificationInterval: number;
-  scheduledNotificationBatchSize: number;
-}
-
 // Error types
 export class RuleEngineError extends Error {
   constructor(

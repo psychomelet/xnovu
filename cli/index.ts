@@ -6,6 +6,7 @@ import { createDockerCommands } from './commands/docker.js';
 import { createSupabaseCommands } from './commands/supabase.js';
 import { createDevCommands } from './commands/dev.js';
 import { createStatusCommands } from './commands/status.js';
+import { createWorkerCommands } from './commands/worker.js';
 
 config();
 
@@ -21,6 +22,7 @@ createSupabaseCommands(program);
 createDevCommands(program);
 createDockerCommands(program);
 createStatusCommands(program);
+createWorkerCommands(program);
 
 // Parse command line arguments
 program.parse();

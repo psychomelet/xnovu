@@ -1,6 +1,7 @@
 import { workflowService, type WorkflowConfig } from '../database/WorkflowService';
 import { DynamicWorkflowFactory } from './DynamicWorkflowFactory';
 import { WorkflowDiscovery } from './WorkflowDiscovery';
+import { logger } from '@/app/services/logger';
 
 export interface RegisteredWorkflow {
   id: string;
@@ -36,7 +37,7 @@ export class WorkflowRegistry {
     };
 
     this.workflows.set(workflowKey, registeredWorkflow);
-    console.log(`Registered static workflow: ${workflowKey}`);
+    logger.workflow('Registered static workflow', workflowKey);
   }
 
   /**
@@ -72,7 +73,7 @@ export class WorkflowRegistry {
     }
     this.enterpriseWorkflows.get(enterpriseId)!.set(workflowKey, registeredWorkflow);
 
-    console.log(`Registered dynamic workflow: ${workflowKey} for enterprise: ${enterpriseId}`);
+    logger.workflow('Registered dynamic workflow', workflowKey, { enterpriseId });
   }
 
   /**
@@ -87,13 +88,13 @@ export class WorkflowRegistry {
           const config = await workflowService.parseWorkflowConfig(workflowRow);
           this.registerDynamicWorkflow(config.workflow_key, config, enterpriseId);
         } catch (error) {
-          console.error(`Failed to register dynamic workflow ${workflowRow.workflow_key} for enterprise ${enterpriseId}:`, error);
+          logger.error('Failed to register dynamic workflow', error as Error, { workflowKey: workflowRow.workflow_key, enterpriseId });
         }
       }
 
-      console.log(`Loaded ${dynamicWorkflows.length} dynamic workflows for enterprise: ${enterpriseId}`);
+      logger.info('Loaded dynamic workflows', { count: dynamicWorkflows.length, enterpriseId });
     } catch (error) {
-      console.error(`Failed to load workflows for enterprise ${enterpriseId}:`, error);
+      logger.error('Failed to load workflows for enterprise', error as Error, { enterpriseId });
       throw error;
     }
   }
@@ -109,9 +110,9 @@ export class WorkflowRegistry {
         this.registerStaticWorkflow(workflowKey, workflowInstance);
       }
 
-      console.log(`Initialized ${staticWorkflows.size} static workflows`);
+      logger.info('Initialized static workflows', { count: staticWorkflows.size });
     } catch (error) {
-      console.error('Failed to initialize static workflows:', error);
+      logger.error('Failed to initialize static workflows', error as Error);
       throw error;
     }
   }
@@ -233,7 +234,7 @@ export class WorkflowRegistry {
     }
 
     if (removed) {
-      console.log(`Unregistered workflow: ${workflowKey}${enterpriseId ? ` for enterprise: ${enterpriseId}` : ''}`);
+      logger.workflow('Unregistered workflow', workflowKey, { enterpriseId });
     }
 
     return removed;
