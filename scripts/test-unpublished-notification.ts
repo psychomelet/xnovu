@@ -6,7 +6,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { triggerNotificationByUuid } from '../lib/notifications';
+import { triggerNotificationById } from '../lib/notifications';
 import type { Database } from '../lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -77,8 +77,8 @@ async function testUnpublishedNotification() {
 
     // Step 3: Try to trigger the unpublished notification
     console.log('\n🔔 Attempting to trigger unpublished notification...');
-    const result = await triggerNotificationByUuid(
-      notification!.transaction_id!
+    const result = await triggerNotificationById(
+      notification!.id
     );
 
     if (result.success) {

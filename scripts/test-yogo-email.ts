@@ -8,7 +8,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { triggerNotificationByUuid } from '../lib/notifications';
+import { triggerNotificationById } from '../lib/notifications';
 import type { Database } from '../lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -111,8 +111,8 @@ async function testYogoEmail() {
 
     // Step 3: Trigger using temporal function
     console.log('\n🔔 Triggering yogo-email workflow via temporal function...');
-    const result = await triggerNotificationByUuid(
-      notification!.transaction_id!  // Use transaction_id, not id
+    const result = await triggerNotificationById(
+      notification!.id
     );
 
     if (result.success) {
