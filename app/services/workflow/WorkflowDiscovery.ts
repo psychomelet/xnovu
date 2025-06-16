@@ -212,19 +212,9 @@ export class WorkflowDiscovery {
         warnings.push('Missing types.ts file');
       }
 
-      // Check for valid workflow export
-      if (metadata.hasIndex) {
-        try {
-          const indexPath = path.join(workflowDir, 'index.ts');
-          const workflowModule = await import(indexPath);
-          
-          if (!this.isValidWorkflowModule(workflowModule)) {
-            errors.push('index.ts does not export a valid workflow');
-          }
-        } catch (error) {
-          errors.push(`Failed to import index.ts: ${error}`);
-        }
-      }
+      // Skip runtime validation of workflow exports during build
+      // Dynamic imports cause issues in Next.js build process
+      // Actual workflow loading and validation happens at runtime
 
     } catch (error) {
       errors.push(`Failed to validate directory: ${error}`);

@@ -1,5 +1,5 @@
 import { workflowRegistry } from './WorkflowRegistry';
-import { welcomeOnboardingEmail, yogoEmail } from '../../novu/workflows';
+import { getAllWorkflows } from '../../novu/workflow-loader';
 import { logger } from '@/app/services/logger';
 
 export class WorkflowLoader {
@@ -19,9 +19,14 @@ export class WorkflowLoader {
       // 1. Initialize static workflows from filesystem
       await workflowRegistry.initializeStaticWorkflows();
 
-      // 2. Manually register existing workflows (temporary until auto-discovery is complete)
-      workflowRegistry.registerStaticWorkflow('welcome-onboarding-email', welcomeOnboardingEmail);
-      workflowRegistry.registerStaticWorkflow('yogo-email', yogoEmail);
+      // 2. Auto-register all workflows from the generated loader
+      const allWorkflows = getAllWorkflows();
+      for (const workflow of allWorkflows) {
+        if (workflow && workflow.id) {
+          workflowRegistry.registerStaticWorkflow(workflow.id, workflow);
+          logger.debug(`Registered workflow: ${workflow.id}`);
+        }
+      }
 
       // 3. Load dynamic workflows for all enterprises (this would be done on-demand in production)
       // For now we'll skip this as it requires enterprise context

@@ -8,6 +8,7 @@ import {
   Section,
   Text,
   Tailwind,
+  render,
 } from '@react-email/components';
 import { getTemplateRenderer } from './TemplateRenderer';
 
@@ -147,8 +148,6 @@ export async function renderTemplateAwareEmail(
     preview?: string;
   } = {}
 ): Promise<string> {
-  const { render } = await import('@react-email/components');
-  
   return render(
     <TemplateAwareEmail
       body={template}
