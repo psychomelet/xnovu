@@ -20,14 +20,9 @@ describe('Notification Rules Activities', () => {
   let createdNotificationIds: number[] = []
 
   beforeAll(async () => {
-    // Skip connection tests if Temporal is not available
-    // Just ensure Supabase is configured
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Supabase credentials are not configured. Please set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.')
-    }
-
-    // Create test enterprise
-    const { data: enterprise, error: enterpriseError } = await supabase
+    try {
+      // Create test enterprise
+      const { data: enterprise, error: enterpriseError } = await supabase
       .schema('base')
       .from('ent_enterprise')
       .insert({
@@ -109,6 +104,10 @@ describe('Notification Rules Activities', () => {
 
     if (workflowError) throw workflowError
     testWorkflowId = workflow.id
+    } catch (error) {
+      console.error('Error in beforeAll:', error)
+      throw error
+    }
   })
 
   afterAll(async () => {

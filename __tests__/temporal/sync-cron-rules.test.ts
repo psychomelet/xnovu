@@ -20,20 +20,9 @@ describe('CRON Rule Sync to Temporal', () => {
   let temporalClient: Client
 
   beforeAll(async () => {
-    // Skip if Temporal is not available
-    if (!process.env.TEMPORAL_ADDRESS) {
-      console.warn('Skipping Temporal sync tests - TEMPORAL_ADDRESS not configured')
-      return
-    }
-    
     // Get temporal client
-    try {
-      const connection = await getTemporalConnection()
-      temporalClient = new Client({ connection })
-    } catch (error) {
-      console.warn('Failed to connect to Temporal:', error)
-      return
-    }
+    const connection = await getTemporalConnection()
+    temporalClient = new Client({ connection })
 
     // Create test enterprise
     const { data: enterprise, error: enterpriseError } = await supabase

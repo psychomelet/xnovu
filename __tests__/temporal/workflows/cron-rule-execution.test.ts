@@ -17,11 +17,6 @@ describe('CRON Rule Execution Workflow', () => {
   let createdNotificationIds: number[] = []
 
   beforeAll(async () => {
-    // Skip connection tests if not configured
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Supabase credentials are not configured.')
-    }
-
     // Set up test workflow environment
     testEnv = await TestWorkflowEnvironment.createLocal()
 
