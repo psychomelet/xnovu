@@ -128,7 +128,7 @@ export async function triggerNotificationById(
       workflow.workflow_key,
       notification.payload,
       notification.overrides,
-      notification.enterprise_id // Pass enterprise_id for template rendering
+      notification.enterprise_id || undefined // Convert null to undefined
     );
 
     const successCount = recipientResults.filter(r => r.success).length;
