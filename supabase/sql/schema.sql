@@ -153,7 +153,7 @@ create table if not exists notify.ent_notification_rule (
   deactivated BOOLEAN default false not null, -- For "Enable/Disable" (Enable/Disable) of rules
   notification_workflow_id BIGINT not null references notify.ent_notification_workflow (id) on delete CASCADE,
   business_id UUID,
-  trigger_type TEXT not null, -- e.g., 'EVENT', 'SCHEDULE'
+  trigger_type TEXT not null, -- values: 'SCHEDULE', 'CRON'
   trigger_config JSONB, -- Configuration, e.g., {"event_name": "user.signup"} or {"cron": "0 9 * * MON"}
   rule_payload JSONB, -- For complex rules defined as javascript, as per design document.
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
