@@ -14,21 +14,22 @@ The integration allows Temporal workers to trigger notifications by:
 
 ### Core Function: `triggerNotificationByUuid`
 
-Location: `/lib/notifications/temporal-trigger.ts`
+Location: `/lib/notifications/trigger.ts`
 
 ```typescript
 export async function triggerNotificationByUuid(
-  notificationUuid: string,
-  enterpriseId: string
-): Promise<TemporalTriggerResult>
+  transactionId: string
+): Promise<TriggerResult>
 ```
 
 This function:
 - Accepts a notification UUID (transaction_id field)
 - Fetches the notification and its associated workflow from Supabase
+- Validates the notification is published (publish_status = 'PUBLISH')
 - Updates status to PROCESSING
 - Triggers Novu for each recipient
-- Updates final status to SENT/PARTIAL/FAILED
+- Updates final status to SENT/FAILED
+- Stores Novu transaction IDs in error_details field
 
 ### Batch Processing: `batchTriggerNotifications`
 
@@ -36,9 +37,9 @@ For efficiency, multiple notifications can be processed in parallel:
 
 ```typescript
 export async function batchTriggerNotifications(
-  notificationUuids: string[],
-  enterpriseId: string
-): Promise<TemporalTriggerResult[]>
+  transactionIds: string[],
+  batchSize?: number
+): Promise<TriggerResult[]>
 ```
 
 ## Database Schema
@@ -50,8 +51,11 @@ The integration uses these key tables:
 Key fields:
 - `transaction_id` (UUID) - Unique identifier for the notification
 - `notification_status` - PENDING → PROCESSING → SENT/FAILED
+- `publish_status` - Must be 'PUBLISH' for notification to be triggered
 - `recipients` - Array of UUIDs that map to Novu subscriber IDs
 - `payload` - JSON data passed to the Novu workflow
+- `channels` - Updated with workflow's default_channels after processing
+- `error_details` - Stores Novu transaction IDs and processing results
 
 ## Configuration
 
@@ -70,23 +74,26 @@ Use `scripts/test-novu-direct.ts` to verify database and Novu connectivity:
 pnpm exec tsx scripts/test-novu-direct.ts
 ```
 
-### Temporal Function Test
-Use `scripts/test-temporal-trigger.ts` to test the worker function:
+### Notification Test Scripts
+Use the test scripts to verify notification processing:
 ```bash
-pnpm exec tsx scripts/test-temporal-trigger.ts
+# Test published notification
+pnpm exec tsx scripts/test-yogo-email.ts
+
+# Test unpublished notification rejection
+pnpm exec tsx scripts/test-unpublished-notification.ts
 ```
 
 ## Usage Example
 
 ```typescript
 // In your Temporal activity
-import { triggerNotificationByUuid } from '@/lib/notifications/temporal-trigger';
+import { triggerNotificationByUuid } from '@/lib/notifications';
 
 export async function processNotification(
-  notificationUuid: string,
-  enterpriseId: string
+  transactionId: string
 ): Promise<void> {
-  const result = await triggerNotificationByUuid(notificationUuid, enterpriseId);
+  const result = await triggerNotificationByUuid(transactionId);
   
   if (!result.success) {
     throw new Error(`Failed to process notification: ${result.error}`);
@@ -101,8 +108,9 @@ export async function processNotification(
 1. **PENDING** - Initial state when notification is created
 2. **PROCESSING** - Set when worker starts processing
 3. **SENT** - Successfully sent to all recipients
-4. **PARTIAL** - Some recipients failed
-5. **FAILED** - Complete failure
+4. **FAILED** - Complete or partial failure
+
+Note: Notifications must have `publish_status = 'PUBLISH'` to be processed. Other statuses (DRAFT, DISCARD, NONE, DELETED) will be rejected.
 
 ## Error Handling
 
@@ -114,6 +122,6 @@ The function includes comprehensive error handling:
 
 ## Performance Considerations
 
-- Batch processing supports up to 10 concurrent notifications
+- Batch processing supports configurable concurrency (default: 10)
 - Each notification can have multiple recipients processed in parallel
 - Status updates are atomic to prevent race conditions
