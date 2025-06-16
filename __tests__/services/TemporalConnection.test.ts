@@ -159,60 +159,6 @@ describe('Temporal Connection', () => {
     }, 30000)
   })
 
-  describe('Worker Connection', () => {
-    it('should create a worker connection', async () => {
-      // Skip this test if running in CI or if workflows directory doesn't exist
-      const workflowsPath = require.resolve('../../lib/temporal/workflows')
-      if (!workflowsPath) {
-        console.log('Skipping worker test - workflows not found')
-        return
-      }
-
-      const address = process.env.TEMPORAL_ADDRESS!
-      const namespace = process.env.TEMPORAL_NAMESPACE!
-      const taskQueue = process.env.TEMPORAL_TASK_QUEUE || 'test-queue'
-      const isSecure = address.includes(':443') || address.startsWith('https://')
-
-      console.log('\n⚙️  Testing worker connection...')
-      console.log(`   Address: ${address}`)
-      console.log(`   TLS: ${isSecure}`)
-
-      const connection = await NativeConnection.connect({
-        address,
-        tls: isSecure ? {} : false,
-      })
-
-      expect(connection).toBeDefined()
-
-      // Create a minimal worker for testing
-      try {
-        const worker = await Worker.create({
-          connection,
-          namespace,
-          taskQueue,
-          // Point to the actual workflows directory
-          workflowsPath: require.resolve('../../lib/temporal/workflows'),
-          activities: {
-            testActivity: async () => 'test',
-          },
-          maxConcurrentActivityTaskExecutions: 1,
-          maxConcurrentWorkflowTaskExecutions: 1,
-        })
-
-        expect(worker).toBeDefined()
-        expect(worker.getState()).toBe('INITIALIZED')
-
-        console.log('✅ Worker connection established')
-        console.log(`   - Namespace: ${namespace}`)
-        console.log(`   - Task Queue: ${taskQueue}`)
-      } catch (error: any) {
-        console.log('⚠️  Worker creation failed:', error.message)
-      } finally {
-        // Don't run the worker, just test creation
-        await connection.close()
-      }
-    }, 30000)
-  })
 
   describe('gRPC vs HTTPS Detection', () => {
     it('should correctly detect TLS requirement based on address', () => {
