@@ -43,6 +43,9 @@ npx novu@latest dev
 # Generate TypeScript types from Supabase
 pnpm xnovu generate-types
 
+# Sync workflows to Novu Cloud and database
+pnpm xnovu sync
+
 # Build for production
 pnpm build
 
@@ -68,6 +71,7 @@ Each workflow module follows this structure:
 - `workflow.ts` - Step definitions and logic
 - `schemas.ts` - Zod validation schemas
 - `types.ts` - TypeScript type definitions
+- `metadata.ts` - Database metadata for workflow sync
 
 ### Key Components
 - **Temporal Polling Workflows** - Reliable notification processing using outbox pattern
@@ -153,6 +157,45 @@ const result = await novu.trigger(workflow.workflow_key, {
   overrides: notification.overrides as any || {}
 })
 ```
+
+## Workflow Synchronization
+
+XNovu uses a metadata-based approach for syncing workflows to both Novu Cloud and the database.
+
+### Workflow Metadata
+
+Each workflow has a `metadata.ts` file that defines:
+- `workflow_key` - Unique identifier matching the Novu workflow ID
+- `name` - Human-readable workflow name
+- `description` - What the workflow does
+- `workflow_type` - "STATIC" for system workflows, "DYNAMIC" for user-configurable
+- `default_channels` - Array of channels used (EMAIL, IN_APP, SMS, PUSH, CHAT)
+- `payload_schema` - JSON Schema generated from Zod schema for payload validation
+- `control_schema` - JSON Schema generated from Zod schema for workflow controls
+- `template_overrides` - Channel-specific template overrides
+- Additional fields for categorization and multi-tenancy
+
+### Syncing Workflows
+
+```bash
+# Sync all workflows to Novu Cloud and database
+pnpm xnovu sync
+
+# This command:
+# 1. Syncs workflows to Novu Cloud using the bridge URL
+# 2. Reads metadata from each workflow's metadata.ts
+# 3. Creates/updates records in ent_notification_workflow table
+```
+
+### Creating New Workflows
+
+1. Create workflow directory under `app/novu/workflows/`
+2. Add standard files: `index.ts`, `workflow.ts`, `schemas.ts`, `types.ts`
+3. Generate workflow files: `pnpm xnovu workflow generate`
+4. Review and complete the generated metadata.ts file
+5. Run sync to deploy: `pnpm xnovu sync`
+
+Note: The workflow index is automatically regenerated during `pnpm build`
 
 ## Documentation To Follow
 
