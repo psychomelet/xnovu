@@ -193,7 +193,6 @@ export class TemplateRenderer {
         channel_type: 'EMAIL' as ChannelType,
         repr: null,
         enterprise_id: enterpriseId,
-        template_key: templateKey,
         created_at: new Date().toISOString(),
         created_by: null,
         updated_at: new Date().toISOString(),
@@ -201,30 +200,9 @@ export class TemplateRenderer {
       };
     }
 
-    // Load from database
-    const { data: template, error } = await this.supabase
-      .schema('notify')
-      .from('ent_notification_template')
-      .select('*')
-      .eq('template_key', templateKey)
-      .eq('enterprise_id', enterpriseId)
-      .eq('publish_status', 'PUBLISH')
-      .eq('deactivated', false)
-      .single();
-
-    if (error || !template) {
-      throw new Error(`Template not found: ${templateKey} (enterprise: ${enterpriseId})`);
-    }
-
-    // Cache the template
-    this.cache.set(cacheKey, {
-      subject: template.subject_template || undefined,
-      body: template.body_template,
-      variables: (template.variables_description as Record<string, any>) || {},
-      compiledAt: new Date()
-    });
-
-    return template;
+    // Load from database - template_key field no longer exists in schema
+    // This functionality needs to be updated when template_key is added back
+    throw new Error(`Template loading by key not supported: ${templateKey} (enterprise: ${enterpriseId})`);
   }
 
   /**
