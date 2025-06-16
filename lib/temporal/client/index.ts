@@ -5,8 +5,12 @@ let client: WorkflowClient | null = null
 
 export async function getTemporalConnection(): Promise<Connection> {
   if (!connection) {
+    const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
+    const isSecure = address.includes(':443') || address.startsWith('https://')
+    
     connection = await Connection.connect({
-      address: process.env.TEMPORAL_ADDRESS || 'localhost:7233',
+      address,
+      tls: isSecure ? {} : false,
     })
   }
   return connection
