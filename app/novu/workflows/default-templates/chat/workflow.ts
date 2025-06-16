@@ -23,18 +23,18 @@ export const defaultChatWorkflow = workflow(
         // Add title if provided
         if (payload.title) {
           if (formatStyle === 'markdown') {
-            formattedMessage += `**${payload.title}**\\n\\n`
+            formattedMessage += `**${payload.title}**\n\n`
           } else if (formatStyle === 'rich' && platform === 'slack') {
-            formattedMessage += `*${payload.title}*\\n\\n`
+            formattedMessage += `*${payload.title}*\n\n`
           } else {
-            formattedMessage += `${payload.title}\\n\\n`
+            formattedMessage += `${payload.title}\n\n`
           }
         }
 
         // Add priority indicator for high/critical
         if (payload.priority === 'high' || payload.priority === 'critical') {
           const priorityEmoji = payload.priority === 'critical' ? '🚨' : '⚠️'
-          formattedMessage += `${priorityEmoji} *Priority: ${payload.priority.toUpperCase()}*\\n\\n`
+          formattedMessage += `${priorityEmoji} *Priority: ${payload.priority.toUpperCase()}*\n\n`
         }
 
         // Add main message
@@ -42,7 +42,7 @@ export const defaultChatWorkflow = workflow(
 
         // Add mentions
         if (payload.mentions && payload.mentions.length > 0) {
-          formattedMessage += '\\n\\n'
+          formattedMessage += '\n\n'
           if (platform === 'slack') {
             formattedMessage += payload.mentions.map(m => `<@${m}>`).join(' ')
           } else if (platform === 'teams') {
@@ -55,7 +55,7 @@ export const defaultChatWorkflow = workflow(
         // Add timestamp if enabled
         if (showTimestamp) {
           const timestamp = new Date().toISOString()
-          formattedMessage += `\\n\\n_Sent at: ${timestamp}_`
+          formattedMessage += `\n\n_Sent at: ${timestamp}_`
         }
 
         // Build platform-specific payload

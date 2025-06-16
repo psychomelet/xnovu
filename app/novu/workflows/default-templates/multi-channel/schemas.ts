@@ -10,7 +10,7 @@ export const payloadSchema = z.object({
   // Channel-specific overrides
   emailSubject: z.string().optional().describe('Override subject for email'),
   emailMessage: z.string().optional().describe('Override message for email (HTML supported)'),
-  smsMessage: z.string().optional().max(160).describe('Override message for SMS'),
+  smsMessage: z.string().max(160).optional().describe('Override message for SMS'),
   pushTitle: z.string().optional().describe('Override title for push'),
   pushMessage: z.string().optional().describe('Override message for push'),
   chatMessage: z.string().optional().describe('Override message for chat'),

@@ -42,7 +42,7 @@ export const defaultPushWorkflow = workflow(
         }
 
         return {
-          title: payload.title,
+          subject: payload.title,
           body: payload.message,
           icon: payload.iconUrl || defaultIcon,
           image: payload.imageUrl,
