@@ -19,7 +19,6 @@ const {
 })
 
 export interface NotificationPollingConfig {
-  enterpriseId?: string
   pollInterval: number // milliseconds
   batchSize?: number
   includeProcessed?: boolean
@@ -70,14 +69,12 @@ export async function notificationPollingWorkflow(config: NotificationPollingCon
     try {
       // Poll for new/updated notifications
       const notifications = await pollNotifications({
-        enterpriseId: currentConfig.enterpriseId,
         batchSize: currentConfig.batchSize,
         includeProcessed: currentConfig.includeProcessed
       })
 
       console.log('Polled notifications', { 
-        count: notifications.length,
-        enterpriseId: currentConfig.enterpriseId 
+        count: notifications.length
       })
 
       // Process each notification
@@ -113,7 +110,6 @@ export async function notificationPollingWorkflow(config: NotificationPollingCon
       // Poll for failed notifications if enabled
       if (currentConfig.processFailedNotifications) {
         const failedNotifications = await pollFailedNotifications({
-          enterpriseId: currentConfig.enterpriseId,
           batchSize: currentConfig.batchSize
         })
 
@@ -139,7 +135,6 @@ export async function notificationPollingWorkflow(config: NotificationPollingCon
       // Poll for scheduled notifications if enabled
       if (currentConfig.processScheduledNotifications) {
         const scheduledNotifications = await pollScheduledNotifications({
-          enterpriseId: currentConfig.enterpriseId,
           batchSize: currentConfig.batchSize
         })
 

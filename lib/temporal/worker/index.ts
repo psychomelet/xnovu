@@ -1,7 +1,9 @@
 import { Worker, NativeConnection } from '@temporalio/worker'
+import { Connection } from '@temporalio/client'
 import { workerConfig } from './config'
 import * as activities from '../activities'
 import { logger } from '@/app/services/logger'
+import { ensureNamespaceExists } from '../namespace'
 
 let worker: Worker | null = null
 let workerConnection: NativeConnection | null = null
@@ -11,6 +13,19 @@ export async function createWorker(): Promise<Worker> {
     const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
     const isSecure = address.includes(':443') || address.startsWith('https://')
     
+    // First ensure namespace exists using a client connection
+    const clientConnection = await Connection.connect({
+      address,
+      tls: isSecure ? {} : false,
+    })
+    
+    try {
+      await ensureNamespaceExists(clientConnection, workerConfig.namespace)
+    } finally {
+      await clientConnection.close()
+    }
+    
+    // Now create the worker connection
     workerConnection = await NativeConnection.connect({
       address,
       tls: isSecure ? {} : false,

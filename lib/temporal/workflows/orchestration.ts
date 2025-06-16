@@ -10,7 +10,6 @@ import {
 import { cronSchedulingWorkflow, scheduledNotificationWorkflow } from './scheduling'
 
 export interface OrchestrationConfig {
-  enterpriseIds: string[]
   cronInterval?: string
   scheduledCheckInterval?: string
   enableCron?: boolean

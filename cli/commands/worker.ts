@@ -16,7 +16,6 @@ export function createWorkerCommands(program: Command): void {
     .command('start')
     .description('Start the unified worker')
     .option('--dev', 'Start in development mode')
-    .option('--enterprises <ids>', 'Comma-separated enterprise IDs')
     .option('--health-port <port>', 'Health check port', '3001')
     .option('--log-level <level>', 'Log level (debug, info, warn, error)', 'info')
     .action(async (options) => {
@@ -29,9 +28,6 @@ export function createWorkerCommands(program: Command): void {
           WORKER_LOG_LEVEL: options.logLevel,
         };
 
-        if (options.enterprises) {
-          env.WORKER_ENTERPRISE_IDS = options.enterprises;
-        }
 
         const workerPath = path.join(process.cwd(), 'worker', 'index.ts');
         const args = options.dev ? ['tsx', workerPath] : ['node', '-r', 'tsx/cjs', workerPath];
@@ -151,7 +147,6 @@ export function createWorkerCommands(program: Command): void {
     .command('restart')
     .description('Restart the unified worker')
     .option('--dev', 'Restart in development mode')
-    .option('--enterprises <ids>', 'Comma-separated enterprise IDs')
     .action(async (options) => {
       try {
         console.log('🔄 Restarting XNovu unified worker...');
@@ -169,17 +164,13 @@ export function createWorkerCommands(program: Command): void {
 
         // Start again
         const startOptions = {
-          dev: options.dev,
-          enterprises: options.enterprises,
+          dev: options.dev
         };
 
         // Re-use the start command logic
         console.log('🚀 Starting worker again...');
         
         const env = { ...process.env };
-        if (options.enterprises) {
-          env.WORKER_ENTERPRISE_IDS = options.enterprises;
-        }
 
         const workerPath = path.join(process.cwd(), 'worker', 'index.ts');
         const args = options.dev ? ['tsx', workerPath] : ['node', '-r', 'tsx/cjs', workerPath];

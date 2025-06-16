@@ -50,7 +50,7 @@ services:
       dockerfile: Dockerfile
     image: xnovu:latest
     restart: unless-stopped
-    command: ["pnpm", "xnovu", "worker", "start", "--enterprises", "${WORKER_ENTERPRISE_IDS}"]
+    command: ["pnpm", "xnovu", "worker", "start"]
     ports:
       - "${WORKER_HEALTH_PORT:-3001}:3001"
     environment:
@@ -68,7 +68,6 @@ services:
       TEMPORAL_MAX_CONCURRENT_ACTIVITIES: ${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-100}
       TEMPORAL_MAX_CONCURRENT_WORKFLOWS: ${TEMPORAL_MAX_CONCURRENT_WORKFLOWS:-50}
       # Worker config
-      WORKER_ENTERPRISE_IDS: ${WORKER_ENTERPRISE_IDS}
       WORKER_HEALTH_PORT: 3001
       WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
     healthcheck:

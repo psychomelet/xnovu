@@ -19,12 +19,11 @@ export class WorkerManager {
   private isShuttingDown = false;
   private startTime: Date = new Date();
   private orchestrationWorkflowId: string | null = null;
-  private pollingWorkflowIds: Map<string, string> = new Map();
+  private pollingWorkflowId: string | null = null;
 
   constructor(config: WorkerConfig) {
     this.config = config;
     logger.worker('Worker manager initialized', { 
-      enterpriseCount: config.enterpriseIds.length,
       healthPort: config.healthPort 
     });
   }
@@ -50,8 +49,7 @@ export class WorkerManager {
 
       this.isStarted = true;
       logger.worker('All worker services started successfully', {
-        uptime: this.getUptime(),
-        enterpriseCount: this.config.enterpriseIds.length
+        uptime: this.getUptime()
       });
 
     } catch (error) {
@@ -71,12 +69,8 @@ export class WorkerManager {
     // 2. Start Temporal Orchestration Workflow
     await this.startOrchestrationWorkflow();
 
-    // 3. Start Notification Polling Workflows
-    if (this.config.enterpriseIds.length > 0) {
-      await this.startPollingWorkflows();
-    } else {
-      logger.warn('No enterprise IDs configured, skipping polling workflows');
-    }
+    // 3. Start Notification Polling Workflow
+    await this.startPollingWorkflow();
 
     // 4. Start Health Monitor (health checks + HTTP server)
     await this.startHealthMonitor();
@@ -115,7 +109,6 @@ export class WorkerManager {
         workflowId: this.orchestrationWorkflowId,
         taskQueue: process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notification-processing',
         args: [{
-          enterpriseIds: this.config.enterpriseIds,
           cronInterval: '1m',
           scheduledInterval: '1m',
           scheduledBatchSize: 100,
@@ -134,49 +127,37 @@ export class WorkerManager {
   }
 
   /**
-   * Start notification polling workflows (outbox pattern)
+   * Start notification polling workflow (outbox pattern)
    */
-  private async startPollingWorkflows(): Promise<void> {
+  private async startPollingWorkflow(): Promise<void> {
     try {
-      logger.worker('Starting notification polling workflows...', {
-        enterpriseCount: this.config.enterpriseIds.length
-      });
+      logger.worker('Starting notification polling workflow...');
 
       const client = await getTemporalClient();
       const taskQueue = process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notification-processing';
 
-      // Start a polling workflow for each enterprise
-      for (const enterpriseId of this.config.enterpriseIds) {
-        const workflowId = `notification-polling-${enterpriseId}-${Date.now()}`;
-        
-        await client.start('notificationPollingWorkflow', {
-          workflowId,
-          taskQueue,
-          args: [{
-            enterpriseId,
-            pollInterval: this.config.subscription?.pollInterval || 5000, // Default 5 seconds
-            batchSize: this.config.subscription?.batchSize || 100,
-            includeProcessed: false,
-            processFailedNotifications: true,
-            processScheduledNotifications: true
-          }],
-          // Run until explicitly cancelled
-          workflowExecutionTimeout: undefined,
-        });
+      // Start a single polling workflow for all enterprises
+      this.pollingWorkflowId = `notification-polling-all-${Date.now()}`;
+      
+      await client.start('notificationPollingWorkflow', {
+        workflowId: this.pollingWorkflowId,
+        taskQueue,
+        args: [{
+          pollInterval: this.config.subscription?.pollInterval || 5000, // Default 5 seconds
+          batchSize: this.config.subscription?.batchSize || 100,
+          includeProcessed: false,
+          processFailedNotifications: true,
+          processScheduledNotifications: true
+        }],
+        // Run until explicitly cancelled
+        workflowExecutionTimeout: undefined,
+      });
 
-        this.pollingWorkflowIds.set(enterpriseId, workflowId);
-        
-        logger.worker('Started polling workflow for enterprise', {
-          enterpriseId,
-          workflowId
-        });
-      }
-
-      logger.worker('All polling workflows started successfully', {
-        enterpriseCount: this.config.enterpriseIds.length
+      logger.worker('Polling workflow started successfully', {
+        workflowId: this.pollingWorkflowId
       });
     } catch (error) {
-      logger.error('Failed to start polling workflows:', error instanceof Error ? error : new Error(String(error)));
+      logger.error('Failed to start polling workflow:', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -228,10 +209,10 @@ export class WorkerManager {
         );
       }
 
-      // Cancel polling workflows
-      for (const [enterpriseId, workflowId] of this.pollingWorkflowIds) {
+      // Cancel polling workflow
+      if (this.pollingWorkflowId) {
         shutdownPromises.push(
-          this.cancelPollingWorkflow(enterpriseId, workflowId).catch(error => 
+          this.cancelPollingWorkflow(this.pollingWorkflowId).catch(error => 
             logger.error('Error cancelling polling workflow:', error)
           )
         );
@@ -306,9 +287,9 @@ export class WorkerManager {
   }
 
   /**
-   * Cancel a polling workflow
+   * Cancel the polling workflow
    */
-  private async cancelPollingWorkflow(enterpriseId: string, workflowId: string): Promise<void> {
+  private async cancelPollingWorkflow(workflowId: string): Promise<void> {
     try {
       const client = await getTemporalClient();
       const handle = client.getHandle(workflowId);
@@ -325,14 +306,12 @@ export class WorkerManager {
       } catch (error) {
         // Workflow might have already completed
         logger.debug('Polling workflow cancellation error:', { 
-          enterpriseId,
           workflowId,
           error: error instanceof Error ? error.message : String(error) 
         });
       }
     } catch (error) {
       logger.error('Failed to cancel polling workflow:', {
-        enterpriseId,
         workflowId,
         error: error instanceof Error ? error : new Error(String(error))
       });
@@ -347,11 +326,7 @@ export class WorkerManager {
 
     const cleanupTasks = [
       () => this.healthMonitor?.stop(),
-      async () => {
-        for (const [enterpriseId, workflowId] of this.pollingWorkflowIds) {
-          await this.cancelPollingWorkflow(enterpriseId, workflowId).catch(() => {});
-        }
-      },
+      () => this.pollingWorkflowId ? this.cancelPollingWorkflow(this.pollingWorkflowId).catch(() => {}) : Promise.resolve(),
       () => this.cancelOrchestrationWorkflow(),
       () => temporalService.shutdown(),
     ];
@@ -376,31 +351,26 @@ export class WorkerManager {
     try {
       // Get polling workflow status
       const pollingStatus = {
-        total: this.pollingWorkflowIds.size,
+        total: this.pollingWorkflowId ? 1 : 0,
         active: 0,
         failed: 0,
         reconnecting: 0
       };
-
-      const enterpriseStatus: Record<string, string> = {};
       
-      // Check status of each polling workflow
-      for (const [enterpriseId, workflowId] of this.pollingWorkflowIds) {
+      // Check status of polling workflow
+      if (this.pollingWorkflowId) {
         try {
           const client = await getTemporalClient();
-          const handle = client.getHandle(workflowId);
+          const handle = client.getHandle(this.pollingWorkflowId);
           const description = await handle.describe();
           
           if (description.status.name === 'RUNNING') {
-            pollingStatus.active++;
-            enterpriseStatus[enterpriseId] = 'polling';
+            pollingStatus.active = 1;
           } else {
-            pollingStatus.failed++;
-            enterpriseStatus[enterpriseId] = 'error';
+            pollingStatus.failed = 1;
           }
         } catch (error) {
-          pollingStatus.failed++;
-          enterpriseStatus[enterpriseId] = 'error';
+          pollingStatus.failed = 1;
         }
       }
 
@@ -446,7 +416,6 @@ export class WorkerManager {
           ruleEngine: temporalStatus?.status === 'healthy' ? 'healthy' : 'unhealthy',
           temporal: temporalStatus ? (temporalStatus.status === 'disabled' ? 'not_initialized' : temporalStatus.status) : 'unhealthy',
         },
-        enterprise_status: enterpriseStatus,
         temporal_status: {
           ...temporalStatus,
           orchestrationWorkflow: orchestrationStatus
@@ -464,7 +433,6 @@ export class WorkerManager {
           ruleEngine: 'unhealthy',
           temporal: 'unhealthy',
         },
-        enterprise_status: {},
       };
     }
   }
@@ -490,10 +458,4 @@ export class WorkerManager {
     return this.isStarted && !this.isShuttingDown;
   }
 
-  /**
-   * Get polling workflow IDs (for testing/debugging)
-   */
-  getPollingWorkflowIds(): Map<string, string> {
-    return this.pollingWorkflowIds;
-  }
 }
