@@ -58,12 +58,11 @@ Batch triggers multiple notifications by UUIDs with concurrency control.
 
 **Returns:** Array of `TriggerResult` objects
 
-### `triggerPendingNotifications(enterpriseId: string, limit?: number)`
+### `triggerPendingNotifications(limit?: number)`
 
-Triggers all pending notifications for an enterprise.
+Triggers all pending notifications.
 
 **Parameters:**
-- `enterpriseId`: The enterprise ID
 - `limit`: Maximum number of notifications to process (default: 100)
 
 **Returns:** Array of `TriggerResult` objects
@@ -158,16 +157,11 @@ export async function processNotificationBatch(
 import { triggerPendingNotifications } from '@/lib/notifications';
 
 export async function processPendingNotifications() {
-  const enterprises = await getActiveEnterprises();
+  const results = await triggerPendingNotifications(
+    50 // Process 50 at a time
+  );
   
-  for (const enterprise of enterprises) {
-    const results = await triggerPendingNotifications(
-      enterprise.id,
-      50 // Process 50 at a time
-    );
-    
-    console.log(`Processed ${results.length} notifications for ${enterprise.id}`);
-  }
+  console.log(`Processed ${results.length} notifications`);
 }
 ```
 

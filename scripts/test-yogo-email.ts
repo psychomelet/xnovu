@@ -86,7 +86,7 @@ async function testYogoEmail() {
       enterprise_id: testEnterpriseId,
       notification_status: 'PENDING' as const,
       publish_status: 'PUBLISH' as const,  // Mark as published so it can be triggered
-      channels: ['EMAIL', 'IN_APP'] as const,  // Expected channels for this workflow
+      channels: ['EMAIL', 'IN_APP'] as Database['shared_types']['Enums']['notification_channel_type'][],  // Expected channels for this workflow
       overrides: {
         // Optional: Override email controls
         email: {
@@ -112,7 +112,7 @@ async function testYogoEmail() {
     // Step 3: Trigger using temporal function
     console.log('\n🔔 Triggering yogo-email workflow via temporal function...');
     const result = await triggerNotificationByUuid(
-      notification!.transaction_id  // Use transaction_id, not id
+      notification!.transaction_id!  // Use transaction_id, not id
     );
 
     if (result.success) {

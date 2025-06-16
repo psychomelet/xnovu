@@ -181,7 +181,7 @@ export async function triggerNotificationById(
     return {
       success: allSuccessful,
       notificationId: notification.id,
-      transactionId: notification.transaction_id,
+      transactionId: notification.transaction_id || undefined,
       novuTransactionId: firstSuccess?.transactionId,
       status: updateData.notification_status,
       notification: notificationWithWorkflow,
@@ -313,14 +313,12 @@ export async function batchTriggerNotifications(
 }
 
 /**
- * Trigger all pending notifications for an enterprise
+ * Trigger all pending notifications
  * 
- * @param enterpriseId - The enterprise ID
  * @param limit - Maximum number of notifications to process (default: 100)
  * @returns Array of results
  */
 export async function triggerPendingNotifications(
-  enterpriseId: string,
   limit: number = 100
 ): Promise<TriggerResult[]> {
   try {
@@ -329,7 +327,6 @@ export async function triggerPendingNotifications(
       .schema('notify')
       .from('ent_notification')
       .select('id')
-      .eq('enterprise_id', enterpriseId)
       .eq('notification_status', 'PENDING')
       .eq('publish_status', 'PUBLISH')
       .limit(limit);

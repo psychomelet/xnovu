@@ -59,7 +59,7 @@ async function testUnpublishedNotification() {
       enterprise_id: testEnterpriseId,
       notification_status: 'PENDING' as const,
       publish_status: 'DRAFT' as const,  // NOT published
-      channels: ['EMAIL', 'IN_APP'] as const
+      channels: ['EMAIL', 'IN_APP'] as Database['shared_types']['Enums']['notification_channel_type'][]
     };
 
     const { data: notification, error: insertError } = await supabase
@@ -78,7 +78,7 @@ async function testUnpublishedNotification() {
     // Step 3: Try to trigger the unpublished notification
     console.log('\n🔔 Attempting to trigger unpublished notification...');
     const result = await triggerNotificationByUuid(
-      notification!.transaction_id
+      notification!.transaction_id!
     );
 
     if (result.success) {
