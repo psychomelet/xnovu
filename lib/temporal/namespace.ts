@@ -20,7 +20,7 @@ export async function ensureNamespaceExists(connection: Connection, namespace: s
         await connection.workflowService.registerNamespace({
           namespace,
           workflowExecutionRetentionPeriod: {
-            seconds: 7 * 24 * 60 * 60 // 7 days retention
+            seconds: 7 * 24 * 60 * 60 as any // 7 days retention
           },
           description: 'XNovu notification processing namespace',
           isGlobalNamespace: false

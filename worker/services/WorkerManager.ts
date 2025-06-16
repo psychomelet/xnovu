@@ -458,4 +458,11 @@ export class WorkerManager {
     return this.isStarted && !this.isShuttingDown;
   }
 
+  /**
+   * Get the current polling workflow ID
+   */
+  getPollingWorkflowId(): string | null {
+    return this.pollingWorkflowId;
+  }
+
 }

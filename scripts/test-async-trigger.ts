@@ -127,16 +127,27 @@ async function testAsyncTrigger() {
         try {
           const result = await notificationClient.getWorkflowResult(asyncResult.workflowId);
           console.log('\n📊 Workflow Result:');
-          console.log('   Success:', result.success);
-          console.log('   Notification ID:', result.notificationId);
-          console.log('   Novu Transaction ID:', result.novuTransactionId);
-          console.log('   Status:', result.status);
           
-          if (result.details) {
-            console.log('   Details:');
-            console.log('     - Success Count:', result.details.successCount);
-            console.log('     - Total Recipients:', result.details.totalRecipients);
-            console.log('     - Duration:', result.details.duration + 'ms');
+          if (Array.isArray(result)) {
+            console.log('   Multiple notifications processed:', result.length);
+            result.forEach((r, index) => {
+              console.log(`   Notification ${index + 1}:`);
+              console.log('     - Success:', r.success);
+              console.log('     - Notification ID:', r.notificationId);
+              console.log('     - Status:', r.status);
+            });
+          } else {
+            console.log('   Success:', result.success);
+            console.log('   Notification ID:', result.notificationId);
+            console.log('   Novu Transaction ID:', result.novuTransactionId);
+            console.log('   Status:', result.status);
+            
+            if (result.details) {
+              console.log('   Details:');
+              console.log('     - Success Count:', result.details.successCount);
+              console.log('     - Total Recipients:', result.details.totalRecipients);
+              console.log('     - Duration:', result.details.duration + 'ms');
+            }
           }
         } catch (error) {
           console.error('❌ Failed to get workflow result:', error);

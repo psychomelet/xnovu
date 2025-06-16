@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
         // Sync trigger (fallback)
         const result = await triggerNotificationById(notificationId)
         return NextResponse.json({
-          success: result.success,
           async: false,
           ...result
         })

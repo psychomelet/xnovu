@@ -196,27 +196,22 @@ export class HealthMonitor {
    */
   private async handleSubscriptionHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const pollingWorkflowIds = this.config.workerManager.getPollingWorkflowIds();
+      const pollingWorkflowId = this.config.workerManager.getPollingWorkflowId();
       
-      if (!pollingWorkflowIds || pollingWorkflowIds.size === 0) {
+      if (!pollingWorkflowId) {
         this.sendResponse(res, 200, {
-          status: 'no_polling_workflows',
-          message: 'No polling workflows configured',
+          status: 'no_polling_workflow',
+          message: 'No polling workflow configured',
           timestamp: new Date().toISOString()
         });
         return;
       }
 
-      const workflowStatuses: Record<string, string> = {};
-      for (const [enterpriseId, workflowId] of pollingWorkflowIds) {
-        workflowStatuses[enterpriseId] = `workflow: ${workflowId}`;
-      }
-      
       this.sendResponse(res, 200, {
         status: 'healthy',
-        polling_workflows: {
-          total: pollingWorkflowIds.size,
-          workflows: workflowStatuses
+        polling_workflow: {
+          id: pollingWorkflowId,
+          status: 'active'
         },
         timestamp: new Date().toISOString()
       });
@@ -237,7 +232,7 @@ export class HealthMonitor {
   private async handleMetrics(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const healthStatus = await this.config.workerManager.getHealthStatus();
-      const pollingWorkflowIds = this.config.workerManager.getPollingWorkflowIds();
+      const pollingWorkflowId = this.config.workerManager.getPollingWorkflowId();
       
       let metrics = [
         `# HELP xnovu_worker_uptime_seconds Worker uptime in seconds`,
