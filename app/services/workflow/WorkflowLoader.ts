@@ -22,9 +22,9 @@ export class WorkflowLoader {
       // 2. Auto-register all workflows from the generated loader
       const allWorkflows = getAllWorkflows();
       for (const workflow of allWorkflows) {
-        if (workflow && workflow.workflowId) {
-          workflowRegistry.registerStaticWorkflow(workflow.workflowId, workflow);
-          logger.debug(`Registered workflow: ${workflow.workflowId}`);
+        if (workflow && workflow.id) {
+          workflowRegistry.registerStaticWorkflow(workflow.id, workflow);
+          logger.debug(`Registered workflow: ${workflow.id}`);
         }
       }
 

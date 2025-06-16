@@ -1,5 +1,6 @@
 import { renderTemplateForWorkflow } from './TemplateAwareEmail';
 import { getTemplateRenderer } from './TemplateRenderer';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../../../lib/supabase/database.types';
 
 type NotificationTemplate = Database['notify']['Tables']['ent_notification_template']['Row'];
@@ -70,7 +71,6 @@ export class WorkflowTemplateIntegration {
   ): Promise<NotificationTemplate> {
     // This would normally use the TemplateRenderer's database access
     // but for direct workflow integration we'll use a direct query
-    const { createClient } = await import('@supabase/supabase-js');
     
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

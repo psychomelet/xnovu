@@ -1,38 +1,14 @@
 import { serve } from "@novu/framework/next";
-import { Client } from "@novu/framework";
 import { NextRequest } from "next/server";
-import { workflowLoader } from "../../services/workflow";
+import { workflows } from "../../novu/workflow-loader";
 
-// Initialize workflows and get handlers from Novu serve
-async function getHandlers() {
-  const workflows = await workflowLoader.getAllWorkflows();
-  
-  // Create a client with the secret key
-  // The Client will use NOVU_SECRET_KEY from env if not provided
-  const client = new Client({
-    secretKey: process.env.NOVU_SECRET_KEY,
-    apiUrl: process.env.NOVU_API_URL,
-  });
-
-  return serve({
-    client,
-    workflows,
-  });
-}
-
-// Cache handlers promise to avoid reinitializing on every request
-let handlersPromise: Promise<any> | null = null;
-
-function getOrCreateHandlers() {
-  if (!handlersPromise) {
-    handlersPromise = getHandlers();
-  }
-  return handlersPromise;
-}
+// Get the handlers from Novu serve - the framework will use NOVU_API_URL env var automatically
+const { GET: NovuGET, POST: NovuPOST, OPTIONS } = serve({
+  workflows,
+});
 
 export async function POST(req: NextRequest, context: any) {
   try {
-    const { POST: NovuPOST } = await getOrCreateHandlers();
     return await NovuPOST(req, context);
   } catch (error) {
     console.error('❌ Novu POST Error:', error);
@@ -42,7 +18,6 @@ export async function POST(req: NextRequest, context: any) {
 
 export async function GET(req: NextRequest, context: any) {
   try {
-    const { GET: NovuGET } = await getOrCreateHandlers();
     return await NovuGET(req, context);
   } catch (error) {
     console.error('❌ Novu GET Error:', error);
@@ -50,12 +25,4 @@ export async function GET(req: NextRequest, context: any) {
   }
 }
 
-export async function OPTIONS(req: NextRequest, context: any) {
-  try {
-    const { OPTIONS: NovuOPTIONS } = await getOrCreateHandlers();
-    return await NovuOPTIONS(req, context);
-  } catch (error) {
-    console.error('❌ Novu OPTIONS Error:', error);
-    throw error;
-  }
-}
+export { OPTIONS };

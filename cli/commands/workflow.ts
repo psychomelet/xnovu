@@ -148,51 +148,63 @@ ${directories.map(dir => `export * from "./${dir}";`).join('\n')}
   console.log(`   ✅ Generated ${indexPath}`);
 
   // Generate workflow-loader.ts (at novu level)
+  // First, let's extract the actual workflow export names from each workflow
+  const workflowExports: { dir: string; exportName: string }[] = [];
+  
+  for (const dir of directories) {
+    const workflowPath = join(WORKFLOWS_PATH, dir, 'workflow.ts');
+    if (existsSync(workflowPath)) {
+      try {
+        const content = readFileSync(workflowPath, 'utf8');
+        // Look for export const <name> = workflow(
+        const match = content.match(/export\s+(?:const\s+)?(\w+)\s*=\s*workflow\s*\(/);
+        if (match) {
+          workflowExports.push({ dir, exportName: match[1] });
+        } else {
+          // Check for default export
+          if (content.includes('export default') && content.includes('workflow(')) {
+            workflowExports.push({ dir, exportName: 'default' });
+          }
+        }
+      } catch (error) {
+        console.error(`Error reading ${workflowPath}:`, error);
+      }
+    }
+  }
+  
   const loaderContent = `/**
  * Auto-generated workflow loader
  * DO NOT EDIT MANUALLY - Run 'pnpm xnovu workflow generate' to update
  */
 
 // Import all workflows
-${directories.map((dir) => {
-    const varName = dir.replace(/-/g, '');
-    return `import * as ${varName}Module from "./workflows/${dir}";`;
+${workflowExports.map(({ dir, exportName }) => {
+    if (exportName === 'default') {
+      return `import ${dir.replace(/-/g, '')}Workflow from "./workflows/${dir}/workflow";`;
+    } else {
+      return `import { ${exportName} } from "./workflows/${dir}/workflow";`;
+    }
   }).join('\n')}
 
-// Map of all workflow modules
-export const workflowModules = {
-${directories.map(dir => {
-    const varName = dir.replace(/-/g, '');
-    return `  "${dir}": ${varName}Module,`;
+// Array of all workflow instances
+export const workflows = [
+${workflowExports.map(({ dir, exportName }) => {
+    if (exportName === 'default') {
+      return `  ${dir.replace(/-/g, '')}Workflow,`;
+    } else {
+      return `  ${exportName},`;
+    }
   }).join('\n')}
-};
+];
 
 // Get all workflow instances
 export function getAllWorkflows() {
-  const workflows: any[] = [];
-  
-  Object.values(workflowModules).forEach(workflowModule => {
-    // Find workflow instances in the module
-    Object.values(workflowModule).forEach(exported => {
-      if (exported && typeof exported === 'object' && 'workflowId' in exported) {
-        workflows.push(exported);
-      }
-    });
-  });
-  
   return workflows;
 }
 
 // Get workflow by ID
 export function getWorkflowById(workflowId: string) {
-  for (const workflowModule of Object.values(workflowModules)) {
-    for (const exported of Object.values(workflowModule)) {
-      if (exported && typeof exported === 'object' && 'workflowId' in exported && exported.workflowId === workflowId) {
-        return exported;
-      }
-    }
-  }
-  return null;
+  return workflows.find(workflow => workflow.id === workflowId);
 }
 `;
 
