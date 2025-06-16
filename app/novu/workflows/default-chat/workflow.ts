@@ -2,7 +2,7 @@ import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 
 export const defaultChatWorkflow = workflow(
-  'default-chat-template',
+  'default-chat',
   async ({ step, payload }) => {
     await step.chat(
       'send-chat-message',

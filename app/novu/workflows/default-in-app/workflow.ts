@@ -2,7 +2,7 @@ import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 
 export const defaultInAppWorkflow = workflow(
-  'default-in-app-template',
+  'default-in-app',
   async ({ step, payload }) => {
     await step.inApp(
       'send-in-app-notification',

@@ -2,7 +2,7 @@ import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 
 export const defaultPushWorkflow = workflow(
-  'default-push-template',
+  'default-push',
   async ({ step, payload }) => {
     await step.push(
       'send-push-notification',

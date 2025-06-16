@@ -2,7 +2,7 @@ import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 
 export const defaultSmsWorkflow = workflow(
-  'default-sms-template',
+  'default-sms',
   async ({ step, payload }) => {
     await step.sms(
       'send-sms',

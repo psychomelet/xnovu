@@ -2,7 +2,7 @@ import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 
 export const defaultMultiChannelWorkflow = workflow(
-  'default-multi-channel-template',
+  'default-multi-channel',
   async ({ step, payload, subscriber }) => {
     // Optional digest step
     const digestResult = await step.digest(

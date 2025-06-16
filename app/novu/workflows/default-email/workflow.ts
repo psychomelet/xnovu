@@ -2,7 +2,7 @@ import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 
 export const defaultEmailWorkflow = workflow(
-  'default-email-template',
+  'default-email',
   async ({ step, payload }) => {
     await step.email(
       'send-email',
