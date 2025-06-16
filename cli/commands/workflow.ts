@@ -137,7 +137,6 @@ function generateWorkflowFiles() {
   // Generate index.ts content (in workflows directory)
   const indexContent = `/**
  * Auto-generated workflow exports
- * Generated at: ${new Date().toISOString()}
  * DO NOT EDIT MANUALLY - Run 'pnpm xnovu workflow generate' to update
  */
 
@@ -151,7 +150,6 @@ ${directories.map(dir => `export * from "./${dir}";`).join('\n')}
   // Generate workflow-loader.ts (at novu level)
   const loaderContent = `/**
  * Auto-generated workflow loader
- * Generated at: ${new Date().toISOString()}
  * DO NOT EDIT MANUALLY - Run 'pnpm xnovu workflow generate' to update
  */
 
@@ -219,7 +217,6 @@ export function getWorkflowById(workflowId: string) {
 
   const metadataContent = `/**
  * Auto-generated workflow metadata aggregator
- * Generated at: ${new Date().toISOString()}
  * DO NOT EDIT MANUALLY - Run 'pnpm xnovu workflow generate' to update
  */
 

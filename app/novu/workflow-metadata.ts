@@ -1,6 +1,5 @@
 /**
  * Auto-generated workflow metadata aggregator
- * Generated at: 2025-06-16T06:10:00.845Z
  * DO NOT EDIT MANUALLY - Run 'pnpm xnovu workflow generate' to update
  */
 
