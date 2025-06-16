@@ -226,40 +226,6 @@ export async function triggerNotificationById(
   }
 }
 
-/**
- * Trigger a notification by its transaction ID (UUID)
- * 
- * @param transactionId - The UUID of the notification
- * @returns Result object with success status and details
- */
-export async function triggerNotificationByUuid(
-  transactionId: string
-): Promise<TriggerResult> {
-  try {
-    // Fetch notification by transaction_id
-    const { data: notification, error } = await supabase
-      .schema('notify')
-      .from('ent_notification')
-      .select('id')
-      .eq('transaction_id', transactionId)
-      .single();
-
-    if (error || !notification) {
-      return {
-        success: false,
-        error: error?.message || 'Notification not found with given transaction ID'
-      };
-    }
-
-    // Delegate to the main function
-    return triggerNotificationById(notification.id);
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
-  }
-}
 
 /**
  * Trigger multiple notifications by their IDs
@@ -276,41 +242,6 @@ export async function triggerNotificationsByIds(
   return results;
 }
 
-/**
- * Batch trigger multiple notifications by UUIDs with concurrency control
- * 
- * @param transactionIds - Array of notification UUIDs
- * @param batchSize - Number of concurrent operations (default: 10)
- * @returns Array of results
- */
-export async function batchTriggerNotifications(
-  transactionIds: string[],
-  batchSize: number = 10
-): Promise<TriggerResult[]> {
-  logger.info('Batch triggering notifications', {
-    count: transactionIds.length
-  });
-
-  const results: TriggerResult[] = [];
-
-  // Process in batches to control concurrency
-  for (let i = 0; i < transactionIds.length; i += batchSize) {
-    const batch = transactionIds.slice(i, i + batchSize);
-    const batchResults = await Promise.all(
-      batch.map(uuid => triggerNotificationByUuid(uuid))
-    );
-    results.push(...batchResults);
-  }
-
-  const successCount = results.filter(r => r.success).length;
-  logger.info('Batch processing completed', {
-    total: transactionIds.length,
-    successful: successCount,
-    failed: transactionIds.length - successCount
-  });
-
-  return results;
-}
 
 /**
  * Trigger all pending notifications
@@ -434,5 +365,3 @@ async function triggerForRecipients(
   return Promise.all(novuPromises);
 }
 
-// Aliases for backward compatibility
-export const triggerNotificationByTransactionId = triggerNotificationByUuid;
