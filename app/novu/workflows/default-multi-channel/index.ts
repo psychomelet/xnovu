@@ -1,0 +1,1 @@
+export { defaultMultiChannelWorkflow } from './workflow'
