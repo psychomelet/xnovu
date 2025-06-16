@@ -2,10 +2,6 @@ import { describe, it, expect, beforeEach, beforeAll } from '@jest/globals'
 import { Connection, WorkflowClient } from '@temporalio/client'
 import { NativeConnection, Worker } from '@temporalio/worker'
 import * as path from 'path'
-import * as dotenv from 'dotenv'
-
-// Load environment variables
-dotenv.config()
 
 /**
  * Temporal Connection Tests
@@ -35,6 +31,8 @@ describe('Temporal Connection', () => {
       const namespace = process.env.TEMPORAL_NAMESPACE!
       
       console.log(`\n📡 Testing Temporal connection to ${address}...`)
+      console.log(`   Environment: ${process.env.NODE_ENV}`)
+      console.log(`   Namespace: ${namespace}`)
       
       // Determine if TLS is needed based on address
       const isSecure = address.includes(':443') || address.startsWith('https://')

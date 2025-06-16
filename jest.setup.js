@@ -7,12 +7,12 @@ config()
 // Test environment configuration
 process.env.NODE_ENV = 'test'
 
-// Override specific values for test environment
-process.env.TEMPORAL_ADDRESS = 'localhost:7233'
-process.env.TEMPORAL_NAMESPACE = 'default'
-process.env.TEMPORAL_TASK_QUEUE = 'test-queue'
-process.env.TEMPORAL_MAX_CONCURRENT_ACTIVITIES = '10'
-process.env.TEMPORAL_MAX_CONCURRENT_WORKFLOWS = '5'
+// Set default values for test environment if not already set
+process.env.TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
+process.env.TEMPORAL_NAMESPACE = process.env.TEMPORAL_NAMESPACE || 'default'
+process.env.TEMPORAL_TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'test-queue'
+process.env.TEMPORAL_MAX_CONCURRENT_ACTIVITIES = process.env.TEMPORAL_MAX_CONCURRENT_ACTIVITIES || '10'
+process.env.TEMPORAL_MAX_CONCURRENT_WORKFLOWS = process.env.TEMPORAL_MAX_CONCURRENT_WORKFLOWS || '5'
 
 // Add Node.js globals for Next.js compatibility
 if (typeof global.TextEncoder === 'undefined') {
