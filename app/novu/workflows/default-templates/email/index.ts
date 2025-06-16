@@ -1,0 +1,1 @@
+export { defaultEmailWorkflow } from './workflow'
