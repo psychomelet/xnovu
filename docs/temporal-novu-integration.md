@@ -12,33 +12,32 @@ The integration allows Temporal workers to trigger notifications by:
 
 ## Implementation
 
-### Core Function: `triggerNotificationByUuid`
+### Core Function: `triggerNotificationById`
 
 Location: `/lib/notifications/trigger.ts`
 
 ```typescript
-export async function triggerNotificationByUuid(
-  transactionId: string
+export async function triggerNotificationById(
+  notificationId: number
 ): Promise<TriggerResult>
 ```
 
 This function:
-- Accepts a notification UUID (transaction_id field)
+- Accepts a notification database ID
 - Fetches the notification and its associated workflow from Supabase
 - Validates the notification is published (publish_status = 'PUBLISH')
 - Updates status to PROCESSING
 - Triggers Novu for each recipient
 - Updates final status to SENT/FAILED
-- Stores Novu transaction IDs in error_details field
+- Stores Novu transaction IDs (returned by Novu) in error_details field
 
-### Batch Processing: `batchTriggerNotifications`
+### Batch Processing: `triggerNotificationsByIds`
 
 For efficiency, multiple notifications can be processed in parallel:
 
 ```typescript
-export async function batchTriggerNotifications(
-  transactionIds: string[],
-  batchSize?: number
+export async function triggerNotificationsByIds(
+  notificationIds: number[]
 ): Promise<TriggerResult[]>
 ```
 
@@ -49,13 +48,13 @@ The integration uses these key tables:
 - `ent_notification_workflow` - Workflow definitions with workflow_key for Novu
 
 Key fields:
-- `transaction_id` (UUID) - Unique identifier for the notification
+- `id` - Database ID of the notification
 - `notification_status` - PENDING → PROCESSING → SENT/FAILED
 - `publish_status` - Must be 'PUBLISH' for notification to be triggered
 - `recipients` - Array of UUIDs that map to Novu subscriber IDs
 - `payload` - JSON data passed to the Novu workflow
 - `channels` - Updated with workflow's default_channels after processing
-- `error_details` - Stores Novu transaction IDs and processing results
+- `error_details` - Stores Novu transaction IDs (returned by Novu) and processing results
 
 ## Configuration
 
@@ -88,12 +87,12 @@ pnpm exec tsx scripts/test-unpublished-notification.ts
 
 ```typescript
 // In your Temporal activity
-import { triggerNotificationByUuid } from '@/lib/notifications';
+import { triggerNotificationById } from '@/lib/notifications';
 
 export async function processNotification(
-  transactionId: string
+  notificationId: number
 ): Promise<void> {
-  const result = await triggerNotificationByUuid(transactionId);
+  const result = await triggerNotificationById(notificationId);
   
   if (!result.success) {
     throw new Error(`Failed to process notification: ${result.error}`);

@@ -22,22 +22,13 @@ Triggers a single notification by its database ID.
 **Returns:** `TriggerResult` object containing:
 - `success`: Boolean indicating if the trigger was successful
 - `notificationId`: The notification ID
-- `transactionId`: The notification's transaction ID (UUID)
-- `novuTransactionId`: The Novu transaction ID (if successful)
+- `novuTransactionId`: The Novu transaction ID returned by Novu (if successful)
 - `status`: Final notification status
 - `error`: Error message (if failed)
 - `details`: Additional details including recipient results
 - `notification`: The notification data
 - `workflow`: The workflow configuration
 
-### `triggerNotificationByUuid(transactionId: string)`
-
-Triggers a notification by its transaction ID (UUID).
-
-**Parameters:**
-- `transactionId`: The UUID of the notification
-
-**Returns:** `TriggerResult` object
 
 ### `triggerNotificationsByIds(notificationIds: number[])`
 
@@ -48,15 +39,6 @@ Triggers multiple notifications by their database IDs.
 
 **Returns:** Array of `TriggerResult` objects
 
-### `batchTriggerNotifications(transactionIds: string[], batchSize?: number)`
-
-Batch triggers multiple notifications by UUIDs with concurrency control.
-
-**Parameters:**
-- `transactionIds`: Array of notification UUIDs
-- `batchSize`: Number of concurrent operations (default: 10)
-
-**Returns:** Array of `TriggerResult` objects
 
 ### `triggerPendingNotifications(limit?: number)`
 
@@ -123,13 +105,13 @@ All functions include comprehensive error handling:
 
 ```typescript
 // app/api/trigger/route.ts
-import { triggerNotificationByUuid } from '@/lib/notifications';
+import { triggerNotificationById } from '@/lib/notifications';
 
 export async function POST(request: Request) {
-  const { transactionId } = await request.json();
+  const { notificationId } = await request.json();
   
-  const result = await triggerNotificationByUuid(
-    transactionId
+  const result = await triggerNotificationById(
+    notificationId
   );
   
   return Response.json(result);
@@ -140,13 +122,13 @@ export async function POST(request: Request) {
 
 ```typescript
 // temporal/activities/notification.ts
-import { batchTriggerNotifications } from '@/lib/notifications';
+import { triggerNotificationsByIds } from '@/lib/notifications';
 
 export async function processNotificationBatch(
-  transactionIds: string[]
+  notificationIds: number[]
 ) {
-  // Process with concurrency limit of 5
-  return await batchTriggerNotifications(transactionIds, 5);
+  // Process multiple notifications
+  return await triggerNotificationsByIds(notificationIds);
 }
 ```
 
