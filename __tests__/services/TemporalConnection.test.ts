@@ -7,33 +7,16 @@ import * as dotenv from 'dotenv'
 // Load environment variables
 dotenv.config()
 
-// Helper to check if we can connect to Temporal
-async function canConnectToTemporal(): Promise<boolean> {
-  try {
-    const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
-    const isSecure = address.includes(':443')
-    const conn = await Connection.connect({
-      address,
-      tls: isSecure ? {} : false,
-      connectTimeout: '5s',
-    })
-    await conn.close()
-    return true
-  } catch {
-    return false
-  }
-}
-
+/**
+ * Temporal Connection Tests
+ * 
+ * Note: These tests require a running Temporal server. If the tests fail with
+ * "Failed to connect before the deadline" errors, it may be due to Jest's 
+ * limitations with gRPC connections. You can verify Temporal connectivity 
+ * by running: pnpm tsx scripts/verify-temporal.ts
+ */
 describe('Temporal Connection', () => {
   const requiredEnvVars = ['TEMPORAL_ADDRESS', 'TEMPORAL_NAMESPACE']
-  let temporalAvailable = false
-  
-  beforeAll(async () => {
-    temporalAvailable = await canConnectToTemporal()
-    if (!temporalAvailable) {
-      console.log('⚠️  Temporal server not accessible - some tests will be skipped')
-    }
-  }, 30000)
   
   beforeEach(() => {
     // Check for required environment variables
@@ -48,10 +31,6 @@ describe('Temporal Connection', () => {
 
   describe('Client SDK Connection', () => {
     it('should connect to Temporal server with valid configuration', async () => {
-      if (!temporalAvailable) {
-        console.log('Skipping - Temporal not available')
-        return
-      }
       const address = process.env.TEMPORAL_ADDRESS!
       const namespace = process.env.TEMPORAL_NAMESPACE!
       
@@ -132,26 +111,16 @@ describe('Temporal Connection', () => {
 
   describe('Namespace Access', () => {
     it('should list available namespaces', async () => {
-      if (!temporalAvailable) {
-        console.log('Skipping - Temporal not available')
-        return
-      }
       const address = process.env.TEMPORAL_ADDRESS!
       const isSecure = address.includes(':443') || address.startsWith('https://')
       
       console.log('\n🔍 Testing namespace access...')
       
-      let connection: Connection
-      try {
-        connection = await Connection.connect({
-          address,
-          tls: isSecure ? {} : false,
-          connectTimeout: '10s',
-        })
-      } catch (error: any) {
-        console.log(`⚠️  Skipping namespace test - connection failed: ${error.message}`)
-        return
-      }
+      const connection = await Connection.connect({
+        address,
+        tls: isSecure ? {} : false,
+        connectTimeout: '10s',
+      })
       
       try {
         // Use workflowService.listNamespaces instead of operatorService
@@ -204,19 +173,10 @@ describe('Temporal Connection', () => {
       console.log(`   Address: ${address}`)
       console.log(`   TLS: ${isSecure}`)
       
-      let connection: NativeConnection
-      try {
-        connection = await NativeConnection.connect({
-          address,
-          tls: isSecure ? {} : false,
-        })
-      } catch (error: any) {
-        console.error(`❌ Worker connection failed:`, error.message)
-        // Worker connections might require additional setup or permissions
-        console.log('⚠️  Note: Worker connections often require additional configuration')
-        console.log('   This test failure might be expected in a test environment')
-        return // Skip the rest of the test
-      }
+      const connection = await NativeConnection.connect({
+        address,
+        tls: isSecure ? {} : false,
+      })
       
       expect(connection).toBeDefined()
       
