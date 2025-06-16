@@ -226,8 +226,8 @@ describe('Temporal Connection', () => {
           connection,
           namespace,
           taskQueue,
-          // Use a test workflow path to avoid loading actual workflows
-          workflowsPath: path.join(__dirname, 'test-workflows'),
+          // Use require.resolve to get a valid module path
+          workflowsPath: require.resolve('./TemporalConnection.test'),
           activities: {
             testActivity: async () => 'test',
           },
