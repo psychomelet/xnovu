@@ -12,6 +12,8 @@ import type { Database } from '@/lib/supabase/database.types';
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 type NotificationWorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
 type NotificationStatus = Database['shared_types']['Enums']['notification_status'];
+type PublishStatus = 'NONE' | 'DRAFT' | 'DISCARD' | 'PUBLISH' | 'DELETED';
+type ChannelType = Database['shared_types']['Enums']['notification_channel_type'];
 
 // Initialize clients
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -51,20 +53,17 @@ export interface RecipientResult {
  * Trigger a notification by its database ID
  * 
  * @param notificationId - The numeric ID of the notification
- * @param enterpriseId - The enterprise ID (for validation)
  * @returns Result object with success status and details
  */
 export async function triggerNotificationById(
-  notificationId: number,
-  enterpriseId: string
+  notificationId: number
 ): Promise<TriggerResult> {
   const startTime = Date.now();
   
   try {
     // Fetch the notification with its workflow
     logger.info('Fetching notification from database', { 
-      notificationId, 
-      enterpriseId 
+      notificationId 
     });
     
     const { data: notification, error: fetchError } = await supabase
@@ -75,7 +74,6 @@ export async function triggerNotificationById(
         ent_notification_workflow!inner(*)
       `)
       .eq('id', notificationId)
-      .eq('enterprise_id', enterpriseId)
       .single();
 
     if (fetchError || !notification) {
@@ -87,6 +85,19 @@ export async function triggerNotificationById(
         success: false,
         error: fetchError?.message || 'Notification not found',
         details: fetchError
+      };
+    }
+
+    // Check if notification is published
+    if (notification.publish_status !== 'PUBLISH') {
+      logger.warn('Notification is not published', {
+        notificationId,
+        publishStatus: notification.publish_status
+      });
+      return {
+        success: false,
+        error: `Notification is not published (status: ${notification.publish_status})`,
+        notification: notification as NotificationRow
       };
     }
 
@@ -127,23 +138,27 @@ export async function triggerNotificationById(
       .filter(r => r.success && r.transactionId)
       .map(r => r.transactionId!);
 
+    // Determine actual channels used (from workflow default_channels)
+    const channels = workflow.default_channels as ChannelType[] || [];
+
     // Update notification status based on results
     const updateData: any = {
-      notification_status: allSuccessful ? 'SENT' : (hasPartialSuccess ? 'PARTIAL' : 'FAILED'),
-      processed_at: new Date().toISOString()
+      notification_status: allSuccessful ? 'SENT' : 'FAILED',
+      processed_at: new Date().toISOString(),
+      channels: channels
     };
 
-    if (transactionIds.length > 0) {
-      updateData.novu_transaction_ids = transactionIds;
-    }
+    // Store transaction IDs and results in error_details (used for both success and failure)
+    const resultDetails: any = {
+      novu_transaction_ids: transactionIds,
+      results: recipientResults,
+      successCount,
+      totalRecipients: recipientResults.length,
+      timestamp: new Date().toISOString()
+    };
 
-    if (!allSuccessful) {
-      updateData.error_details = { 
-        results: recipientResults, 
-        successCount,
-        totalRecipients: recipientResults.length 
-      };
-    }
+    // Always store the details for tracking
+    updateData.error_details = resultDetails;
 
     await supabase
       .schema('notify')
@@ -215,12 +230,10 @@ export async function triggerNotificationById(
  * Trigger a notification by its transaction ID (UUID)
  * 
  * @param transactionId - The UUID of the notification
- * @param enterpriseId - The enterprise ID (for validation)
  * @returns Result object with success status and details
  */
 export async function triggerNotificationByUuid(
-  transactionId: string,
-  enterpriseId: string
+  transactionId: string
 ): Promise<TriggerResult> {
   try {
     // Fetch notification by transaction_id
@@ -229,7 +242,6 @@ export async function triggerNotificationByUuid(
       .from('ent_notification')
       .select('id')
       .eq('transaction_id', transactionId)
-      .eq('enterprise_id', enterpriseId)
       .single();
 
     if (error || !notification) {
@@ -240,7 +252,7 @@ export async function triggerNotificationByUuid(
     }
 
     // Delegate to the main function
-    return triggerNotificationById(notification.id, enterpriseId);
+    return triggerNotificationById(notification.id);
   } catch (error) {
     return {
       success: false,
@@ -253,15 +265,13 @@ export async function triggerNotificationByUuid(
  * Trigger multiple notifications by their IDs
  * 
  * @param notificationIds - Array of notification IDs
- * @param enterpriseId - The enterprise ID
  * @returns Array of results for each notification
  */
 export async function triggerNotificationsByIds(
-  notificationIds: number[],
-  enterpriseId: string
+  notificationIds: number[]
 ): Promise<TriggerResult[]> {
   const results = await Promise.all(
-    notificationIds.map(id => triggerNotificationById(id, enterpriseId))
+    notificationIds.map(id => triggerNotificationById(id))
   );
   return results;
 }
@@ -270,18 +280,15 @@ export async function triggerNotificationsByIds(
  * Batch trigger multiple notifications by UUIDs with concurrency control
  * 
  * @param transactionIds - Array of notification UUIDs
- * @param enterpriseId - The enterprise ID
  * @param batchSize - Number of concurrent operations (default: 10)
  * @returns Array of results
  */
 export async function batchTriggerNotifications(
   transactionIds: string[],
-  enterpriseId: string,
   batchSize: number = 10
 ): Promise<TriggerResult[]> {
   logger.info('Batch triggering notifications', {
-    count: transactionIds.length,
-    enterpriseId
+    count: transactionIds.length
   });
 
   const results: TriggerResult[] = [];
@@ -290,7 +297,7 @@ export async function batchTriggerNotifications(
   for (let i = 0; i < transactionIds.length; i += batchSize) {
     const batch = transactionIds.slice(i, i + batchSize);
     const batchResults = await Promise.all(
-      batch.map(uuid => triggerNotificationByUuid(uuid, enterpriseId))
+      batch.map(uuid => triggerNotificationByUuid(uuid))
     );
     results.push(...batchResults);
   }
@@ -317,13 +324,14 @@ export async function triggerPendingNotifications(
   limit: number = 100
 ): Promise<TriggerResult[]> {
   try {
-    // Fetch pending notifications
+    // Fetch pending notifications that are published
     const { data: notifications, error } = await supabase
       .schema('notify')
       .from('ent_notification')
       .select('id')
       .eq('enterprise_id', enterpriseId)
       .eq('notification_status', 'PENDING')
+      .eq('publish_status', 'PUBLISH')
       .limit(limit);
 
     if (error || !notifications) {
@@ -336,7 +344,7 @@ export async function triggerPendingNotifications(
     // Trigger each notification
     const results = await Promise.all(
       notifications.map(notification => 
-        triggerNotificationById(notification.id, enterpriseId)
+        triggerNotificationById(notification.id)
       )
     );
 
@@ -353,20 +361,17 @@ export async function triggerPendingNotifications(
  * Find and trigger a notification by custom criteria
  * 
  * @param criteria - Object with field-value pairs to match
- * @param enterpriseId - The enterprise ID
  * @returns Result object with success status and details
  */
 export async function triggerNotificationByCriteria(
-  criteria: Record<string, any>,
-  enterpriseId: string
+  criteria: Record<string, any>
 ): Promise<TriggerResult> {
   try {
     // Build query
     let query = supabase
       .schema('notify')
       .from('ent_notification')
-      .select('id')
-      .eq('enterprise_id', enterpriseId);
+      .select('id');
 
     // Add criteria to query
     for (const [field, value] of Object.entries(criteria)) {
@@ -384,7 +389,7 @@ export async function triggerNotificationByCriteria(
     }
 
     // Delegate to the main function
-    return triggerNotificationById(notification.id, enterpriseId);
+    return triggerNotificationById(notification.id);
   } catch (error) {
     return {
       success: false,

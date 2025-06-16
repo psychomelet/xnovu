@@ -12,13 +12,12 @@ The notification trigger system allows you to:
 
 ## Functions
 
-### `triggerNotificationById(notificationId: number, enterpriseId: string)`
+### `triggerNotificationById(notificationId: number)`
 
 Triggers a single notification by its database ID.
 
 **Parameters:**
 - `notificationId`: The numeric ID of the notification
-- `enterpriseId`: The enterprise ID (for validation)
 
 **Returns:** `TriggerResult` object containing:
 - `success`: Boolean indicating if the trigger was successful
@@ -31,33 +30,30 @@ Triggers a single notification by its database ID.
 - `notification`: The notification data
 - `workflow`: The workflow configuration
 
-### `triggerNotificationByUuid(transactionId: string, enterpriseId: string)`
+### `triggerNotificationByUuid(transactionId: string)`
 
 Triggers a notification by its transaction ID (UUID).
 
 **Parameters:**
 - `transactionId`: The UUID of the notification
-- `enterpriseId`: The enterprise ID (for validation)
 
 **Returns:** `TriggerResult` object
 
-### `triggerNotificationsByIds(notificationIds: number[], enterpriseId: string)`
+### `triggerNotificationsByIds(notificationIds: number[])`
 
 Triggers multiple notifications by their database IDs.
 
 **Parameters:**
 - `notificationIds`: Array of notification IDs
-- `enterpriseId`: The enterprise ID
 
 **Returns:** Array of `TriggerResult` objects
 
-### `batchTriggerNotifications(transactionIds: string[], enterpriseId: string, batchSize?: number)`
+### `batchTriggerNotifications(transactionIds: string[], batchSize?: number)`
 
 Batch triggers multiple notifications by UUIDs with concurrency control.
 
 **Parameters:**
 - `transactionIds`: Array of notification UUIDs
-- `enterpriseId`: The enterprise ID
 - `batchSize`: Number of concurrent operations (default: 10)
 
 **Returns:** Array of `TriggerResult` objects
@@ -72,13 +68,12 @@ Triggers all pending notifications for an enterprise.
 
 **Returns:** Array of `TriggerResult` objects
 
-### `triggerNotificationByCriteria(criteria: Record<string, any>, enterpriseId: string)`
+### `triggerNotificationByCriteria(criteria: Record<string, any>)`
 
 Find and trigger a notification by custom criteria.
 
 **Parameters:**
 - `criteria`: Object with field-value pairs to match
-- `enterpriseId`: The enterprise ID
 
 **Returns:** `TriggerResult` object
 
@@ -88,8 +83,24 @@ The notification status is updated throughout the process:
 1. `PENDING` → Initial state
 2. `PROCESSING` → When trigger starts
 3. `SENT` → When successfully triggered
-4. `PARTIAL` → When some recipients succeed but not all
-5. `FAILED` → When an error occurs
+4. `FAILED` → When an error occurs
+
+## Publish Status Requirement
+
+**Important**: Only notifications with `publish_status = 'PUBLISH'` will be triggered. Notifications in other states (`DRAFT`, `DISCARD`, `NONE`, `DELETED`) will be rejected with an appropriate error message.
+
+## Field Updates
+
+When a notification is processed, the following fields are updated:
+- `notification_status`: Updated to reflect the processing result
+- `processed_at`: Timestamp when processing completed
+- `channels`: Updated with the actual channels used (from workflow's default_channels)
+- `error_details`: Contains processing details including:
+  - `novu_transaction_ids`: Array of Novu transaction IDs
+  - `results`: Detailed results for each recipient
+  - `successCount`: Number of successful recipients
+  - `totalRecipients`: Total number of recipients
+  - `timestamp`: Processing timestamp
 
 ## Multi-Recipient Support
 
@@ -116,11 +127,10 @@ All functions include comprehensive error handling:
 import { triggerNotificationByUuid } from '@/lib/notifications';
 
 export async function POST(request: Request) {
-  const { transactionId, enterpriseId } = await request.json();
+  const { transactionId } = await request.json();
   
   const result = await triggerNotificationByUuid(
-    transactionId,
-    enterpriseId
+    transactionId
   );
   
   return Response.json(result);
@@ -134,11 +144,10 @@ export async function POST(request: Request) {
 import { batchTriggerNotifications } from '@/lib/notifications';
 
 export async function processNotificationBatch(
-  transactionIds: string[],
-  enterpriseId: string
+  transactionIds: string[]
 ) {
   // Process with concurrency limit of 5
-  return await batchTriggerNotifications(transactionIds, enterpriseId, 5);
+  return await batchTriggerNotifications(transactionIds, 5);
 }
 ```
 

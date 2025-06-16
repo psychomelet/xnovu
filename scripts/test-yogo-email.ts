@@ -85,6 +85,8 @@ async function testYogoEmail() {
       notification_workflow_id: workflowId,
       enterprise_id: testEnterpriseId,
       notification_status: 'PENDING' as const,
+      publish_status: 'PUBLISH' as const,  // Mark as published so it can be triggered
+      channels: ['EMAIL', 'IN_APP'] as const,  // Expected channels for this workflow
       overrides: {
         // Optional: Override email controls
         email: {
@@ -110,8 +112,7 @@ async function testYogoEmail() {
     // Step 3: Trigger using temporal function
     console.log('\n🔔 Triggering yogo-email workflow via temporal function...');
     const result = await triggerNotificationByUuid(
-      notification!.transaction_id,  // Use transaction_id, not id
-      testEnterpriseId
+      notification!.transaction_id  // Use transaction_id, not id
     );
 
     if (result.success) {
@@ -150,11 +151,23 @@ async function testYogoEmail() {
     const { data: finalNotification } = await supabase
       .schema('notify')
       .from('ent_notification')
-      .select('id, notification_status, processed_at, novu_transaction_ids, error_details')
+      .select('id, notification_status, publish_status, channels, processed_at, error_details')
       .eq('id', notification!.id)
       .single();
 
-    console.log('Final notification state:', finalNotification);
+    console.log('Final notification state:');
+    console.log('   ID:', finalNotification?.id);
+    console.log('   Status:', finalNotification?.notification_status);
+    console.log('   Publish Status:', finalNotification?.publish_status);
+    console.log('   Channels:', finalNotification?.channels);
+    console.log('   Processed At:', finalNotification?.processed_at);
+    
+    if (finalNotification?.error_details) {
+      const details = finalNotification.error_details as any;
+      console.log('   Novu Transaction IDs:', details.novu_transaction_ids);
+      console.log('   Success Count:', details.successCount);
+      console.log('   Total Recipients:', details.totalRecipients);
+    }
 
     console.log('\n✨ Test completed! Check your:');
     console.log('   - Email inbox for the test email');
