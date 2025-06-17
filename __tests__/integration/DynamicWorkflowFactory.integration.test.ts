@@ -179,7 +179,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   describe('Workflow Execution with Real Database Status Updates', () => {
     it('should update notification status through complete workflow execution', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'status-tracking-workflow-integration',
+        workflow_key: `status-tracking-workflow-integration-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL'],
         emailTemplateId: 123
@@ -187,8 +187,10 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Create a real notification in the database
       const testNotification = await createTestNotification({
-        name: 'Status Tracking Integration Test',
-        notification_status: 'PENDING'
+        name: `Status Tracking Integration Test ${Date.now()}-${Math.random()}`,
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from interfering
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       // Create workflow
@@ -237,7 +239,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
     it('should handle workflow execution errors and update status to FAILED in database', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'error-workflow-integration',
+        workflow_key: `error-workflow-integration-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL'],
         emailTemplateId: 123
@@ -245,8 +247,10 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Create a real notification in the database
       const testNotification = await createTestNotification({
-        name: 'Error Test Notification Integration',
-        notification_status: 'PENDING'
+        name: `Error Test Notification Integration ${Date.now()}-${Math.random()}`,
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from picking this up
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       // Mock template rendering to throw error
@@ -286,7 +290,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
     it('should update notification status through multi-channel workflow execution', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'multi-channel-integration-workflow',
+        workflow_key: `multi-channel-integration-workflow-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL', 'IN_APP'],
         emailTemplateId: 123,
@@ -295,13 +299,17 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Create real notifications in database
       const emailNotification = await createTestNotification({
-        name: 'Email Integration Test',
-        notification_status: 'PENDING'
+        name: `Email Integration Test ${Date.now()}-${Math.random()}`,
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from interfering
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       const inAppNotification = await createTestNotification({
-        name: 'In-App Integration Test',
-        notification_status: 'PENDING'
+        name: `In-App Integration Test ${Date.now()}-${Math.random()}`, 
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from interfering
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       // Create workflow
@@ -421,7 +429,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   describe('Workflow Factory with Template Rendering Integration', () => {
     it('should integrate with template rendering service for all channel types', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'template-integration-workflow',
+        workflow_key: `template-integration-workflow-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL', 'IN_APP', 'SMS', 'PUSH'],
         emailTemplateId: 123,
