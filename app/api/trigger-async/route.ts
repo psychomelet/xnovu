@@ -24,7 +24,11 @@ export async function POST(request: NextRequest) {
           async: true,
           workflowId: result.workflowId,
           runId: result.runId,
-          message: `Notification ${notificationId} queued for async processing`
+          startDelay: result.startDelay,
+          scheduledFor: result.scheduledFor,
+          message: result.startDelay 
+            ? `Notification ${notificationId} scheduled for ${result.scheduledFor}`
+            : `Notification ${notificationId} queued for async processing`
         })
       } else {
         // Sync trigger (fallback)

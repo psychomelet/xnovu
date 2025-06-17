@@ -15,6 +15,24 @@ jest.mock('uuid', () => ({
   v4: jest.fn(() => 'mock-uuid-1234')
 }))
 
+// Mock Supabase
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({
+    schema: jest.fn(() => ({
+      from: jest.fn(() => ({
+        select: jest.fn(() => ({
+          eq: jest.fn(() => ({
+            single: jest.fn(() => Promise.resolve({
+              data: { scheduled_for: null },
+              error: null
+            }))
+          }))
+        }))
+      }))
+    }))
+  }))
+}))
+
 describe('NotificationClient', () => {
   let client: NotificationClient
   let mockTemporalClient: any

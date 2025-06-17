@@ -14,9 +14,9 @@ type SupabaseClient = ReturnType<typeof createClient<Database>>;
 
 // Mock @novu/framework with enhanced functionality for testing
 jest.mock('@novu/framework', () => ({
-  workflow: jest.fn((key, stepFunction, options) => ({ 
-    key, 
-    stepFunction, 
+  workflow: jest.fn((key, stepFunction, options) => ({
+    key,
+    stepFunction,
     options,
     trigger: jest.fn().mockResolvedValue({ success: true, transactionId: 'test-txn' })
   }))
@@ -36,7 +36,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   const testUserId = randomUUID();
   const createdNotificationIds: number[] = [];
   const createdWorkflowIds: number[] = [];
-  
+
   // Get mock functions
   const mockWorkflow = jest.mocked(require('@novu/framework').workflow);
   const mockGetTemplateRenderer = jest.mocked(require('../../app/services/template/TemplateRenderer').getTemplateRenderer);
@@ -45,9 +45,9 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   // Check if we have real credentials
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  const hasRealCredentials = supabaseUrl && 
-    supabaseServiceKey && 
-    supabaseUrl.includes('supabase.co') && 
+  const hasRealCredentials = supabaseUrl &&
+    supabaseServiceKey &&
+    supabaseUrl.includes('supabase.co') &&
     supabaseServiceKey.length > 50;
 
   beforeAll(async () => {
@@ -59,13 +59,13 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       auth: { persistSession: false },
       global: { headers: { 'x-application-name': 'xnovu-test-dynamic-workflow-factory-integration' } }
     });
-    
+
     notificationService = new NotificationService();
   });
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    
+
     // Setup template renderer mock
     mockRenderTemplate.mockResolvedValue({
       subject: 'Test Subject',
@@ -74,7 +74,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
     mockGetTemplateRenderer.mockReturnValue({
       renderTemplate: mockRenderTemplate
     });
-    
+
     // Clean up any existing test data
     await cleanupTestData();
   });
@@ -86,7 +86,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
   async function cleanupTestData() {
     if (!hasRealCredentials) return;
-    
+
     try {
       // Delete test notifications
       if (createdNotificationIds.length > 0) {
@@ -107,7 +107,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
           .in('id', createdWorkflowIds);
         createdWorkflowIds.length = 0;
       }
-      
+
       // Delete by exact enterprise ID
       await supabase
         .schema('notify')
@@ -300,7 +300,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       });
 
       const inAppNotification = await createTestNotification({
-        name: 'In-App Integration Test', 
+        name: 'In-App Integration Test',
         notification_status: 'PENDING'
       });
 
@@ -322,15 +322,15 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       };
 
       // Execute workflow for email notification
-      await stepFunction({ 
-        step: mockStep, 
-        payload: { 
+      await stepFunction({
+        step: mockStep,
+        payload: {
           notificationId: emailNotification.id,
           data: { message: 'Email test' }
         }
       });
 
-      // Execute workflow for in-app notification  
+      // Execute workflow for in-app notification
       await stepFunction({
         step: mockStep,
         payload: {
