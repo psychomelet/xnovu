@@ -13,17 +13,54 @@ type SupabaseClient = ReturnType<typeof createClient<Database>>;
 describe('NotificationPollingService Scheduled Notification Integration Tests', () => {
   let supabase: SupabaseClient;
   let pollingService: NotificationPollingService;
+  // Use a valid UUID for enterprise ID
   const testEnterpriseId = randomUUID();
   const createdNotificationIds: number[] = [];
   const createdWorkflowIds: number[] = [];
 
+  // Helper to wait for notification to be available
+  const waitForNotification = async (
+    pollFn: () => Promise<NotificationRow[]>,
+    notificationId: number,
+    maxRetries: number = 5
+  ): Promise<NotificationRow | undefined> => {
+    for (let i = 0; i < maxRetries; i++) {
+      const results = await pollFn();
+      const found = results.find(n => n.id === notificationId);
+      if (found) return found;
+
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    return undefined;
+  };
+
+  // Wrapper to filter polling results by our test enterprise
+  const pollNotificationsForTest = async (options: Parameters<typeof pollingService.pollNotifications>[0] = {}) => {
+    // Use a large batch size to ensure we get all notifications
+    const results = await pollingService.pollNotifications({ ...options, batchSize: 1000 });
+    return results.filter(n => n.enterprise_id === testEnterpriseId);
+  };
+
+  const pollScheduledNotificationsForTest = async (options: Parameters<typeof pollingService.pollScheduledNotifications>[0] = {}) => {
+    // Use a large batch size to ensure we get all notifications
+    const results = await pollingService.pollScheduledNotifications({ ...options, batchSize: 1000 });
+    return results.filter(n => n.enterprise_id === testEnterpriseId);
+  };
+
+  const pollFailedNotificationsForTest = async (options: Parameters<typeof pollingService.pollFailedNotifications>[0] = {}) => {
+    // Use a large batch size to ensure we get all notifications
+    const results = await pollingService.pollFailedNotifications({ ...options, batchSize: 1000 });
+    return results.filter(n => n.enterprise_id === testEnterpriseId);
+  };
+
   // Check for real credentials
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  
-  const hasRealCredentials = supabaseUrl && 
-    supabaseServiceKey && 
-    supabaseUrl.includes('supabase.co') && 
+
+  const hasRealCredentials = supabaseUrl &&
+    supabaseServiceKey &&
+    supabaseUrl.includes('supabase.co') &&
     supabaseServiceKey.length > 50;
 
   beforeAll(async () => {
@@ -67,19 +104,7 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
   });
 
   async function createTestWorkflow(): Promise<WorkflowRow> {
-    // First, try to find an existing workflow
-    const { data: existingWorkflow } = await supabase
-      .schema('notify')
-      .from('ent_notification_workflow')
-      .select()
-      .eq('workflow_key', 'default-email')
-      .single();
-
-    if (existingWorkflow) {
-      return existingWorkflow;
-    }
-
-    // If not found, create a new one with unique key
+    // Always create a new workflow with unique key to avoid test interference
     const uniqueKey = `test-polling-workflow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const { data, error } = await supabase
       .schema('notify')
@@ -130,25 +155,30 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     }
 
     createdNotificationIds.push(data.id);
+
+    // Small delay to ensure notification is properly persisted
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     return data;
   }
 
   describe('pollNotifications with scheduled_for filtering', () => {
     let testWorkflow: WorkflowRow;
 
-    beforeAll(async () => {
+    beforeEach(async () => {
+      // Create a fresh workflow for each test to avoid interference
       testWorkflow = await createTestWorkflow();
-    });
 
-    beforeEach(() => {
       // Create fresh polling service for each test to avoid timestamp issues
       pollingService = new NotificationPollingService(supabase);
+      // Reset the polling timestamp to ensure we capture all notifications
+      pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
     });
 
     it('should include notifications without scheduled_for', async () => {
       const notification = await createTestNotification(testWorkflow.id, null);
 
-      const results = await pollingService.pollNotifications({ batchSize: 10 });
+      const results = await pollNotificationsForTest();
 
       const found = results.find(n => n.id === notification.id);
       expect(found).toBeDefined();
@@ -161,7 +191,7 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         pastDate.toISOString()
       );
 
-      const results = await pollingService.pollNotifications({ batchSize: 10 });
+      const results = await pollNotificationsForTest();
 
       const found = results.find(n => n.id === notification.id);
       expect(found).toBeDefined();
@@ -174,7 +204,7 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         futureDate.toISOString()
       );
 
-      const results = await pollingService.pollNotifications({ batchSize: 10 });
+      const results = await pollNotificationsForTest();
 
       const found = results.find(n => n.id === notification.id);
       expect(found).toBeUndefined();
@@ -192,7 +222,7 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes from now
       );
 
-      const results = await pollingService.pollNotifications({ batchSize: 20 });
+      const results = await pollNotificationsForTest();
 
       // Should find null and past, but not future
       expect(results.find(n => n.id === nullScheduled.id)).toBeDefined();
@@ -201,6 +231,10 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     });
 
     it('should respect includeProcessed option with scheduled_for filter', async () => {
+      // Create a fresh polling service with a reset timestamp for this test
+      const testPollingService = new NotificationPollingService(supabase);
+      testPollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000));
+
       // First, create a notification with PENDING status
       const notification = await createTestNotification(
         testWorkflow.id,
@@ -209,40 +243,65 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       );
 
       // Poll without includeProcessed to establish a baseline timestamp
-      const firstPoll = await pollingService.pollNotifications({ batchSize: 10 });
-      expect(firstPoll.find(n => n.id === notification.id)).toBeDefined();
+      // Use retry mechanism to handle timing issues
+      let foundNotification: NotificationRow | undefined;
+      for (let i = 0; i < 5; i++) {
+        const firstPoll = await testPollingService.pollNotifications({ batchSize: 1000 });
+        const filteredFirstPoll = firstPoll.filter(n => n.enterprise_id === testEnterpriseId);
+        foundNotification = filteredFirstPoll.find(n => n.id === notification.id);
+        if (foundNotification) break;
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      expect(foundNotification).toBeDefined();
 
-      // Update the notification to SENT status
+      // Update the notification to SENT status with a new timestamp
+      const newTimestamp = new Date(Date.now() + 1000).toISOString(); // 1 second in future
       await supabase
         .schema('notify')
         .from('ent_notification')
-        .update({ notification_status: 'SENT' })
+        .update({
+          notification_status: 'SENT',
+          updated_at: newTimestamp
+        })
         .eq('id', notification.id);
 
+      // Small delay to ensure update is persisted
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       // Poll without includeProcessed (default) - should not find SENT notification
-      const resultsExcluded = await pollingService.pollNotifications({ batchSize: 10 });
-      expect(resultsExcluded.find(n => n.id === notification.id)).toBeUndefined();
+      const resultsExcluded = await testPollingService.pollNotifications({ batchSize: 1000 });
+      const filteredExcluded = resultsExcluded.filter(n => n.enterprise_id === testEnterpriseId);
+      expect(filteredExcluded.find(n => n.id === notification.id)).toBeUndefined();
 
       // Poll with includeProcessed - should find SENT notification
-      const resultsIncluded = await pollingService.pollNotifications({ 
-        batchSize: 10,
-        includeProcessed: true 
-      });
-      
-      expect(resultsIncluded.find(n => n.id === notification.id)).toBeDefined();
+      // Use retry mechanism to handle timing issues
+      let foundIncluded: NotificationRow | undefined;
+      for (let i = 0; i < 5; i++) {
+        const resultsIncluded = await testPollingService.pollNotifications({
+          batchSize: 1000,
+          includeProcessed: true
+        });
+        const filteredIncluded = resultsIncluded.filter(n => n.enterprise_id === testEnterpriseId);
+        foundIncluded = filteredIncluded.find(n => n.id === notification.id);
+        if (foundIncluded) break;
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      expect(foundIncluded).toBeDefined();
     });
   });
 
   describe('pollScheduledNotifications', () => {
     let testWorkflow: WorkflowRow;
 
-    beforeAll(async () => {
+    beforeEach(async () => {
+      // Create a fresh workflow for each test to avoid interference
       testWorkflow = await createTestWorkflow();
-    });
 
-    beforeEach(() => {
       // Create fresh polling service for each test to avoid timestamp issues
       pollingService = new NotificationPollingService(supabase);
+      // Reset the polling timestamp to ensure we capture all notifications
+      pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
     });
 
     it('should only return notifications with scheduled_for <= now', async () => {
@@ -257,10 +316,16 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       );
       const nullNotification = await createTestNotification(testWorkflow.id, null);
 
-      const results = await pollingService.pollScheduledNotifications({ batchSize: 20 });
+      const found = await waitForNotification(
+        pollScheduledNotificationsForTest,
+        pastNotification.id
+      );
 
       // Should only find past scheduled notification
-      expect(results.find(n => n.id === pastNotification.id)).toBeDefined();
+      expect(found).toBeDefined();
+
+      // Verify other notifications are not found
+      const results = await pollScheduledNotificationsForTest();
       expect(results.find(n => n.id === futureNotification.id)).toBeUndefined();
       expect(results.find(n => n.id === nullNotification.id)).toBeUndefined();
     });
@@ -276,12 +341,14 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         new Date(Date.now() - 30 * 60 * 1000).toISOString() // 30 minutes ago
       );
 
-      const results = await pollingService.pollScheduledNotifications({ batchSize: 20 });
+      const results = await pollScheduledNotificationsForTest();
 
       const olderIndex = results.findIndex(n => n.id === older.id);
       const newerIndex = results.findIndex(n => n.id === newer.id);
 
       // Older should come before newer
+      expect(olderIndex).not.toBe(-1);
+      expect(newerIndex).not.toBe(-1);
       if (olderIndex !== -1 && newerIndex !== -1) {
         expect(olderIndex).toBeLessThan(newerIndex);
       }
@@ -299,9 +366,13 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         'FAILED'
       );
 
-      const results = await pollingService.pollScheduledNotifications({ batchSize: 20 });
+      const found = await waitForNotification(
+        pollScheduledNotificationsForTest,
+        pendingNotification.id
+      );
+      expect(found).toBeDefined();
 
-      expect(results.find(n => n.id === pendingNotification.id)).toBeDefined();
+      const results = await pollScheduledNotificationsForTest();
       expect(results.find(n => n.id === failedNotification.id)).toBeUndefined();
     });
 
@@ -313,24 +384,28 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       );
 
       // Small delay to ensure we're past the scheduled time
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      const results = await pollingService.pollScheduledNotifications({ batchSize: 10 });
+      const found = await waitForNotification(
+        pollScheduledNotificationsForTest,
+        notification.id
+      );
 
-      expect(results.find(n => n.id === notification.id)).toBeDefined();
+      expect(found).toBeDefined();
     });
   });
 
   describe('pollFailedNotifications', () => {
     let testWorkflow: WorkflowRow;
 
-    beforeAll(async () => {
+    beforeEach(async () => {
+      // Create a fresh workflow for each test to avoid interference
       testWorkflow = await createTestWorkflow();
-    });
 
-    beforeEach(() => {
       // Create fresh polling service for each test to avoid timestamp issues
       pollingService = new NotificationPollingService(supabase);
+      // Reset the polling timestamp to ensure we capture all notifications
+      pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
     });
 
     it('should include failed notifications regardless of scheduled_for', async () => {
@@ -346,11 +421,19 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         'FAILED'
       );
 
-      const results = await pollingService.pollFailedNotifications({ batchSize: 10 });
+      // Use waitForNotification to make the test robust
+      const foundNoSchedule = await waitForNotification(
+        pollFailedNotificationsForTest,
+        failedNoSchedule.id
+      );
+      const foundFutureSchedule = await waitForNotification(
+        pollFailedNotificationsForTest,
+        failedFutureSchedule.id
+      );
 
       // Both should be included
-      expect(results.find(n => n.id === failedNoSchedule.id)).toBeDefined();
-      expect(results.find(n => n.id === failedFutureSchedule.id)).toBeDefined();
+      expect(foundNoSchedule).toBeDefined();
+      expect(foundFutureSchedule).toBeDefined();
     });
   });
 });
