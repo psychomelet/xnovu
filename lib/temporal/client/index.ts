@@ -50,3 +50,6 @@ export async function closeTemporalConnection(): Promise<void> {
 
 // Export notification client
 export { NotificationClient, notificationClient } from './notification-client'
+
+// Export schedule client
+export * from './schedule-client'

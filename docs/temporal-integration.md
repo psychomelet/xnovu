@@ -18,22 +18,28 @@ The Temporal integration provides asynchronous notification processing through a
 lib/
 ├── temporal/
 │   ├── activities/
-│   │   ├── index.ts                    # Exports notification-trigger activity
-│   │   └── notification-trigger.ts     # Core async trigger functionality
+│   │   ├── index.ts                    # Exports notification-trigger and rule-scheduled activities
+│   │   ├── notification-trigger.ts     # Core async trigger functionality
+│   │   └── rule-scheduled.ts           # Creates notifications from scheduled rules
 │   ├── workflows/
 │   │   ├── index.ts                    # Exports notification workflows
-│   │   └── notification-trigger.ts     # Simple trigger workflows
+│   │   ├── notification-trigger.ts     # Simple trigger workflows
+│   │   └── rule-scheduled.ts           # Workflow triggered by Temporal schedules
 │   ├── worker/
 │   │   ├── index.ts                    # Worker initialization and lifecycle
 │   │   └── config.ts                   # Worker configuration
 │   ├── client/
 │   │   ├── index.ts                    # Temporal client setup
-│   │   └── notification-client.ts      # High-level API for triggering notifications
+│   │   ├── notification-client.ts      # High-level API for triggering notifications
+│   │   └── schedule-client.ts          # Temporal schedule management
+│   ├── services/
+│   │   └── rule-sync-service.ts        # Syncs notification rules with Temporal schedules
 │   ├── namespace.ts                    # Namespace auto-creation
 │   └── service.ts                      # Temporal service management
 └── polling/
     ├── notification-polling.ts         # Polling service functions
-    └── polling-loop.ts                 # Database polling loop implementation
+    ├── polling-loop.ts                 # Database polling loop implementation
+    └── rule-polling-loop.ts            # Polls for rule changes and syncs schedules
 ```
 
 ## Key Components
@@ -43,11 +49,15 @@ lib/
 - **notification-trigger.ts**: Contains activities for triggering notifications asynchronously
   - `triggerNotificationByIdActivity`: Triggers a single notification
   - `triggerMultipleNotificationsByIdActivity`: Triggers multiple notifications
+- **rule-scheduled.ts**: Creates notifications from rules triggered by Temporal schedules
+  - `createNotificationFromRule`: Creates a notification entry when a scheduled rule fires
 
 ### 2. Temporal Workflows
 
 - **notification-trigger.ts**: Simple workflows that call the trigger activities
   - `notificationTriggerWorkflow`: Workflow for single notification
+- **rule-scheduled.ts**: Workflow triggered by Temporal schedules
+  - `ruleScheduledWorkflow`: Creates notifications based on scheduled rules
   - `triggerMultipleNotificationsWorkflow`: Workflow for multiple notifications
 
 ### 3. Polling Loop (Outside Temporal)
@@ -274,6 +284,51 @@ The function includes comprehensive error handling:
 - Status updates are atomic to prevent race conditions
 - Independent scaling: Polling and temporal workers can be scaled separately
 - Temporal provides built-in retry and backoff strategies
+
+## Rule Scheduling with Temporal Schedules
+
+The system supports CRON-based notification rules that are synchronized with Temporal Schedules:
+
+### How It Works
+
+1. **Rule Definition**: Rules are defined in `ent_notification_rule` table with `trigger_type = 'CRON'`
+2. **Schedule Synchronization**: 
+   - On worker startup, all active CRON rules are synced to Temporal Schedules
+   - A polling loop monitors rule changes and updates schedules accordingly
+3. **Schedule Execution**: When a schedule fires, it triggers the `ruleScheduledWorkflow`
+4. **Notification Creation**: The workflow creates a notification entry that is picked up by the standard polling loop
+
+### Configuration
+
+```bash
+# Rule polling configuration (in .env.worker)
+RULE_POLL_INTERVAL_MS=30000            # Check for rule changes every 30 seconds
+RULE_POLL_BATCH_SIZE=100               # Process up to 100 rule changes per batch
+```
+
+### Rule Schema
+
+Rules must have the following structure:
+```json
+{
+  "trigger_type": "CRON",
+  "trigger_config": {
+    "cron": "0 9 * * MON",  // Standard cron expression
+    "timezone": "UTC"       // Optional, defaults to UTC
+  },
+  "rule_payload": {
+    "recipients": ["user-id-1", "user-id-2"],
+    // Additional payload data
+  }
+}
+```
+
+### Schedule Management
+
+- Schedules are automatically created/updated when rules change
+- Deactivated or unpublished rules have their schedules paused
+- Deleted rules have their schedules removed
+- Schedule IDs follow the pattern: `rule-{ruleId}-{enterpriseId}`
 
 ## Deployment and Monitoring
 

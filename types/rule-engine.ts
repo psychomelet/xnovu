@@ -12,7 +12,7 @@ export type NotificationUpdate = Database['notify']['Tables']['ent_notification'
 export type NotificationWorkflow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
 
 // Trigger types
-export type TriggerType = 'CRON' | 'SCHEDULE';
+export type TriggerType = 'CRON';
 
 // Trigger configuration interfaces
 export interface CronTriggerConfig {
@@ -21,12 +21,7 @@ export interface CronTriggerConfig {
   enabled?: boolean;
 }
 
-export interface ScheduleTriggerConfig {
-  schedule_time: string; // ISO string
-  timezone?: string;
-}
-
-export type TriggerConfig = CronTriggerConfig | ScheduleTriggerConfig;
+export type TriggerConfig = CronTriggerConfig;
 
 // Rule execution context
 export interface RuleExecutionContext {
@@ -62,13 +57,3 @@ export class CronValidationError extends RuleEngineError {
   }
 }
 
-export class ScheduleValidationError extends RuleEngineError {
-  constructor(scheduleTime: string, ruleId?: number) {
-    super(
-      `Invalid schedule time: ${scheduleTime}`,
-      'INVALID_SCHEDULE',
-      ruleId
-    );
-    this.name = 'ScheduleValidationError';
-  }
-}

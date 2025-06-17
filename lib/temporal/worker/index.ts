@@ -5,10 +5,12 @@ import * as activities from '../activities'
 import { logger } from '@/app/services/logger'
 import { ensureNamespaceExists } from '../namespace'
 import { NotificationPollingLoop } from '@/lib/polling/polling-loop'
+import { RulePollingLoop } from '@/lib/polling/rule-polling-loop'
 
 let worker: Worker | null = null
 let workerConnection: NativeConnection | null = null
 let pollingLoop: NotificationPollingLoop | null = null
+let rulePollingLoop: RulePollingLoop | null = null
 
 export async function createWorker(): Promise<Worker> {
   if (!workerConnection) {
@@ -50,7 +52,7 @@ export async function createWorker(): Promise<Worker> {
 }
 
 export async function startWorker(): Promise<void> {
-  // Start the polling loop
+  // Start the notification polling loop
   pollingLoop = new NotificationPollingLoop({
     pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS || '10000', 10),
     failedPollIntervalMs: parseInt(process.env.FAILED_POLL_INTERVAL_MS || '60000', 10),
@@ -66,6 +68,15 @@ export async function startWorker(): Promise<void> {
   logger.temporal('Starting notification polling loop...')
   await pollingLoop.start()
   
+  // Start the rule polling loop
+  rulePollingLoop = new RulePollingLoop({
+    pollIntervalMs: parseInt(process.env.RULE_POLL_INTERVAL_MS || '30000', 10), // Poll every 30 seconds
+    batchSize: parseInt(process.env.RULE_POLL_BATCH_SIZE || '100', 10),
+  })
+  
+  logger.temporal('Starting rule polling loop...')
+  await rulePollingLoop.start()
+  
   // Start the temporal worker
   const w = await createWorker()
   logger.temporal('Starting Temporal worker...')
@@ -73,11 +84,18 @@ export async function startWorker(): Promise<void> {
 }
 
 export async function stopWorker(): Promise<void> {
-  // Stop the polling loop
+  // Stop the notification polling loop
   if (pollingLoop) {
     logger.temporal('Stopping notification polling loop...')
     await pollingLoop.stop()
     pollingLoop = null
+  }
+  
+  // Stop the rule polling loop
+  if (rulePollingLoop) {
+    logger.temporal('Stopping rule polling loop...')
+    await rulePollingLoop.stop()
+    rulePollingLoop = null
   }
   
   // Stop the temporal worker

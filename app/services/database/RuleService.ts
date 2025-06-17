@@ -356,6 +356,112 @@ export class RuleService {
   }
 
   /**
+   * Get rules updated after a specific timestamp
+   */
+  async getRulesUpdatedAfter(timestamp: Date, limit: number = 100): Promise<NotificationRule[]> {
+    try {
+      const { data, error } = await this.supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .select(`
+          *,
+          ent_notification_workflow!inner(*)
+        `)
+        .gt('updated_at', timestamp.toISOString())
+        .eq('trigger_type', 'CRON')
+        .order('updated_at', { ascending: true })
+        .limit(limit);
+
+      if (error) {
+        throw new RuleEngineError(
+          `Failed to fetch updated rules: ${error.message}`,
+          'DATABASE_ERROR'
+        );
+      }
+
+      return data || [];
+    } catch (error) {
+      if (error instanceof RuleEngineError) {
+        throw error;
+      }
+      throw new RuleEngineError(
+        `Unexpected error fetching updated rules: ${error}`,
+        'UNKNOWN_ERROR'
+      );
+    }
+  }
+
+  /**
+   * Get the timestamp of the most recently updated rule
+   */
+  async getLastRuleUpdateTime(): Promise<Date | null> {
+    try {
+      const { data, error } = await this.supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .select('updated_at')
+        .eq('trigger_type', 'CRON')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw new RuleEngineError(
+          `Failed to fetch last update time: ${error.message}`,
+          'DATABASE_ERROR'
+        );
+      }
+
+      return data ? new Date(data.updated_at) : null;
+    } catch (error) {
+      if (error instanceof RuleEngineError) {
+        throw error;
+      }
+      throw new RuleEngineError(
+        `Unexpected error fetching last update time: ${error}`,
+        'UNKNOWN_ERROR'
+      );
+    }
+  }
+
+  /**
+   * Get all active rules for initial sync
+   */
+  async getAllActiveRules(): Promise<NotificationRule[]> {
+    try {
+      const { data, error } = await this.supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .select(`
+          *,
+          ent_notification_workflow!inner(*)
+        `)
+        .eq('trigger_type', 'CRON')
+        .eq('publish_status', 'PUBLISH')
+        .eq('deactivated', false)
+        .eq('ent_notification_workflow.publish_status', 'PUBLISH')
+        .eq('ent_notification_workflow.deactivated', false);
+
+      if (error) {
+        throw new RuleEngineError(
+          `Failed to fetch all active rules: ${error.message}`,
+          'DATABASE_ERROR'
+        );
+      }
+
+      return data || [];
+    } catch (error) {
+      if (error instanceof RuleEngineError) {
+        throw error;
+      }
+      throw new RuleEngineError(
+        `Unexpected error fetching all active rules: ${error}`,
+        'UNKNOWN_ERROR'
+      );
+    }
+  }
+
+  /**
    * Gracefully shut down the service and its connections
    */
   async shutdown(): Promise<void> {
