@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { WorkflowService } from '../../app/services/database/WorkflowService';
-import { NotificationService } from '../../app/services/database/NotificationService';
+import { WorkflowService } from '@/app/services/database/WorkflowService';
+import { NotificationService } from '@/app/services/database/NotificationService';
 import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../../lib/supabase/database.types';
+import type { Database } from '@/lib/supabase/database.types';
 import { randomUUID } from 'crypto';
 
 // Types

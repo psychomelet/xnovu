@@ -8,6 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Novu } from '@novu/api';
 import type { Database } from '@/lib/supabase/database.types';
+import { getTemplateRenderer } from '@/app/services/template/TemplateRenderer';
 
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
 type NotificationWorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
@@ -126,7 +127,8 @@ export async function triggerNotificationById(
       notification.recipients,
       workflow.workflow_key,
       notification.payload,
-      notification.overrides
+      notification.overrides,
+      notification.enterprise_id || undefined // Convert null to undefined
     );
 
     const successCount = recipientResults.filter(r => r.success).length;
@@ -333,15 +335,31 @@ async function triggerForRecipients(
   recipients: string[],
   workflowId: string,
   payload: any,
-  overrides?: any
+  overrides?: any,
+  enterpriseId?: string
 ): Promise<RecipientResult[]> {
+  // Check if we need to render templates
+  let processedOverrides = overrides || {};
+  
+  if (enterpriseId && overrides) {
+    try {
+      processedOverrides = await renderTemplatesInOverrides(overrides, payload, enterpriseId);
+    } catch (error) {
+      logger.error('Failed to render templates in overrides', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        enterpriseId 
+      });
+      // Continue with original overrides if template rendering fails
+    }
+  }
+
   const novuPromises = recipients.map(async (recipientId) => {
     try {
       const result = await novu.trigger({
         workflowId,
         to: recipientId,
         payload: payload as any,
-        overrides: overrides as any || {}
+        overrides: processedOverrides as any
       });
       
       return { 
@@ -363,5 +381,61 @@ async function triggerForRecipients(
   });
 
   return Promise.all(novuPromises);
+}
+
+/**
+ * Render templates found in notification overrides
+ * Detects template tags and processes them with TemplateRenderer
+ */
+export async function renderTemplatesInOverrides(
+  overrides: any,
+  payload: any,
+  enterpriseId: string
+): Promise<any> {
+  // Handle null/undefined overrides
+  if (!overrides) {
+    return overrides;
+  }
+  
+  const templateRenderer = getTemplateRenderer();
+  const processedOverrides = JSON.parse(JSON.stringify(overrides)); // Deep clone
+  
+  // Function to recursively process template strings
+  const processTemplateString = async (value: any): Promise<any> => {
+    if (typeof value === 'string') {
+      // Check if the string contains template syntax
+      if (value.includes('{{') && value.includes('}}')) {
+        try {
+          // Render the template with payload as variables
+          const rendered = await templateRenderer.render(value, {
+            enterpriseId,
+            variables: payload
+          });
+          return rendered;
+        } catch (error) {
+          logger.warn('Template rendering failed, using original value', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            template: value.substring(0, 100) // Log first 100 chars
+          });
+          return value;
+        }
+      }
+    } else if (Array.isArray(value)) {
+      // Process arrays recursively
+      return Promise.all(value.map(item => processTemplateString(item)));
+    } else if (value && typeof value === 'object') {
+      // Process objects recursively
+      const processed: any = {};
+      for (const [key, val] of Object.entries(value)) {
+        processed[key] = await processTemplateString(val);
+      }
+      return processed;
+    }
+    
+    return value;
+  };
+  
+  // Process the entire overrides object
+  return processTemplateString(processedOverrides);
 }
 

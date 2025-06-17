@@ -72,7 +72,7 @@ export function createStatusCommands(program: Command): void {
         
         if (novuSecretKey && novuSecretKey !== 'your_cloud_secret_key') {
           console.log('✅ Novu secret key is configured');
-          console.log(`🔑 Secret Key: ${novuSecretKey.substring(0, 8)}...${novuSecretKey.substring(novuSecretKey.length - 4)}`);
+          console.log('🔑 Secret Key: [CONFIGURED]');
           
           // Test Novu connection
           try {

@@ -199,6 +199,10 @@ Note: The workflow index is automatically regenerated during `pnpm build`
 
 ## Documentation To Follow
 
+### Template Rendering System
+
+For comprehensive template rendering documentation, including security features, XSS prevention, channel-specific rendering, workflow integration, and performance optimization, see [docs/template-rendering-guide.md](docs/template-rendering-guide.md).
+
 ### Temporal Async Integration
 
 For comprehensive async notification processing with Temporal, including workflows, activities, polling loops, and monitoring, see [docs/temporal-integration.md](docs/temporal-integration.md).

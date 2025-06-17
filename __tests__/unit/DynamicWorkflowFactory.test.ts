@@ -1,5 +1,5 @@
-import { DynamicWorkflowFactory } from '../../app/services/workflow/DynamicWorkflowFactory';
-import type { WorkflowConfig } from '../../app/services/database/WorkflowService';
+import { DynamicWorkflowFactory } from '@/app/services/workflow/DynamicWorkflowFactory';
+import type { WorkflowConfig } from '@/app/services/database/WorkflowService';
 
 // Mock @novu/framework for unit testing workflow creation logic
 jest.mock('@novu/framework', () => ({

@@ -159,7 +159,6 @@ describe('Temporal Connection', () => {
     }, 30000)
   })
 
-
   describe('gRPC vs HTTPS Detection', () => {
     it('should correctly detect TLS requirement based on address', () => {
       console.log('\n🔒 Testing TLS detection...')
