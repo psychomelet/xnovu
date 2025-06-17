@@ -191,11 +191,11 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
     
     // Decode HTML entities
     text = text.replace(/&nbsp;/g, ' ');
-    text = text.replace(/&amp;/g, '&');
     text = text.replace(/&lt;/g, '<');
     text = text.replace(/&gt;/g, '>');
     text = text.replace(/&quot;/g, '"');
     text = text.replace(/&#39;/g, "'");
+    text = text.replace(/&amp;/g, '&');
     
     // Clean up whitespace
     text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
