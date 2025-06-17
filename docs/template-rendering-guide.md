@@ -457,7 +457,7 @@ console.log(result.metadata);
 The system includes comprehensive security test coverage:
 
 ```typescript
-// SecurityFixes.test.ts example
+// SecurityFixes.unit.test.ts example
 describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
   it('should handle malformed script end tags with various whitespace', async () => {
     const maliciousHtml = `
