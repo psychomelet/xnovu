@@ -192,16 +192,16 @@ export class HealthMonitor {
   }
 
   /**
-   * Handle subscription-specific health endpoint (now polling workflows)
+   * Handle subscription-specific health endpoint (now polling loop)
    */
   private async handleSubscriptionHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      const pollingWorkflowId = this.config.workerManager.getPollingWorkflowId();
+      const pollingLoopRunning = this.config.workerManager.getPollingLoopStatus();
       
-      if (!pollingWorkflowId) {
+      if (!pollingLoopRunning) {
         this.sendResponse(res, 200, {
-          status: 'no_polling_workflow',
-          message: 'No polling workflow configured',
+          status: 'no_polling_loop',
+          message: 'Polling loop not running',
           timestamp: new Date().toISOString()
         });
         return;
@@ -209,9 +209,8 @@ export class HealthMonitor {
 
       this.sendResponse(res, 200, {
         status: 'healthy',
-        polling_workflow: {
-          id: pollingWorkflowId,
-          status: 'active'
+        polling_loop: {
+          status: 'running'
         },
         timestamp: new Date().toISOString()
       });
@@ -232,7 +231,7 @@ export class HealthMonitor {
   private async handleMetrics(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const healthStatus = await this.config.workerManager.getHealthStatus();
-      const pollingWorkflowId = this.config.workerManager.getPollingWorkflowId();
+      const pollingLoopRunning = this.config.workerManager.getPollingLoopStatus();
       
       let metrics = [
         `# HELP xnovu_worker_uptime_seconds Worker uptime in seconds`,

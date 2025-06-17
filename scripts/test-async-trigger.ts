@@ -1,14 +1,14 @@
 #!/usr/bin/env tsx
 
 /**
- * Test script for async notification triggering via Temporal
+ * Test script for async notification triggering via database polling
  * 
- * This script tests the async trigger functionality through Temporal workflows
+ * This script tests the async trigger functionality by inserting notifications
+ * into the database and monitoring their status changes
  */
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { notificationClient } from '../lib/temporal/client/notification-client';
 import type { Database } from '../lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -21,7 +21,7 @@ const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function testAsyncTrigger() {
-  console.log('🚀 Starting async notification trigger test...\n');
+  console.log('🚀 Starting async notification trigger test (database polling mode)...\n');
 
   let testEnterpriseId = '00000000-0000-0000-0000-000000000001';
   const testSubscriberId = 'e31d847b-ba83-42ca-a3a9-404797c89366';
@@ -76,8 +76,8 @@ async function testAsyncTrigger() {
       transaction_id: transactionId,
       name: 'Async Temporal Test - ' + new Date().toISOString(),
       payload: {
-        inAppSubject: '⚡ Async Temporal Test Notification',
-        inAppBody: 'This notification was triggered asynchronously through Temporal workflows!'
+        inAppSubject: '⚡ Async Database Polling Test',
+        inAppBody: 'This notification was triggered through database polling and Temporal workflows!'
       },
       recipients: [testSubscriberId],
       notification_workflow_id: workflowId,
@@ -98,86 +98,67 @@ async function testAsyncTrigger() {
     console.log('✅ Created notification:');
     console.log('   ID:', notification!.id);
     console.log('   Transaction ID:', notification!.transaction_id);
+    console.log('   Status:', notification!.notification_status);
 
-    // Step 3: Trigger notification asynchronously
-    console.log('\n🔔 Triggering notification asynchronously via Temporal...');
-    const asyncResult = await notificationClient.asyncTriggerNotificationById(notification!.id);
-    
-    console.log('✅ Async trigger initiated:');
-    console.log('   Workflow ID:', asyncResult.workflowId);
-    console.log('   Run ID:', asyncResult.runId);
-
-    // Step 4: Monitor workflow status
-    console.log('\n⏳ Monitoring workflow status...');
+    // Step 3: Monitor notification status changes
+    console.log('\n⏳ Monitoring notification status (polling will pick it up)...');
     let isComplete = false;
     let attempts = 0;
-    const maxAttempts = 30; // 30 seconds max wait
+    const maxAttempts = 60; // 60 seconds max wait
+    let lastStatus = notification!.notification_status;
     
     while (!isComplete && attempts < maxAttempts) {
       await delay(1000); // Wait 1 second between checks
       
-      const status = await notificationClient.getWorkflowStatus(asyncResult.workflowId);
-      console.log(`   Status check ${attempts + 1}:`, status.status, `(history: ${status.historyLength})`);
+      const { data: currentNotification, error: fetchError } = await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .select('*')
+        .eq('id', notification!.id)
+        .single();
       
-      if (!status.isRunning) {
+      if (fetchError) {
+        console.error('Error fetching notification:', fetchError);
+        break;
+      }
+      
+      if (currentNotification!.notification_status !== lastStatus) {
+        console.log(`   Status changed: ${lastStatus} -> ${currentNotification!.notification_status}`);
+        lastStatus = currentNotification!.notification_status;
+      }
+      
+      if (currentNotification!.notification_status === 'SENT' || 
+          currentNotification!.notification_status === 'FAILED') {
         isComplete = true;
-        console.log('✅ Workflow completed!');
+        console.log('\n✅ Notification processing completed!');
+        console.log('   Final Status:', currentNotification!.notification_status);
+        console.log('   Processed At:', currentNotification!.processed_at);
         
-        // Try to get the result
-        try {
-          const result = await notificationClient.getWorkflowResult(asyncResult.workflowId);
-          console.log('\n📊 Workflow Result:');
-          
-          if (Array.isArray(result)) {
-            console.log('   Multiple notifications processed:', result.length);
-            result.forEach((r, index) => {
-              console.log(`   Notification ${index + 1}:`);
-              console.log('     - Success:', r.success);
-              console.log('     - Notification ID:', r.notificationId);
-              console.log('     - Status:', r.status);
-            });
-          } else {
-            console.log('   Success:', result.success);
-            console.log('   Notification ID:', result.notificationId);
-            console.log('   Novu Transaction ID:', result.novuTransactionId);
-            console.log('   Status:', result.status);
-            
-            if (result.details) {
-              console.log('   Details:');
-              console.log('     - Success Count:', result.details.successCount);
-              console.log('     - Total Recipients:', result.details.totalRecipients);
-              console.log('     - Duration:', result.details.duration + 'ms');
-            }
-          }
-        } catch (error) {
-          console.error('❌ Failed to get workflow result:', error);
+        if (currentNotification!.error_details) {
+          console.log('   Error Details:', JSON.stringify(currentNotification!.error_details, null, 2));
+        }
+        
+        if (currentNotification!.transaction_id) {
+          console.log('   Transaction ID:', currentNotification!.transaction_id);
         }
       }
       
       attempts++;
+      
+      // Show progress every 5 seconds
+      if (attempts % 5 === 0 && !isComplete) {
+        console.log(`   Still ${lastStatus}... (${attempts}s elapsed)`);
+      }
     }
     
     if (!isComplete) {
-      console.log('⚠️  Workflow still running after 30 seconds...');
+      console.log('⚠️  Notification still not processed after 60 seconds...');
+      console.log('   Current Status:', lastStatus);
+      console.log('   Make sure the temporal worker is running!');
     }
 
-    // Step 5: Check final notification status
-    console.log('\n📊 Checking final notification status in database...');
-    const { data: finalNotification } = await supabase
-      .schema('notify')
-      .from('ent_notification')
-      .select('id, notification_status, publish_status, channels, processed_at, error_details')
-      .eq('id', notification!.id)
-      .single();
-
-    console.log('Final notification state:');
-    console.log('   ID:', finalNotification?.id);
-    console.log('   Status:', finalNotification?.notification_status);
-    console.log('   Channels:', finalNotification?.channels);
-    console.log('   Processed At:', finalNotification?.processed_at);
-
-    // Step 6: Test multiple notifications
-    console.log('\n\n🔥 Testing batch async trigger...');
+    // Step 4: Test multiple notifications
+    console.log('\n\n🔥 Testing batch notifications...');
     
     // Create multiple notifications
     const batchNotifications = [];
@@ -190,7 +171,7 @@ async function testAsyncTrigger() {
           name: `Batch Test ${i + 1} - ${new Date().toISOString()}`,
           payload: {
             inAppSubject: `Batch Notification ${i + 1}`,
-            inAppBody: `This is batch notification ${i + 1} triggered via Temporal`
+            inAppBody: `This is batch notification ${i + 1} processed via database polling`
           },
           recipients: [testSubscriberId],
           notification_workflow_id: workflowId,
@@ -209,16 +190,68 @@ async function testAsyncTrigger() {
     const notificationIds = batchNotifications.map(n => n.id);
     console.log('✅ Created batch notifications:', notificationIds);
     
-    // Trigger batch
-    const batchResult = await notificationClient.asyncTriggerMultipleNotifications(notificationIds);
-    console.log('✅ Batch trigger initiated:');
-    console.log('   Workflow ID:', batchResult.workflowId);
-    console.log('   Run ID:', batchResult.runId);
+    // Monitor batch status
+    console.log('\n⏳ Monitoring batch notifications...');
+    const batchStatuses = new Map(notificationIds.map(id => [id, 'PENDING']));
+    let batchComplete = false;
+    let batchAttempts = 0;
+    
+    while (!batchComplete && batchAttempts < maxAttempts) {
+      await delay(1000);
+      
+      const { data: batchResults, error: batchError } = await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .select('id, notification_status')
+        .in('id', notificationIds);
+      
+      if (batchError) {
+        console.error('Error fetching batch notifications:', batchError);
+        break;
+      }
+      
+      let changesDetected = false;
+      for (const result of batchResults!) {
+        const oldStatus = batchStatuses.get(result.id);
+        if (oldStatus !== result.notification_status) {
+          console.log(`   Notification ${result.id}: ${oldStatus} -> ${result.notification_status}`);
+          batchStatuses.set(result.id, result.notification_status);
+          changesDetected = true;
+        }
+      }
+      
+      // Check if all are complete
+      const allComplete = Array.from(batchStatuses.values()).every(
+        status => status === 'SENT' || status === 'FAILED'
+      );
+      
+      if (allComplete) {
+        batchComplete = true;
+        console.log('\n✅ All batch notifications processed!');
+        const summary = Array.from(batchStatuses.entries())
+          .map(([id, status]) => `   ID ${id}: ${status}`)
+          .join('\n');
+        console.log(summary);
+      }
+      
+      batchAttempts++;
+      
+      // Show progress every 5 seconds
+      if (batchAttempts % 5 === 0 && !batchComplete && !changesDetected) {
+        const pendingCount = Array.from(batchStatuses.values()).filter(s => s === 'PENDING').length;
+        const processingCount = Array.from(batchStatuses.values()).filter(s => s === 'PROCESSING').length;
+        console.log(`   Still waiting... (${pendingCount} pending, ${processingCount} processing)`);
+      }
+    }
+    
+    if (!batchComplete) {
+      console.log('⚠️  Some batch notifications still not processed after 60 seconds');
+    }
 
-    console.log('\n✨ Test completed successfully!');
-    console.log('   - Check Temporal UI for workflow execution details');
+    console.log('\n✨ Test completed!');
     console.log('   - Check your email and in-app notifications');
-    console.log('   - Monitor database for notification status updates');
+    console.log('   - Monitor the worker logs for processing details');
+    console.log('   - Database polling interval: ' + (process.env.POLL_INTERVAL_MS || '10000') + 'ms');
     
   } catch (error) {
     console.error('\n❌ Test failed:', error);

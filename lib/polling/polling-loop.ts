@@ -1,6 +1,6 @@
 import { logger } from '@/app/services/logger'
 import { Connection, WorkflowClient } from '@temporalio/client'
-import { pollNotifications, pollFailedNotifications, pollScheduledNotifications } from './notification-polling'
+import { pollNotifications, pollFailedNotifications, pollScheduledNotifications, updatePollingNotificationStatus } from './notification-polling'
 import { Database } from '@/lib/supabase/database.types'
 
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
@@ -182,13 +182,16 @@ export class NotificationPollingLoop {
       try {
         await this.temporalClient!.start('notificationTriggerWorkflow', {
           taskQueue: this.config.temporal.taskQueue,
-          workflowId: `notification-${notification.id}-${Date.now()}`,
+          workflowId: `notification-${notification.id}`,
           args: [{ notificationId: notification.id }],
         })
 
         logger.info('Started workflow for notification', {
           notificationId: notification.id
         })
+
+        // Update notification status to PROCESSING to prevent re-polling
+        await updatePollingNotificationStatus(notification.id, 'PROCESSING')
       } catch (error) {
         logger.error('Failed to start workflow for notification', {
           notificationId: notification.id,
@@ -198,5 +201,12 @@ export class NotificationPollingLoop {
     })
 
     await Promise.all(promises)
+  }
+
+  /**
+   * Check if the polling loop is currently running
+   */
+  public getIsRunning(): boolean {
+    return this.isRunning
   }
 }
