@@ -102,6 +102,26 @@ export async function triggerNotificationById(
       };
     }
 
+    // Check if notification is scheduled for future
+    if (notification.scheduled_for) {
+      const scheduledTime = new Date(notification.scheduled_for);
+      const now = new Date();
+      if (scheduledTime > now) {
+        logger.warn('Notification is scheduled for future', {
+          notificationId,
+          scheduledFor: notification.scheduled_for,
+          currentTime: now.toISOString()
+        });
+        return {
+          success: false,
+          error: `Notification scheduled for ${scheduledTime.toISOString()}. Current time: ${now.toISOString()}`,
+          notificationId,
+          status: 'SCHEDULED' as NotificationStatus,
+          notification: notification as NotificationRow
+        };
+      }
+    }
+
     // Type assertion for the joined data
     const notificationWithWorkflow = notification as NotificationRow & {
       ent_notification_workflow: NotificationWorkflowRow;

@@ -14,9 +14,9 @@ type SupabaseClient = ReturnType<typeof createClient<Database>>;
 
 // Mock @novu/framework with enhanced functionality for testing
 jest.mock('@novu/framework', () => ({
-  workflow: jest.fn((key, stepFunction, options) => ({ 
-    key, 
-    stepFunction, 
+  workflow: jest.fn((key, stepFunction, options) => ({
+    key,
+    stepFunction,
     options,
     trigger: jest.fn().mockResolvedValue({ success: true, transactionId: 'test-txn' })
   }))
@@ -36,7 +36,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   const testUserId = randomUUID();
   const createdNotificationIds: number[] = [];
   const createdWorkflowIds: number[] = [];
-  
+
   // Get mock functions
   const mockWorkflow = jest.mocked(require('@novu/framework').workflow);
   const mockGetTemplateRenderer = jest.mocked(require('../../app/services/template/TemplateRenderer').getTemplateRenderer);
@@ -45,9 +45,9 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   // Check if we have real credentials
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  const hasRealCredentials = supabaseUrl && 
-    supabaseServiceKey && 
-    supabaseUrl.includes('supabase.co') && 
+  const hasRealCredentials = supabaseUrl &&
+    supabaseServiceKey &&
+    supabaseUrl.includes('supabase.co') &&
     supabaseServiceKey.length > 50;
 
   beforeAll(async () => {
@@ -59,13 +59,13 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       auth: { persistSession: false },
       global: { headers: { 'x-application-name': 'xnovu-test-dynamic-workflow-factory-integration' } }
     });
-    
+
     notificationService = new NotificationService();
   });
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    
+
     // Setup template renderer mock
     mockRenderTemplate.mockResolvedValue({
       subject: 'Test Subject',
@@ -74,7 +74,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
     mockGetTemplateRenderer.mockReturnValue({
       renderTemplate: mockRenderTemplate
     });
-    
+
     // Clean up any existing test data
     await cleanupTestData();
   });
@@ -86,7 +86,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
   async function cleanupTestData() {
     if (!hasRealCredentials) return;
-    
+
     try {
       // Delete test notifications
       if (createdNotificationIds.length > 0) {
@@ -107,7 +107,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
           .in('id', createdWorkflowIds);
         createdWorkflowIds.length = 0;
       }
-      
+
       // Delete by exact enterprise ID
       await supabase
         .schema('notify')
@@ -179,7 +179,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   describe('Workflow Execution with Real Database Status Updates', () => {
     it('should update notification status through complete workflow execution', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'status-tracking-workflow-integration',
+        workflow_key: `status-tracking-workflow-integration-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL'],
         emailTemplateId: 123
@@ -187,8 +187,10 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Create a real notification in the database
       const testNotification = await createTestNotification({
-        name: 'Status Tracking Integration Test',
-        notification_status: 'PENDING'
+        name: `Status Tracking Integration Test ${Date.now()}-${Math.random()}`,
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from interfering
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       // Create workflow
@@ -237,7 +239,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
     it('should handle workflow execution errors and update status to FAILED in database', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'error-workflow-integration',
+        workflow_key: `error-workflow-integration-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL'],
         emailTemplateId: 123
@@ -245,8 +247,10 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Create a real notification in the database
       const testNotification = await createTestNotification({
-        name: 'Error Test Notification Integration',
-        notification_status: 'PENDING'
+        name: `Error Test Notification Integration ${Date.now()}-${Math.random()}`,
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from picking this up
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       // Mock template rendering to throw error
@@ -286,7 +290,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
     it('should update notification status through multi-channel workflow execution', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'multi-channel-integration-workflow',
+        workflow_key: `multi-channel-integration-workflow-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL', 'IN_APP'],
         emailTemplateId: 123,
@@ -295,13 +299,17 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Create real notifications in database
       const emailNotification = await createTestNotification({
-        name: 'Email Integration Test',
-        notification_status: 'PENDING'
+        name: `Email Integration Test ${Date.now()}-${Math.random()}`,
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from interfering
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       const inAppNotification = await createTestNotification({
-        name: 'In-App Integration Test', 
-        notification_status: 'PENDING'
+        name: `In-App Integration Test ${Date.now()}-${Math.random()}`, 
+        notification_status: 'PENDING',
+        deactivated: true, // Prevent polling service from interfering
+        scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Schedule for tomorrow
       });
 
       // Create workflow
@@ -322,15 +330,15 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       };
 
       // Execute workflow for email notification
-      await stepFunction({ 
-        step: mockStep, 
-        payload: { 
+      await stepFunction({
+        step: mockStep,
+        payload: {
           notificationId: emailNotification.id,
           data: { message: 'Email test' }
         }
       });
 
-      // Execute workflow for in-app notification  
+      // Execute workflow for in-app notification
       await stepFunction({
         step: mockStep,
         payload: {
@@ -421,7 +429,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   describe('Workflow Factory with Template Rendering Integration', () => {
     it('should integrate with template rendering service for all channel types', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'template-integration-workflow',
+        workflow_key: `template-integration-workflow-${Date.now()}-${Math.random()}`,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL', 'IN_APP', 'SMS', 'PUSH'],
         emailTemplateId: 123,
