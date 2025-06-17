@@ -202,11 +202,12 @@ describe('NotificationService Unit Tests', () => {
       const notificationToCancel = await service.createNotification(insertData);
       testNotificationIds.push(notificationToCancel.id);
       
-      // Verify the notification exists and is in expected state
+      // Verify the notification exists and has expected initial status
       const beforeCancel = await service.getNotification(notificationToCancel.id, testEnterpriseId);
       expect(beforeCancel).toBeDefined();
       expect(beforeCancel!.notification_status).toBe('PENDING');
       
+      // Cancel the notification
       await service.cancelNotification(notificationToCancel.id, testEnterpriseId);
 
       // Verify the status was updated to RETRACTED

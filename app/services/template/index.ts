@@ -16,8 +16,7 @@ export {
 
 // New modular exports
 export { TemplateEngine, type TemplateContext, type RenderOptions, type RenderResult } from './core/TemplateEngine';
-export { TemplateParser, type XNovuRenderMatch } from './core/TemplateParser';
-export { VariableInterpolator } from './core/VariableInterpolator';
+export { LiquidTemplateEngine } from './core/LiquidTemplateEngine';
 
 export { 
   type TemplateLoader, 
