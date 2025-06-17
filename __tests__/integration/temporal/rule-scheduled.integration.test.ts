@@ -19,7 +19,6 @@ describe('Rule Scheduled Activity Integration', () => {
   beforeAll(async () => {
     // Create test workflow and rule
     const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-      enterprise_id: 'test-scheduled-ent',
       default_channels: ['EMAIL', 'IN_APP'],
     }, {
       rule_payload: {

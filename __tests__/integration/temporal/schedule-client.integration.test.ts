@@ -160,9 +160,7 @@ describe('Schedule Client Integration', () => {
     beforeAll(async () => {
       // Create multiple schedules
       for (let i = 0; i < 3; i++) {
-        const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-          enterprise_id: `test-list-ent-${i}`,
-        })
+        const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
         testEnterpriseIds.push(workflow.enterprise_id!)
         
         await createSchedule(rule as NotificationRule)

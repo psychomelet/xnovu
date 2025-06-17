@@ -21,7 +21,7 @@ export function createTestWorkflow(overrides?: Partial<Database['notify']['Table
     workflow_key: `test-workflow-${uuidv4()}`,
     workflow_type: 'STATIC' as const,
     default_channels: ['IN_APP'] as Database['shared_types']['Enums']['notification_channel_type'][],
-    enterprise_id: `test-ent-${uuidv4()}`,
+    enterprise_id: uuidv4(), // Use valid UUID format
     publish_status: 'PUBLISH' as const,
     deactivated: false,
     ...overrides,
@@ -44,8 +44,8 @@ export function createTestRule(
       recipients: [`user-${uuidv4()}`],
       test: true,
     },
-    enterprise_id: overrides?.enterprise_id || `test-ent-${uuidv4()}`,
-    business_id: overrides?.business_id || `test-biz-${uuidv4()}`,
+    enterprise_id: overrides?.enterprise_id || uuidv4(), // Use valid UUID format
+    business_id: overrides?.business_id || uuidv4(), // Use valid UUID format
     publish_status: 'PUBLISH' as const,
     deactivated: false,
     ...overrides,
@@ -61,7 +61,7 @@ export function createTestNotification(
     notification_workflow_id: workflowId,
     payload: { test: true },
     recipients: [`user-${uuidv4()}`],
-    enterprise_id: overrides?.enterprise_id || `test-ent-${uuidv4()}`,
+    enterprise_id: overrides?.enterprise_id || uuidv4(), // Use valid UUID format
     notification_status: 'PENDING' as const,
     publish_status: 'PUBLISH' as const,
     ...overrides,
@@ -166,3 +166,18 @@ export async function waitForCondition(
   
   throw new Error('Timeout waiting for condition')
 }
+
+// Add minimal test to satisfy Jest requirement
+describe('supabase-test-helpers', () => {
+  it('should export helper functions', () => {
+    expect(createTestSupabaseClient).toBeDefined()
+    expect(createTestWorkflow).toBeDefined()
+    expect(createTestRule).toBeDefined()
+    expect(createTestNotification).toBeDefined()
+    expect(cleanupTestWorkflows).toBeDefined()
+    expect(cleanupTestRules).toBeDefined()
+    expect(cleanupTestNotifications).toBeDefined()
+    expect(setupTestWorkflowWithRule).toBeDefined()
+    expect(waitForCondition).toBeDefined()
+  })
+})

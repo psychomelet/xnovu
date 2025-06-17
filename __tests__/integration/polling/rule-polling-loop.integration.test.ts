@@ -27,9 +27,7 @@ describe('RulePollingLoop Integration', () => {
   beforeAll(async () => {
     // Create test rules
     for (let i = 0; i < 2; i++) {
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-        enterprise_id: `test-polling-ent-${i}`,
-      })
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
       testEnterpriseIds.push(workflow.enterprise_id!)
       testRules.push(rule as NotificationRule)
     }
@@ -87,9 +85,7 @@ describe('RulePollingLoop Integration', () => {
 
     it('should continue polling even if initial sync fails', async () => {
       // Create a rule with invalid configuration
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-        enterprise_id: 'test-polling-invalid',
-      }, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
         trigger_config: null // Invalid config
       })
       testEnterpriseIds.push(workflow.enterprise_id!)
@@ -136,9 +132,7 @@ describe('RulePollingLoop Integration', () => {
 
     it('should detect and sync new rules', async () => {
       // Create a new rule after polling started
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-        enterprise_id: 'test-polling-new',
-      })
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
       testEnterpriseIds.push(workflow.enterprise_id!)
       newRule = rule as NotificationRule
 
@@ -235,9 +229,7 @@ describe('RulePollingLoop Integration', () => {
 
     it('should reconcile schedules when running', async () => {
       // Create an orphaned schedule by deleting a rule
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-        enterprise_id: 'test-polling-orphan',
-      })
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
       testEnterpriseIds.push(workflow.enterprise_id!)
       
       // Create schedule

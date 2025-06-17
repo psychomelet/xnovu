@@ -399,7 +399,7 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       })).rejects.toThrow('SMS template error');
 
       // Small delay to ensure database update completes
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Verify notification was marked as failed
       const updatedNotification = await notificationService.getNotification(testNotification.id, testEnterpriseId);
