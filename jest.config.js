@@ -15,8 +15,12 @@ const customJestConfig = {
     customExportConditions: ['node', 'node-addons'],
   },
   testMatch: [
-    '**/__tests__/**/*.(ts|tsx|js)',
+    '**/__tests__/**/*.(test|spec).(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)'
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__tests__/setup/'
   ],
   verbose: true, // Show individual test results
   silent: false, // Allow console output
