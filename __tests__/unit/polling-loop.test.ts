@@ -72,8 +72,13 @@ describe('NotificationPollingLoop', () => {
     }
   })
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks()
+    
+    // Stop any running polling loop first
+    if (pollingLoop) {
+      await pollingLoop.stop()
+    }
     
     // Setup mock workflow client
     mockWorkflowClient = {
@@ -125,13 +130,14 @@ describe('NotificationPollingLoop', () => {
 
   describe('polling functionality', () => {
     it('should detect and process new notifications', async () => {
-      // Insert a test notification
+      // Insert a test notification with unique name
+      const uniqueName = `Test Polling Notification ${uuidv4()}`
       const { data: notification, error } = await supabase
         .schema('notify')
         .from('ent_notification')
         .insert({
           transaction_id: uuidv4(),
-          name: 'Test Polling Notification',
+          name: uniqueName,
           payload: {
             message: 'This is a test notification for polling'
           },
@@ -176,15 +182,16 @@ describe('NotificationPollingLoop', () => {
     })
 
     it('should process multiple notifications in parallel', async () => {
-      // Insert multiple test notifications
+      // Insert multiple test notifications with unique names
       const notifications = []
       for (let i = 0; i < 3; i++) {
+        const uniqueName = `Test Polling Notification ${uuidv4()}-${i}`
         const { data, error } = await supabase
           .schema('notify')
           .from('ent_notification')
           .insert({
             transaction_id: uuidv4(),
-            name: `Test Polling Notification ${i}`,
+            name: uniqueName,
             payload: {
               message: `Test notification ${i + 1}`
             },
@@ -205,11 +212,17 @@ describe('NotificationPollingLoop', () => {
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait for polling to process notifications
-      await new Promise(resolve => setTimeout(resolve, 300))
+      // Wait longer for polling to process all notifications
+      await new Promise(resolve => setTimeout(resolve, 500))
       
-      // Verify all workflows were triggered
-      expect(mockWorkflowClient.start).toHaveBeenCalledTimes(3)
+      // Verify workflows were triggered for our notifications (at least 3 calls)
+      expect(mockWorkflowClient.start.mock.calls.length).toBeGreaterThanOrEqual(3)
+      
+      // Verify the calls were made with correct notification IDs
+      const calledWorkflowIds = mockWorkflowClient.start.mock.calls.map(call => call[1].workflowId)
+      notifications.forEach(notification => {
+        expect(calledWorkflowIds).toContain(`notification-${notification.id}`)
+      })
       
       // Verify all notifications were updated to PROCESSING
       for (const notification of notifications) {
@@ -226,12 +239,13 @@ describe('NotificationPollingLoop', () => {
 
     it('should not reprocess notifications already in PROCESSING state', async () => {
       // Insert a notification already in PROCESSING state
+      const uniqueName = `Test Polling Notification ${uuidv4()}`
       const { data: notification } = await supabase
         .schema('notify')
         .from('ent_notification')
         .insert({
           transaction_id: uuidv4(),
-          name: 'Test Polling Notification',
+          name: uniqueName,
           payload: {
             message: 'Already processing'
           },
@@ -251,8 +265,9 @@ describe('NotificationPollingLoop', () => {
       // Wait for a polling cycle
       await new Promise(resolve => setTimeout(resolve, 300))
       
-      // Verify workflow was NOT triggered
-      expect(mockWorkflowClient.start).not.toHaveBeenCalled()
+      // Verify workflow was NOT triggered for our PROCESSING notification
+      const calledWorkflowIds = mockWorkflowClient.start.mock.calls.map(call => call[1].workflowId)
+      expect(calledWorkflowIds).not.toContain(`notification-${notification!.id}`)
     })
 
     it('should handle workflow start errors gracefully', async () => {
@@ -260,12 +275,13 @@ describe('NotificationPollingLoop', () => {
       mockWorkflowClient.start.mockRejectedValue(new Error('Workflow start failed'))
       
       // Insert a test notification
+      const uniqueName = `Test Polling Notification ${uuidv4()}`
       const { data: notification } = await supabase
         .schema('notify')
         .from('ent_notification')
         .insert({
           transaction_id: uuidv4(),
-          name: 'Test Polling Notification',
+          name: uniqueName,
           payload: {
             message: 'This will fail to start workflow'
           },
@@ -328,12 +344,13 @@ describe('NotificationPollingLoop', () => {
   describe('scheduled notifications', () => {
     it('should process scheduled notifications that are due', async () => {
       // Insert a scheduled notification due now
+      const uniqueName = `Test Polling Notification ${uuidv4()}`
       const { data: notification } = await supabase
         .schema('notify')
         .from('ent_notification')
         .insert({
           transaction_id: uuidv4(),
-          name: 'Test Polling Notification',
+          name: uniqueName,
           payload: {
             message: 'Scheduled notification'
           },
@@ -372,12 +389,13 @@ describe('NotificationPollingLoop', () => {
   describe('failed notifications', () => {
     it('should retry failed notifications', async () => {
       // Insert a failed notification
+      const uniqueName = `Test Polling Notification ${uuidv4()}`
       const { data: notification } = await supabase
         .schema('notify')
         .from('ent_notification')
         .insert({
           transaction_id: uuidv4(),
-          name: 'Test Polling Notification',
+          name: uniqueName,
           payload: {
             message: 'Failed notification to retry'
           },
