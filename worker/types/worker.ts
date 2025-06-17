@@ -3,7 +3,6 @@
  */
 
 export interface WorkerConfig {
-  enterpriseIds: string[];
   healthPort: number;
   logLevel: string;
   supabase: {
@@ -38,7 +37,6 @@ export interface WorkerHealthStatus {
     ruleEngine: 'healthy' | 'unhealthy' | 'not_initialized';
     temporal: 'healthy' | 'unhealthy' | 'not_initialized';
   };
-  enterprise_status: Record<string, string>;
   temporal_status?: any;
 }
 
