@@ -14,17 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: Test
 
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
     - uses: actions/checkout@v4
 
@@ -50,11 +39,6 @@ jobs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
 
-    - name: Install Redis CLI
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y redis-tools
-
     - name: Run linter
       run: pnpm lint
 
@@ -70,11 +54,6 @@ jobs:
         TEMPORAL_ADDRESS: ${{ secrets.TEMPORAL_ADDRESS }}
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
-
-    - name: Verify Redis connection
-      run: |
-        redis-cli -h localhost -p 6379 ping
-        echo "Redis is ready"
 
     - name: Run connection tests
       run: pnpm test:connection
