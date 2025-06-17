@@ -171,14 +171,20 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
     // First sanitize the HTML to ensure it's safe
     const sanitizedHtml = sanitizeForChannel(html, 'email');
     
-    // Remove style and script tags with content
     let text = sanitizedHtml;
     let previousText;
+    
+    // Remove style tags with content - use loop to handle nested/malformed tags
     do {
       previousText = text;
-      text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+      text = text.replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, '');
     } while (text !== previousText);
-    text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    
+    // Remove script tags with content - use loop to handle nested/malformed tags
+    do {
+      previousText = text;
+      text = text.replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+    } while (text !== previousText);
     
     // Replace common block elements with newlines
     text = text.replace(/<\/?(p|div|h[1-6]|br|hr|li)[^>]*>/gi, '\n');
@@ -186,8 +192,11 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
     // Replace links with text and URL
     text = text.replace(/<a[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)');
     
-    // Remove all other HTML tags
-    text = text.replace(/<[^>]+>/g, '');
+    // Remove all other HTML tags - use loop to handle nested/malformed tags
+    do {
+      previousText = text;
+      text = text.replace(/<[^>]*>/g, '');
+    } while (text !== previousText);
     
     // Decode HTML entities
     text = text.replace(/&nbsp;/g, ' ');
