@@ -54,7 +54,14 @@ export class TemplateEngine {
     context: TemplateContext,
     options?: RenderOptions
   ): Promise<RenderResult> {
-    return this.liquidEngine.render(template, context, options);
+    const result = await this.liquidEngine.render(template, context, options);
+    
+    // Apply throwOnError option
+    if (options?.throwOnError && result.errors.length > 0) {
+      throw result.errors[0].error;
+    }
+    
+    return result;
   }
 
   /**
@@ -82,7 +89,6 @@ export class TemplateEngine {
 
   /**
    * Extract all variables used in a template (including nested templates)
-   * For now, use regex-based extraction. Could be enhanced with Liquid's AST in the future.
    */
   async extractVariables(
     template: string,
@@ -90,7 +96,7 @@ export class TemplateEngine {
   ): Promise<string[]> {
     const variables = new Set<string>();
     
-    // Extract Liquid variables
+    // Extract direct Liquid variables
     const liquidVarRegex = /\{\{\s*([^}|]+)(?:\s*\|[^}]+)?\s*\}\}/g;
     let match;
     while ((match = liquidVarRegex.exec(template)) !== null) {
@@ -100,20 +106,29 @@ export class TemplateEngine {
       }
     }
     
-    // Extract variables from xnovu_render tags
-    const xnovuRegex = /\{%\s*xnovu_render\s+["']([^"']+)["'](?:\s*,\s*([^%]+))?\s*%\}/g;
-    while ((match = xnovuRegex.exec(template)) !== null) {
-      if (match[2]) {
-        // Extract variable references from the arguments
-        const argStr = match[2];
-        const varMatches = argStr.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g);
-        if (varMatches) {
-          varMatches.forEach(v => {
-            if (!['true', 'false', 'null', 'undefined'].includes(v)) {
-              variables.add(v);
-            }
-          });
-        }
+    // Extract from legacy xnovu_render syntax
+    const legacyRegex = /\{\{\s*xnovu_render\s*\(\s*['"`]([^'"`]+)['"`]/g;
+    while ((match = legacyRegex.exec(template)) !== null) {
+      const templateKey = match[1];
+      try {
+        const loadResult = await this.liquidEngine.getTemplateLoader().loadTemplate(templateKey, context);
+        const nestedVars = await this.extractVariables(loadResult.template.bodyTemplate, context);
+        nestedVars.forEach(v => variables.add(v));
+      } catch (error) {
+        // Skip on error
+      }
+    }
+    
+    // Extract from Liquid xnovu_render syntax
+    const liquidXnovuRegex = /\{%\s*xnovu_render\s+["']([^"']+)["']/g;
+    while ((match = liquidXnovuRegex.exec(template)) !== null) {
+      const templateKey = match[1];
+      try {
+        const loadResult = await this.liquidEngine.getTemplateLoader().loadTemplate(templateKey, context);
+        const nestedVars = await this.extractVariables(loadResult.template.bodyTemplate, context);
+        nestedVars.forEach(v => variables.add(v));
+      } catch (error) {
+        // Skip on error
       }
     }
     

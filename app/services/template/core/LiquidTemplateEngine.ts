@@ -454,6 +454,13 @@ export class LiquidTemplateEngine {
   }
 
   /**
+   * Get the template loader
+   */
+  getTemplateLoader(): TemplateLoader {
+    return this.templateLoader;
+  }
+
+  /**
    * Register utility filters for template processing
    */
   private registerUtilityFilters() {

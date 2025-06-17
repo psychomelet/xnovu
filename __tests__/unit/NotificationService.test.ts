@@ -195,15 +195,17 @@ describe('NotificationService Unit Tests', () => {
       // Create a fresh notification for this test to avoid interference
       const insertData = createTestNotificationInsert({
         name: `Notification for Cancellation ${Date.now()}`,
+        notification_status: 'PENDING', // Explicitly set initial status
         publish_status: 'DRAFT' // Set to DRAFT to avoid processing by polling systems
       });
       const notificationToCancel = await service.createNotification(insertData);
       testNotificationIds.push(notificationToCancel.id);
       
-      // Verify the notification exists and is in expected state
+      // Verify the notification exists and has expected initial status
       const beforeCancel = await service.getNotification(notificationToCancel.id, testEnterpriseId);
       expect(beforeCancel).toBeDefined();
       
+      // Cancel the notification
       await service.cancelNotification(notificationToCancel.id, testEnterpriseId);
 
       // Verify the status was updated to RETRACTED

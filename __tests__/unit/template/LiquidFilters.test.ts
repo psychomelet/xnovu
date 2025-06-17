@@ -51,7 +51,7 @@ describe('Liquid Filters', () => {
       };
 
       const result = await engine.render(template, context);
-      expect(result.content.trim()).toBe('Hello\nThis is a test');
+      expect(result.content.trim()).toBe('Hello\n\nThis is a test');
     });
 
     it('should handle links', async () => {

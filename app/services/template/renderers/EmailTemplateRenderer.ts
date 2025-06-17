@@ -49,7 +49,7 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
 
     // Generate text version if requested
     if (options?.includeTextVersion) {
-      emailResult.textBody = this.htmlToText(body);
+      emailResult.textBody = await this.htmlToText(body);
     }
 
     return emailResult;
@@ -90,7 +90,7 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
 
     // Generate text version if requested
     if (options?.includeTextVersion) {
-      emailResult.textBody = this.htmlToText(body);
+      emailResult.textBody = await this.htmlToText(body);
     }
 
     return emailResult;
@@ -168,14 +168,18 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
    * Simple HTML to text conversion
    * @deprecated Use {{ content | html_to_text }} filter in templates instead
    */
-  private htmlToText(html: string): string {
-    // Get Liquid engine and use the filter
+  private async htmlToText(html: string): Promise<string> {
+    // Use Liquid engine to apply the html_to_text filter
     const engine = this.getEngine();
     if (engine && 'getLiquidEngine' in engine) {
-      const liquid = (engine as any).getLiquidEngine().getLiquid();
-      const filter = liquid.filters.get('html_to_text');
-      if (filter) {
-        return filter(html);
+      try {
+        const template = '{{ content | html_to_text }}';
+        const result = await engine.render(template, {
+          variables: { content: html }
+        });
+        return result.content;
+      } catch (error) {
+        // Fall through to fallback
       }
     }
     

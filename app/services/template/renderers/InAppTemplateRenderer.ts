@@ -74,7 +74,7 @@ export class InAppTemplateRenderer extends BaseChannelRenderer {
 
     // Convert markdown to HTML if needed
     if (this.isMarkdown(result.content)) {
-      result.content = this.markdownToHtml(result.content);
+      result.content = await this.markdownToHtml(result.content);
     }
 
     return result;
@@ -111,16 +111,18 @@ export class InAppTemplateRenderer extends BaseChannelRenderer {
    * Basic markdown to HTML conversion for in-app display
    * @deprecated Use {{ content | markdown_to_html | sanitize_inapp }} filters in templates instead
    */
-  private markdownToHtml(markdown: string): string {
-    // Get Liquid engine and use the filters
+  private async markdownToHtml(markdown: string): Promise<string> {
+    // Use Liquid engine to apply the filters
     const engine = this.getEngine();
     if (engine && 'getLiquidEngine' in engine) {
-      const liquid = (engine as any).getLiquidEngine().getLiquid();
-      const markdownFilter = liquid.filters.get('markdown_to_html');
-      const sanitizeFilter = liquid.filters.get('sanitize_inapp');
-      if (markdownFilter && sanitizeFilter) {
-        const html = markdownFilter(markdown);
-        return sanitizeFilter(html);
+      try {
+        const template = '{{ content | markdown_to_html | sanitize_inapp }}';
+        const result = await engine.render(template, {
+          variables: { content: markdown }
+        });
+        return result.content;
+      } catch (error) {
+        // Fall through to fallback
       }
     }
     
