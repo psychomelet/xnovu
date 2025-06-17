@@ -34,6 +34,7 @@
     "@temporalio/worker": "^1.11.8",
     "@temporalio/workflow": "^1.11.8",
     "@types/sanitize-html": "^2.16.0",
+    "liquidjs": "^10.21.1",
     "next": "15.3.3",
     "node-cron": "^3.0.3",
     "prettier": "^3.5.3",

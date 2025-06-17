@@ -367,13 +367,12 @@ describe('TemplateEngine', () => {
     });
   });
 
-  describe('getComponents', () => {
-    it('should return underlying components', () => {
-      const components = engine.getComponents();
+  describe('getLiquidEngine', () => {
+    it('should return underlying Liquid engine', () => {
+      const liquidEngine = engine.getLiquidEngine();
 
-      expect(components.parser).toBeDefined();
-      expect(components.interpolator).toBeDefined();
-      expect(components.templateLoader).toBe(mockLoader);
+      expect(liquidEngine).toBeDefined();
+      expect(liquidEngine.getTemplateLoader()).toBe(mockLoader);
     });
   });
 });

@@ -74,7 +74,7 @@ export class InAppTemplateRenderer extends BaseChannelRenderer {
 
     // Convert markdown to HTML if needed
     if (this.isMarkdown(result.content)) {
-      result.content = this.markdownToHtml(result.content);
+      result.content = await this.markdownToHtml(result.content);
     }
 
     return result;
@@ -109,36 +109,24 @@ export class InAppTemplateRenderer extends BaseChannelRenderer {
 
   /**
    * Basic markdown to HTML conversion for in-app display
+   * @deprecated Use {{ content | markdown_to_html | sanitize_inapp }} filters in templates instead
    */
-  private markdownToHtml(markdown: string): string {
-    let html = markdown;
-
-    // Headers
-    html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
-    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-    // Bold and italic
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-    // Lists
-    html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-
-    // Line breaks
-    html = html.replace(/\n\n/g, '</p><p>');
-    html = `<p>${html}</p>`;
-
-    // Clean up empty paragraphs
-    html = html.replace(/<p>\s*<\/p>/g, '');
-
-    // Sanitize the generated HTML for security
-    return sanitizeForChannel(html, 'in_app');
+  private async markdownToHtml(markdown: string): Promise<string> {
+    // Use Liquid engine to apply the filters
+    const engine = this.getEngine();
+    if (engine && 'getLiquidEngine' in engine) {
+      try {
+        const template = '{{ content | markdown_to_html | sanitize_inapp }}';
+        const result = await engine.render(template, {
+          variables: { content: markdown }
+        });
+        return result.content;
+      } catch (error) {
+        // Fall through to fallback
+      }
+    }
+    
+    // Fallback to simple conversion
+    return sanitizeForChannel(markdown, 'in_app');
   }
 }

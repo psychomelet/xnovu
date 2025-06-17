@@ -119,11 +119,11 @@ export class TemplateRenderer {
   }
 
   /**
-   * @deprecated Use TemplateParser from core/TemplateParser.ts
+   * @deprecated Legacy method - no longer supported
    */
   private parseXNovuRenderSyntax(template: string): any[] {
-    const { parser } = this.engine.getComponents();
-    return parser.parseXNovuRenderSyntax(template);
+    console.warn('parseXNovuRenderSyntax is deprecated and no longer supported');
+    return [];
   }
 
   /**
@@ -179,22 +179,29 @@ export class TemplateRenderer {
   }
 
   /**
-   * @deprecated Use VariableInterpolator from core/VariableInterpolator.ts
+   * @deprecated Variable interpolation is now handled by Liquid
    */
   private interpolateVariables(
     template: string,
     variables: Record<string, any>
   ): string {
-    const { interpolator } = this.engine.getComponents();
-    return interpolator.interpolate(template, variables);
+    console.warn('interpolateVariables is deprecated. Use Liquid template syntax instead');
+    // Basic fallback implementation
+    let result = template;
+    for (const [key, value] of Object.entries(variables)) {
+      const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+      result = result.replace(regex, String(value));
+    }
+    return result;
   }
 
   /**
-   * @deprecated Use VariableInterpolator from core/VariableInterpolator.ts
+   * @deprecated Nested value extraction is now handled by Liquid
    */
   private getNestedValue(obj: any, path: string): any {
-    const { interpolator } = this.engine.getComponents();
-    return interpolator.extractValue(obj, path);
+    console.warn('getNestedValue is deprecated. Use Liquid template syntax instead');
+    // Basic fallback implementation
+    return path.split('.').reduce((current, key) => current?.[key], obj);
   }
 
   /**
