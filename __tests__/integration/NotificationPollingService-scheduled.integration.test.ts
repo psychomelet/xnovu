@@ -2,6 +2,7 @@ import { NotificationPollingService } from '@/app/services/database/Notification
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import { randomUUID } from 'crypto';
+import { getTestEnterpriseId } from '../setup/test-data';
 
 // Types
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
@@ -13,8 +14,7 @@ type SupabaseClient = ReturnType<typeof createClient<Database>>;
 describe('NotificationPollingService Scheduled Notification Integration Tests', () => {
   let supabase: SupabaseClient;
   let pollingService: NotificationPollingService;
-  // Use a valid UUID for enterprise ID
-  const testEnterpriseId = randomUUID();
+  let testEnterpriseId: string;
   const createdNotificationIds: number[] = [];
   const createdWorkflowIds: number[] = [];
 
@@ -68,6 +68,9 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       throw new Error('Real Supabase credentials required for integration tests. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     }
 
+    // Get shared test enterprise ID
+    testEnterpriseId = getTestEnterpriseId();
+
     supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
       global: { headers: { 'x-application-name': 'xnovu-test-polling-scheduled' } }
@@ -77,30 +80,10 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
   });
 
   afterAll(async () => {
-    // Clean up test data
-    for (const notificationId of createdNotificationIds) {
-      try {
-        await supabase
-          .schema('notify')
-          .from('ent_notification')
-          .delete()
-          .eq('id', notificationId);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-    }
-
-    for (const workflowId of createdWorkflowIds) {
-      try {
-        await supabase
-          .schema('notify')
-          .from('ent_notification_workflow')
-          .delete()
-          .eq('id', workflowId);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-    }
+    // Cleanup handled by global teardown
+    // Just clear tracking arrays
+    createdNotificationIds.length = 0;
+    createdWorkflowIds.length = 0;
   });
 
   async function createTestWorkflow(): Promise<WorkflowRow> {

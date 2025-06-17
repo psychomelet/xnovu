@@ -4,6 +4,7 @@ import { NotificationService } from '@/app/services/database/NotificationService
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import { randomUUID } from 'crypto';
+import { getTestEnterpriseId, generateTestUserId } from '../setup/test-data';
 
 // Types
 type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
@@ -16,8 +17,8 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
   let supabase: SupabaseClient;
   let workflowService: WorkflowService;
   let notificationService: NotificationService;
-  const testEnterpriseId = randomUUID();
-  const testUserId = randomUUID();
+  let testEnterpriseId: string;
+  let testUserId: string;
   const createdNotificationIds: number[] = [];
   const createdWorkflowIds: number[] = [];
 
@@ -35,6 +36,10 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
       throw new Error('Real Supabase credentials required for Trigger API Integration tests. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     }
 
+    // Get shared test enterprise ID
+    testEnterpriseId = getTestEnterpriseId();
+    testUserId = generateTestUserId();
+
     supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
       global: { headers: { 'x-application-name': 'xnovu-test-trigger-api-integration' } }
@@ -46,56 +51,17 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    
-    // Clean up any existing test data
-    await cleanupTestData();
+    // No need for cleanup - handled by global teardown
   });
 
   afterEach(async () => {
-    // Clean up test data after each test
-    await cleanupTestData();
+    jest.clearAllMocks();
+    // Clear tracking arrays (data cleanup handled by global teardown)
+    createdNotificationIds.length = 0;
+    createdWorkflowIds.length = 0;
   });
 
-  async function cleanupTestData() {
-    if (!hasRealCredentials) return;
-    
-    try {
-      // Delete test notifications
-      if (createdNotificationIds.length > 0) {
-        await supabase
-          .schema('notify')
-          .from('ent_notification')
-          .delete()
-          .in('id', createdNotificationIds);
-        createdNotificationIds.length = 0;
-      }
-
-      // Delete test workflows
-      if (createdWorkflowIds.length > 0) {
-        await supabase
-          .schema('notify')
-          .from('ent_notification_workflow')
-          .delete()
-          .in('id', createdWorkflowIds);
-        createdWorkflowIds.length = 0;
-      }
-      
-      // Delete by exact enterprise ID
-      await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .delete()
-        .eq('enterprise_id', testEnterpriseId);
-
-      await supabase
-        .schema('notify')
-        .from('ent_notification_workflow')
-        .delete()
-        .eq('enterprise_id', testEnterpriseId);
-    } catch (error) {
-      console.warn('Cleanup warning:', error);
-    }
-  }
+  // Cleanup handled by global teardown - no need for individual cleanup
 
   async function createTestWorkflow(overrides: Partial<WorkflowInsert> = {}): Promise<WorkflowRow> {
     const defaultWorkflow: WorkflowInsert = {
