@@ -105,20 +105,24 @@ export class SmsTemplateRenderer extends BaseChannelRenderer {
    */
   private cleanForSms(content: string): string {
     // Remove any HTML tags if present
-    let cleaned = content.replace(/<[^>]+>/g, '');
+    let previous;
+    do {
+      previous = content;
+      content = content.replace(/<[^>]+>/g, '');
+    } while (content !== previous);
 
     // Replace multiple spaces with single space
-    cleaned = cleaned.replace(/\s+/g, ' ');
+    content = content.replace(/\s+/g, ' ');
 
     // Replace fancy quotes and dashes with standard ones
-    cleaned = cleaned.replace(/[""]/g, '"');
-    cleaned = cleaned.replace(/['']/g, "'");
-    cleaned = cleaned.replace(/[–—]/g, '-');
+    content = content.replace(/[""]/g, '"');
+    content = content.replace(/['']/g, "'");
+    content = content.replace(/[–—]/g, '-');
 
     // Trim whitespace
-    cleaned = cleaned.trim();
+    content = content.trim();
 
-    return cleaned;
+    return content;
   }
 
   /**
