@@ -134,6 +134,9 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     scheduledFor: string | null = null,
     status: 'PENDING' | 'FAILED' | 'SENT' = 'PENDING'
   ): Promise<NotificationRow> {
+    // Ensure updated_at is explicitly set to now
+    const now = new Date().toISOString();
+    
     const { data, error } = await supabase
       .schema('notify')
       .from('ent_notification')
@@ -146,6 +149,7 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         notification_status: status,
         enterprise_id: testEnterpriseId,
         scheduled_for: scheduledFor,
+        updated_at: now,  // Explicitly set updated_at
       } satisfies NotificationInsert)
       .select()
       .single();
@@ -155,6 +159,14 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     }
 
     createdNotificationIds.push(data.id);
+    
+    console.log('Created notification:', {
+      id: data.id,
+      enterprise_id: data.enterprise_id,
+      updated_at: data.updated_at,
+      scheduled_for: data.scheduled_for,
+      status: data.notification_status
+    });
 
     // Small delay to ensure notification is properly persisted
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -173,14 +185,22 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       pollingService = new NotificationPollingService(supabase);
       // Reset the polling timestamp to ensure we capture all notifications
       pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
+      
+      // Verify the timestamp was set
+      const state = pollingService.getPollingState();
+      console.log('Polling state after reset:', state);
     });
 
     it('should include notifications without scheduled_for', async () => {
       const notification = await createTestNotification(testWorkflow.id, null);
-
-      const results = await pollNotificationsForTest();
-
-      const found = results.find(n => n.id === notification.id);
+      
+      // Use the helper function that retries
+      const found = await waitForNotification(
+        () => pollNotificationsForTest(),
+        notification.id,
+        10  // More retries
+      );
+      
       expect(found).toBeDefined();
     });
 
@@ -302,6 +322,10 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       pollingService = new NotificationPollingService(supabase);
       // Reset the polling timestamp to ensure we capture all notifications
       pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
+      
+      // Verify the timestamp was set
+      const state = pollingService.getPollingState();
+      console.log('Polling state after reset:', state);
     });
 
     it('should only return notifications with scheduled_for <= now', async () => {
@@ -406,6 +430,10 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       pollingService = new NotificationPollingService(supabase);
       // Reset the polling timestamp to ensure we capture all notifications
       pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
+      
+      // Verify the timestamp was set
+      const state = pollingService.getPollingState();
+      console.log('Polling state after reset:', state);
     });
 
     it('should include failed notifications regardless of scheduled_for', async () => {

@@ -171,39 +171,72 @@ describe('Schedule Client Integration', () => {
     })
 
     it('should create new schedule if not found during update', async () => {
+      // Create a unique rule for this test
+      const updateRule = {
+        ...testRule,
+        id: testRule.id + 5555,
+        name: `Test Rule Update ${Date.now()}`,
+      }
+      const updateScheduleId = getScheduleId(updateRule)
+      
+      // Make sure schedule doesn't exist first
+      try {
+        await deleteSchedule(updateRule)
+      } catch (error) {
+        // Ignore errors if schedule doesn't exist
+      }
+      
       // Try to update non-existent schedule
-      await updateSchedule(testRule)
+      await updateSchedule(updateRule)
 
       // Wait for schedule to be created
       await waitForCondition(async () => {
-        const description = await getSchedule(scheduleId)
+        const description = await getSchedule(updateScheduleId)
         return description !== null
       }, 10000)
 
-      const description = await getSchedule(scheduleId)
+      const description = await getSchedule(updateScheduleId)
       expect(description).toBeDefined()
+      
+      // Clean up
+      await deleteSchedule(updateRule)
     })
 
     it('should delete existing schedule', async () => {
+      // Create a unique rule for this test
+      const deleteRule = {
+        ...testRule,
+        id: testRule.id + 4444,
+        name: `Test Rule Delete ${Date.now()}`,
+      }
+      const deleteScheduleId = getScheduleId(deleteRule)
+      
+      // Clean up any existing schedule first
+      try {
+        await deleteSchedule(deleteRule)
+      } catch (error) {
+        // Ignore errors if schedule doesn't exist
+      }
+      
       // Create schedule
-      await createSchedule(testRule)
+      await createSchedule(deleteRule)
 
       // Wait for schedule to be available
       await waitForCondition(async () => {
-        const description = await getSchedule(scheduleId)
+        const description = await getSchedule(deleteScheduleId)
         return description !== null
       }, 10000)
 
       // Delete it
-      await deleteSchedule(testRule)
+      await deleteSchedule(deleteRule)
 
       // Wait for schedule to be deleted
       await waitForCondition(async () => {
-        const description = await getSchedule(scheduleId)
+        const description = await getSchedule(deleteScheduleId)
         return description === null
       }, 10000)
 
-      const description = await getSchedule(scheduleId)
+      const description = await getSchedule(deleteScheduleId)
       expect(description).toBeNull()
     })
 
@@ -305,14 +338,34 @@ describe('Schedule Client Integration', () => {
 
   describe('getSchedule', () => {
     let scheduleId: string
+    let uniqueRule: NotificationRule
 
     beforeAll(async () => {
-      scheduleId = getScheduleId(testRule)
-      await createSchedule(testRule)
+      // Create a unique rule for this test to avoid conflicts
+      uniqueRule = {
+        ...testRule,
+        id: testRule.id + 9999,
+        name: `Test Rule getSchedule ${Date.now()}`,
+      }
+      scheduleId = getScheduleId(uniqueRule)
+      
+      // Clean up any existing schedule first
+      try {
+        await deleteSchedule(uniqueRule)
+      } catch (error) {
+        // Ignore errors if schedule doesn't exist
+      }
+      
+      // Create fresh schedule
+      await createSchedule(uniqueRule)
     })
 
     afterAll(async () => {
-      await deleteSchedule(testRule)
+      try {
+        await deleteSchedule(uniqueRule)
+      } catch (error) {
+        console.error('Failed to cleanup schedule in getSchedule test:', error)
+      }
     })
 
     it('should get schedule description', async () => {
