@@ -7,12 +7,20 @@ import type { WorkerConfig } from '@/worker/types/worker'
 import { temporalService } from '@/lib/temporal/service'
 import { getTemporalClient } from '@/lib/temporal/client'
 
+// Mock HealthMonitor
+jest.mock('@/worker/services/HealthMonitor', () => ({
+  HealthMonitor: jest.fn().mockImplementation(() => ({
+    start: jest.fn().mockResolvedValue(undefined),
+    stop: jest.fn().mockResolvedValue(undefined)
+  }))
+}))
+
 // Mock the temporal service and client
 jest.mock('@/lib/temporal/service', () => ({
   temporalService: {
     initialize: jest.fn(),
-    start: jest.fn(),
-    shutdown: jest.fn()
+    shutdown: jest.fn(),
+    getHealth: jest.fn()
   }
 }))
 
@@ -25,6 +33,11 @@ jest.mock('@/lib/temporal/workflows/orchestration', () => ({
   notificationOrchestrationWorkflow: jest.fn()
 }))
 
+// Mock the polling workflow
+jest.mock('@/lib/temporal/workflows/notification-polling-workflow', () => ({
+  notificationPollingWorkflow: jest.fn()
+}))
+
 describe('WorkerManager', () => {
   let workerManager: WorkerManager
   let mockConfig: WorkerConfig
@@ -32,6 +45,7 @@ describe('WorkerManager', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    jest.clearAllTimers()
 
     mockConfig = {
       healthPort: 3001,
@@ -40,26 +54,50 @@ describe('WorkerManager', () => {
 
     // Setup mock temporal client
     mockTemporalClient = {
-      start: jest.fn().mockResolvedValue({
-        workflowId: 'mock-workflow-id',
-        firstExecutionRunId: 'mock-run-id'
+      start: jest.fn().mockImplementation((workflowName, options) => {
+        // Return appropriate mock based on workflow type
+        if (workflowName === 'notificationOrchestrationWorkflow') {
+          return Promise.resolve({
+            workflowId: options.workflowId,
+            firstExecutionRunId: 'mock-orchestration-run-id'
+          })
+        } else if (workflowName === 'notificationPollingWorkflow') {
+          return Promise.resolve({
+            workflowId: options.workflowId,
+            firstExecutionRunId: 'mock-polling-run-id'
+          })
+        }
+        return Promise.resolve({
+          workflowId: 'mock-workflow-id',
+          firstExecutionRunId: 'mock-run-id'
+        })
       }),
       getHandle: jest.fn().mockReturnValue({
         describe: jest.fn().mockResolvedValue({
           status: { name: 'RUNNING' },
           historyLength: 5
         }),
-        cancel: jest.fn()
+        cancel: jest.fn().mockResolvedValue(undefined),
+        signal: jest.fn().mockResolvedValue(undefined)
       })
     }
 
     ;(getTemporalClient as jest.Mock).mockResolvedValue(mockTemporalClient)
     ;(temporalService.initialize as jest.Mock).mockResolvedValue(undefined)
-    ;(temporalService.start as jest.Mock).mockResolvedValue(undefined)
     ;(temporalService.shutdown as jest.Mock).mockResolvedValue(undefined)
+    ;(temporalService.getHealth as jest.Mock).mockResolvedValue({ status: 'healthy' })
 
     workerManager = new WorkerManager(mockConfig)
     mockConfig.workerManager = workerManager
+  })
+
+  afterEach(async () => {
+    // Ensure proper cleanup after each test
+    if (workerManager && workerManager.isRunning()) {
+      await workerManager.shutdown()
+    }
+    jest.clearAllMocks()
+    jest.clearAllTimers()
   })
 
   describe('initialization', () => {
@@ -81,13 +119,12 @@ describe('WorkerManager', () => {
     it('should start services and create single polling workflow', async () => {
       await workerManager.start()
 
-      // Verify temporal service was initialized and started
+      // Verify temporal service was initialized
       expect(temporalService.initialize).toHaveBeenCalled()
-      expect(temporalService.start).toHaveBeenCalled()
 
       // Verify orchestration workflow was started
       expect(mockTemporalClient.start).toHaveBeenCalledWith(
-        expect.any(Function), // notificationOrchestrationWorkflow
+        'notificationOrchestrationWorkflow',
         expect.objectContaining({
           workflowId: expect.stringMatching(/^orchestration-\d+$/),
           taskQueue: expect.any(String)
@@ -107,7 +144,7 @@ describe('WorkerManager', () => {
 
     it('should handle service start errors gracefully', async () => {
       const error = new Error('Temporal service failed to start')
-      ;(temporalService.start as jest.Mock).mockRejectedValue(error)
+      ;(temporalService.initialize as jest.Mock).mockRejectedValue(error)
 
       await expect(workerManager.start()).rejects.toThrow('Temporal service failed to start')
       expect(workerManager.isRunning()).toBe(false)
@@ -126,13 +163,18 @@ describe('WorkerManager', () => {
         status: 'healthy',
         uptime: expect.any(Number),
         components: {
-          temporal: { status: 'healthy' },
           subscriptions: {
             total: 1, // Single polling workflow
             active: 1,
             failed: 0,
             reconnecting: 0
-          }
+          },
+          ruleEngine: 'healthy',
+          temporal: 'healthy'
+        },
+        temporal_status: {
+          status: 'healthy',
+          orchestrationWorkflow: 'RUNNING'
         }
       })
     })
@@ -218,8 +260,14 @@ describe('WorkerManager', () => {
       )
       
       expect(pollingWorkflowCall).toBeDefined()
-      // Workflow should be started without enterprise-specific arguments
-      expect(pollingWorkflowCall[1].args).toEqual([{}])
+      // Workflow should be started with polling configuration (no enterprise ID)
+      expect(pollingWorkflowCall[1].args).toEqual([{
+        pollInterval: 5000,
+        batchSize: 100,
+        includeProcessed: false,
+        processFailedNotifications: true,
+        processScheduledNotifications: true
+      }])
     })
   })
 })
