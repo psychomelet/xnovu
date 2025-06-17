@@ -4,6 +4,9 @@
 
 import winston from 'winston';
 
+// Determine if we're in test environment and should suppress output
+const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
+
 // Create Winston logger instance for worker
 const winstonLogger = winston.createLogger({
   level: process.env.WORKER_LOG_LEVEL || 'info',
@@ -18,6 +21,8 @@ const winstonLogger = winston.createLogger({
   },
   transports: [
     new winston.transports.Console({
+      // In test environment, suppress output by setting silent to true
+      silent: isTestEnvironment,
       format: winston.format.combine(
         // In development, use pretty print
         process.env.NODE_ENV === 'development'

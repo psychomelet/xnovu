@@ -1,16 +1,4 @@
-import { Runtime, DefaultLogger, makeTelemetryFilterString } from '@temporalio/worker'
 import * as path from 'path'
-
-// Configure worker runtime
-Runtime.install({
-  logger: new DefaultLogger('INFO', (info) => {
-    const { level, message, timestampNanos } = info
-    console.log(`[${level}] ${new Date(Number(timestampNanos / 1000000n)).toISOString()} ${message}`)
-  }),
-  telemetryOptions: {
-    tracingFilter: makeTelemetryFilterString({ core: 'INFO', other: 'INFO' }),
-  },
-})
 
 export const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'xnovu-notification-processing'
 
