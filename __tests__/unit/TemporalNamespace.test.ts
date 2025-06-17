@@ -42,9 +42,8 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       // Clean up the test namespace
       try {
         await connection.workflowService.deleteNamespace({ namespace: testNamespace })
-        console.log(`✅ Cleaned up test namespace: ${testNamespace}`)
       } catch (error) {
-        console.log(`⚠️  Failed to delete test namespace ${testNamespace}:`, error.message)
+        // Failed to delete test namespace, but this is not critical for cleanup
       }
       
       await connection.close()
