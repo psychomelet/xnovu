@@ -123,7 +123,11 @@ export async function updateSchedule(rule: NotificationRule): Promise<void> {
       }
     })
   } catch (error: any) {
-    if (error?.code === 5) { // NOT_FOUND
+    // Handle different error types for NOT_FOUND
+    if (error?.code === 5 || 
+        error?.message?.includes('schedule not found') ||
+        error?.message?.includes('workflow not found') ||
+        error?.name === 'ScheduleNotFoundError') {
       logger.warn('Schedule not found, creating new one', { scheduleId })
       await createSchedule(rule)
     } else {
@@ -146,7 +150,12 @@ export async function deleteSchedule(rule: NotificationRule): Promise<void> {
     
     await handle.delete()
   } catch (error: any) {
-    if (error?.code === 5) { // NOT_FOUND
+    // Handle different error types for NOT_FOUND
+    if (error?.code === 5 || 
+        error?.message?.includes('schedule not found') ||
+        error?.message?.includes('workflow not found') ||
+        error?.message?.includes('workflow execution already completed') ||
+        error?.name === 'ScheduleNotFoundError') {
       logger.warn('Schedule not found, already deleted', { scheduleId })
     } else {
       throw error
@@ -184,7 +193,11 @@ export async function getSchedule(scheduleId: string): Promise<ScheduleDescripti
     const handle = client.getHandle(scheduleId)
     return await handle.describe()
   } catch (error: any) {
-    if (error?.code === 5) { // NOT_FOUND
+    // Handle different error types for NOT_FOUND
+    if (error?.code === 5 || 
+        error?.message?.includes('schedule not found') ||
+        error?.message?.includes('workflow not found') ||
+        error?.name === 'ScheduleNotFoundError') {
       return null
     }
     throw error

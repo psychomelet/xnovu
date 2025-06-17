@@ -168,13 +168,16 @@ describe('RulePollingLoop Integration', () => {
       // Wait for polling to pick up the change
       await waitForCondition(async () => {
         const description = await getSchedule(scheduleId)
-        return description?.schedule?.spec?.cronExpressions?.[0] === '0 15 * * FRI'
-      }, 5000)
+        console.log('Checking for timezone update:', description?.schedule?.spec?.timezoneName)
+        return description?.schedule?.spec?.timezoneName === 'America/New_York'
+      }, 10000)
 
       // Verify schedule was updated
       const description = await getSchedule(scheduleId)
-      expect(description?.schedule?.spec?.cronExpressions).toContain('0 15 * * FRI')
-      expect(description?.schedule?.spec?.timezone).toBe('America/New_York')
+      expect(description?.schedule?.spec?.timezoneName).toBe('America/New_York')
+      // Check Friday (day 5) and hour 15 in structured format
+      expect(description?.schedule?.spec?.structuredCalendar?.[0]?.hour).toEqual([{ start: 15, end: 15, step: 1 }])
+      expect(description?.schedule?.spec?.structuredCalendar?.[0]?.dayOfWeek).toEqual([{ start: 5, end: 5, step: 1 }])
     })
 
     it('should remove schedules for deactivated rules', async () => {
