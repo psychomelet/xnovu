@@ -105,6 +105,85 @@ describe('Supabase Connection', () => {
         console.log(`✅ Schema Access Test - Successfully queried notify.ent_notification table (found ${data?.length || 0} records)`);
       }
     }, 15000);
+
+    it('should be able to insert and delete test data from notify.typ_notification_category', async () => {
+      if (!supabaseUrl || !supabaseServiceKey || !supabaseUrl.includes('supabase.co') || supabaseServiceKey.length <= 50) {
+        throw new Error('Real Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
+      }
+
+      const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+        auth: {
+          persistSession: false,
+        }
+      });
+
+      const notifyClient = supabase.schema('notify');
+      let insertedId: number | null = null;
+
+      try {
+        // Test INSERT permission
+        const testCategory: Database['notify']['Tables']['typ_notification_category']['Insert'] = {
+          name: 'TEST_PERMISSION_CHECK',
+          code: 'TEST_PERM',
+          description: 'Test category for permission validation - safe to delete',
+          sort_order: 9999,
+          deactivated: true,
+          publish_status: 'DRAFT'
+        };
+
+        const { data: insertData, error: insertError } = await notifyClient
+          .from('typ_notification_category')
+          .insert(testCategory)
+          .select('id')
+          .single();
+
+        if (insertError) {
+          if (insertError.message.includes('permission')) {
+            throw new Error(`Permission denied inserting into notify.typ_notification_category: ${insertError.message}`);
+          } else {
+            throw new Error(`Insert test failed: ${insertError.message}`);
+          }
+        }
+
+        expect(insertData).toBeDefined();
+        expect(insertData.id).toBeDefined();
+        insertedId = insertData.id;
+
+        console.log(`✅ Insert Permission Test - Successfully inserted test category with ID: ${insertedId}`);
+
+        // Test DELETE permission
+        const { error: deleteError } = await notifyClient
+          .from('typ_notification_category')
+          .delete()
+          .eq('id', insertedId);
+
+        if (deleteError) {
+          if (deleteError.message.includes('permission')) {
+            throw new Error(`Permission denied deleting from notify.typ_notification_category: ${deleteError.message}`);
+          } else {
+            throw new Error(`Delete test failed: ${deleteError.message}`);
+          }
+        }
+
+        console.log(`✅ Delete Permission Test - Successfully deleted test category with ID: ${insertedId}`);
+        insertedId = null; // Mark as cleaned up
+
+      } catch (error) {
+        // Cleanup on error if we managed to insert something
+        if (insertedId) {
+          try {
+            await notifyClient
+              .from('typ_notification_category')
+              .delete()
+              .eq('id', insertedId);
+            console.log(`🧹 Cleanup - Removed test category with ID: ${insertedId}`);
+          } catch (cleanupError) {
+            console.warn(`⚠️  Failed to cleanup test category with ID: ${insertedId}`, cleanupError);
+          }
+        }
+        throw error;
+      }
+    }, 15000);
   });
 
   describe('DB Access', () => {
