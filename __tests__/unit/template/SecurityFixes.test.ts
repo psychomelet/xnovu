@@ -18,11 +18,13 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
   });
 
   describe('Script tag filtering with loop-based approach', () => {
-    it('should handle malformed script end tags like </script >', async () => {
+    it('should handle malformed script end tags with various whitespace and characters', async () => {
       const maliciousHtml = `
         <p>Safe content</p>
         <script>alert('xss')</script >
         <script>alert('another')  </script  >
+        <script>alert('mixed')</script\t\n bar>
+        <script>alert('attrs')</script disabled class="test">
         <p>More safe content</p>
       `;
 
@@ -33,6 +35,9 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
       // Should not contain script content
       expect(result).not.toContain('alert');
       expect(result).not.toContain('xss');
+      expect(result).not.toContain('another');
+      expect(result).not.toContain('mixed');
+      expect(result).not.toContain('attrs');
       expect(result).toContain('Safe content');
       expect(result).toContain('More safe content');
     });
@@ -52,11 +57,13 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
       expect(result).toContain('Safe content');
     });
 
-    it('should handle style tags with malformed end tags', async () => {
+    it('should handle style tags with malformed end tags and mixed characters', async () => {
       const maliciousHtml = `
         <p>Safe content</p>
         <style>body { background: url('javascript:alert(1)') }</style >
         <style >body { color: red }  </style  >
+        <style>body { margin: 0 }</style\t\n disabled>
+        <style>body { padding: 0 }</style class="test" id="bad">
         <p>More safe content</p>
       `;
 
@@ -66,6 +73,8 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
       expect(result).not.toContain('javascript:alert');
       expect(result).not.toContain('background');
       expect(result).not.toContain('color: red');
+      expect(result).not.toContain('margin: 0');
+      expect(result).not.toContain('padding: 0');
       expect(result).toContain('Safe content');
     });
   });

@@ -177,13 +177,13 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
     // Remove style tags with content - use loop to handle nested/malformed tags
     do {
       previousText = text;
-      text = text.replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+      text = text.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
     } while (text !== previousText);
     
     // Remove script tags with content - use loop to handle nested/malformed tags
     do {
       previousText = text;
-      text = text.replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+      text = text.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '');
     } while (text !== previousText);
     
     // Replace common block elements with newlines
