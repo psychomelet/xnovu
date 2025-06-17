@@ -13,8 +13,9 @@ import { ensureNamespaceExists } from '@/lib/temporal/namespace'
  */
 describe('Temporal Namespace Auto-Creation (Real Service)', () => {
   let connection: Connection
-  const testNamespace = 'test-ns-unit-test'
+  let testNamespace: string
   const requiredEnvVars = ['TEMPORAL_ADDRESS', 'TEMPORAL_NAMESPACE']
+  const cleanupNamespaces: string[] = []
 
   beforeAll(async () => {
     // Check for required environment variables
@@ -26,10 +27,14 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       )
     }
 
+    // Generate a unique namespace for test isolation and register for cleanup
+    testNamespace = `test-ns-unit-test-${Date.now()}`
+    cleanupNamespaces.push(testNamespace)
+
     // Establish real temporal connection
     const address = process.env.TEMPORAL_ADDRESS!
     const isSecure = address.includes(':443') || address.startsWith('https://')
-    
+
     connection = await Connection.connect({
       address,
       tls: isSecure ? {} : false,
@@ -39,13 +44,19 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
   afterAll(async () => {
     if (connection) {
-      // Clean up the test namespace
-      try {
-        await connection.workflowService.deleteNamespace({ namespace: testNamespace })
-      } catch (error) {
-        // Failed to delete test namespace, but this is not critical for cleanup
+      // Attempt to delete any namespaces created during the suite; ignore failures
+      const { execSync } = require('child_process')
+      for (const ns of cleanupNamespaces) {
+        try {
+          execSync(`temporal operator namespace delete --namespace=${ns} --address=${process.env.TEMPORAL_ADDRESS} --yes`, {
+            stdio: 'ignore',
+            timeout: 10000,
+          })
+        } catch (_) {
+          // Ignore cleanup failures (namespace may already be gone or deletion forbidden)
+        }
       }
-      
+
       await connection.close()
     }
   }, 30000)
@@ -64,7 +75,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       expect(describeSpy).not.toHaveBeenCalled()
       expect(registerSpy).not.toHaveBeenCalled()
-      
+
       describeSpy.mockRestore()
       registerSpy.mockRestore()
     })
@@ -77,7 +88,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       expect(describeSpy).not.toHaveBeenCalled()
       expect(registerSpy).not.toHaveBeenCalled()
-      
+
       describeSpy.mockRestore()
       registerSpy.mockRestore()
     })
@@ -94,7 +105,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
         namespace: existingNamespace
       })
       expect(registerSpy).not.toHaveBeenCalled()
-      
+
       describeSpy.mockRestore()
       registerSpy.mockRestore()
     }, 15000)
@@ -102,17 +113,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
     it('should create namespace when it does not exist', async () => {
       const describeSpy = jest.spyOn(connection.workflowService, 'describeNamespace')
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-      let deletedNamespace = false
 
-      // First ensure the test namespace doesn't exist by trying to delete it
-      try {
-        await connection.workflowService.deleteNamespace({ namespace: testNamespace })
-        deletedNamespace = true
-        // Wait a moment for deletion to propagate
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      } catch {
-        // Namespace doesn't exist or can't be deleted
-      }
 
       await ensureNamespaceExists(connection, testNamespace)
 
@@ -120,21 +121,16 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
         namespace: testNamespace
       })
 
-      // Only expect registerNamespace to be called if we actually deleted the namespace
-      if (deletedNamespace) {
-        expect(registerSpy).toHaveBeenCalledWith({
-          namespace: testNamespace,
-          workflowExecutionRetentionPeriod: {
-            seconds: 7 * 24 * 60 * 60 // 7 days in seconds
-          },
-          description: 'XNovu notification processing namespace',
-          isGlobalNamespace: false
-        })
-      } else {
-        // Namespace already existed, so registerNamespace should not be called
-        expect(registerSpy).not.toHaveBeenCalled()
-      }
-      
+      // The namespace should have been (re-)created, so registerNamespace must have been invoked.
+      expect(registerSpy).toHaveBeenCalledWith({
+        namespace: testNamespace,
+        workflowExecutionRetentionPeriod: {
+          seconds: 7 * 24 * 60 * 60, // 7 days in seconds
+        },
+        description: 'XNovu notification processing namespace',
+        isGlobalNamespace: false,
+      })
+
       describeSpy.mockRestore()
       registerSpy.mockRestore()
     }, 20000)
@@ -143,7 +139,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       // This test simulates race condition by mocking the register call to fail with ALREADY_EXISTS
       const describeSpy = jest.spyOn(connection.workflowService, 'describeNamespace')
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-      
+
       // Mock describe to fail (namespace not found)
       const notFoundError = new Error('Namespace not found')
       ;(notFoundError as any).code = 5 // NOT_FOUND
@@ -159,7 +155,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       expect(describeSpy).toHaveBeenCalled()
       expect(registerSpy).toHaveBeenCalled()
-      
+
       describeSpy.mockRestore()
       registerSpy.mockRestore()
     }, 15000)
@@ -167,7 +163,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
     it('should handle unexpected describe errors', async () => {
       const describeSpy = jest.spyOn(connection.workflowService, 'describeNamespace')
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-      
+
       // Mock unexpected error during describe
       const unexpectedError = new Error('Connection failed')
       ;(unexpectedError as any).code = 14 // UNAVAILABLE
@@ -177,7 +173,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       expect(describeSpy).toHaveBeenCalled()
       expect(registerSpy).not.toHaveBeenCalled()
-      
+
       describeSpy.mockRestore()
       registerSpy.mockRestore()
     }, 15000)
@@ -185,7 +181,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
     it('should handle unexpected registration errors', async () => {
       const describeSpy = jest.spyOn(connection.workflowService, 'describeNamespace')
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-      
+
       // Mock describe failure (namespace not found)
       const notFoundError = new Error('Namespace not found')
       ;(notFoundError as any).code = 5 // NOT_FOUND
@@ -200,37 +196,28 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       expect(describeSpy).toHaveBeenCalled()
       expect(registerSpy).toHaveBeenCalled()
-      
+
       describeSpy.mockRestore()
       registerSpy.mockRestore()
     }, 15000)
 
     it('should create namespace with correct retention period', async () => {
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-      let deletedNamespace = false
-      
-      // First delete the namespace to ensure it gets created with the right parameters
-      try {
-        await connection.workflowService.deleteNamespace({ namespace: testNamespace })
-        deletedNamespace = true
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      } catch {
-        // Namespace doesn't exist or can't be deleted
-      }
 
-      await ensureNamespaceExists(connection, testNamespace)
+      // Use a second unique namespace so we can assert creation parameters
+      const retentionNamespace = `${testNamespace}-retention`
+      cleanupNamespaces.push(retentionNamespace)
 
-      if (deletedNamespace) {
-        expect(registerSpy).toHaveBeenCalled()
-        const registerCall = registerSpy.mock.calls[0][0]
-        expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(7 * 24 * 60 * 60)
-        expect(registerCall.description).toBe('XNovu notification processing namespace')
-        expect(registerCall.isGlobalNamespace).toBe(false)
-      } else {
-        // Namespace already existed, registerNamespace wasn't called
-        expect(registerSpy).not.toHaveBeenCalled()
-      }
-      
+      await ensureNamespaceExists(connection, retentionNamespace)
+
+      // Assert that the namespace creation request contains the correct
+      // retention period and metadata.
+      expect(registerSpy).toHaveBeenCalled()
+      const registerCall = registerSpy.mock.calls[0][0] as any
+      expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(7 * 24 * 60 * 60)
+      expect(registerCall.description).toBe('XNovu notification processing namespace')
+      expect(registerCall.isGlobalNamespace).toBe(false)
+
       registerSpy.mockRestore()
     }, 15000)
   })
@@ -248,7 +235,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       it(`should ${shouldThrow ? 'throw' : 'handle'} ${name} error (code ${code})`, async () => {
         const describeSpy = jest.spyOn(connection.workflowService, 'describeNamespace')
         const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-        
+
         const error = new Error(`${name} error`)
         ;(error as any).code = code
 
@@ -262,7 +249,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
           // Test error in describeNamespace
           describeSpy.mockRejectedValue(error)
           if (shouldCreateNamespace) {
-            registerSpy.mockResolvedValue({})
+            registerSpy.mockResolvedValue({} as any)
           }
         }
 
@@ -271,7 +258,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
         } else {
           await expect(ensureNamespaceExists(connection, `mock-error-${code}`)).resolves.toBeUndefined()
         }
-        
+
         describeSpy.mockRestore()
         registerSpy.mockRestore()
       }, 15000)
