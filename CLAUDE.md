@@ -199,6 +199,10 @@ Note: The workflow index is automatically regenerated during `pnpm build`
 
 ## Documentation To Follow
 
+### Temporal Async Integration
+
+For comprehensive async notification processing with Temporal, including workflows, activities, polling loops, and monitoring, see [docs/temporal-integration.md](docs/temporal-integration.md).
+
 ### Novu Workflow Development
 
 For comprehensive Novu workflow development documentation, including workflow patterns, channel steps, triggering, and smart building specific use cases, see [docs/novu-workflow.md](docs/novu-workflow.md).
