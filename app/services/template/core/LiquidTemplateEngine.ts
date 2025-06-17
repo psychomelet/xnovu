@@ -366,8 +366,13 @@ export class LiquidTemplateEngine {
       // Handle single quotes in string values
       // Match strings that start and end with single quotes
       cleaned = cleaned.replace(/:\s*'([^']*)'/g, (match, content) => {
-        // Escape any double quotes in the content
-        const escaped = content.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+        // Properly escape JSON special characters
+        const escaped = content
+          .replace(/\\/g, '\\\\')  // Escape backslashes first
+          .replace(/"/g, '\\"')    // Escape double quotes
+          .replace(/\n/g, '\\n')   // Escape newlines
+          .replace(/\r/g, '\\r')   // Escape carriage returns
+          .replace(/\t/g, '\\t');  // Escape tabs
         return `:"${escaped}"`;
       });
       
