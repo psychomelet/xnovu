@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getTemporalClient } from './index'
-import { triggerNotificationWorkflow, triggerMultipleNotificationsWorkflow } from '../workflows'
+import { notificationTriggerWorkflow, triggerMultipleNotificationsWorkflow } from '../workflows'
 import type { TriggerResult } from '@/lib/notifications/trigger'
 
 export interface AsyncTriggerOptions {
@@ -27,7 +27,7 @@ export class NotificationClient {
     const workflowId = options?.workflowId || `trigger-notification-${notificationId}-${uuidv4()}`
     const taskQueue = options?.taskQueue || this.taskQueue
 
-    const handle = await client.start(triggerNotificationWorkflow, {
+    const handle = await client.start(notificationTriggerWorkflow, {
       args: [{ notificationId }],
       taskQueue,
       workflowId,

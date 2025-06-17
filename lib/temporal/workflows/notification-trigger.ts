@@ -27,7 +27,7 @@ export interface TriggerMultipleNotificationsWorkflowParams {
 /**
  * Workflow to trigger a single notification by ID asynchronously
  */
-export async function triggerNotificationWorkflow(
+export async function notificationTriggerWorkflow(
   params: TriggerNotificationWorkflowParams
 ): Promise<TriggerResult> {
   return await triggerNotificationByIdActivity(params)

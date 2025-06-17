@@ -28,14 +28,9 @@ jest.mock('@/lib/temporal/client', () => ({
   getTemporalClient: jest.fn()
 }))
 
-// Mock the orchestration workflow
-jest.mock('@/lib/temporal/workflows/orchestration', () => ({
-  notificationOrchestrationWorkflow: jest.fn()
-}))
-
-// Mock the polling workflow
-jest.mock('@/lib/temporal/workflows/notification-polling-workflow', () => ({
-  notificationPollingWorkflow: jest.fn()
+// Mock the trigger workflow
+jest.mock('@/lib/temporal/workflows/notification-trigger', () => ({
+  notificationTriggerWorkflow: jest.fn()
 }))
 
 describe('WorkerManager', () => {
