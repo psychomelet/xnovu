@@ -63,13 +63,13 @@ export class TemplateRenderer {
     context: TemplateContext
   ): Promise<string> {
     const xnovuMatches = this.parseXNovuRenderSyntax(template);
-    
+
     if (xnovuMatches.length === 0) {
       return template;
     }
 
     let result = template;
-    
+
     // Process matches in reverse order to maintain string indices
     for (const match of xnovuMatches.reverse()) {
       try {
@@ -95,15 +95,15 @@ export class TemplateRenderer {
         );
 
         // Replace the xnovu_render call with rendered content
-        result = result.substring(0, match.startIndex) + 
-                 renderedContent + 
+        result = result.substring(0, match.startIndex) +
+                 renderedContent +
                  result.substring(match.endIndex);
       } catch (error) {
         console.error(`[TemplateRenderer] Failed to process template ${match.templateKey}:`, error);
         // Replace with error message instead of breaking the entire template
         const errorMessage = `[Template Error: ${match.templateKey}]`;
-        result = result.substring(0, match.startIndex) + 
-                 errorMessage + 
+        result = result.substring(0, match.startIndex) +
+                 errorMessage +
                  result.substring(match.endIndex);
       }
     }
@@ -154,7 +154,7 @@ export class TemplateRenderer {
       // Use Function constructor for safer evaluation than eval
       // This allows for more complex object syntax while being safer than eval
       const result = new Function('return ' + variablesJson)();
-      
+
       if (typeof result !== 'object' || result === null) {
         throw new Error('Variables must be an object');
       }
@@ -174,12 +174,13 @@ export class TemplateRenderer {
     enterpriseId: string
   ): Promise<NotificationTemplate> {
     const cacheKey = `${enterpriseId}:${templateKey}`;
-    
+
     // Check cache first
     const cached = this.cache.get(cacheKey);
     if (cached && this.isCacheValid(cached.compiledAt)) {
       return {
         id: 0, // Placeholder since we're using template_key
+        template_key: templateKey,
         body_template: cached.body,
         subject_template: cached.subject || null,
         variables_description: cached.variables,
@@ -200,9 +201,30 @@ export class TemplateRenderer {
       };
     }
 
-    // Load from database - template_key field no longer exists in schema
-    // This functionality needs to be updated when template_key is added back
-    throw new Error(`Template loading by key not supported: ${templateKey} (enterprise: ${enterpriseId})`);
+    // Load from database
+    const { data: template, error } = await this.supabase
+      .schema('notify')
+      .from('ent_notification_template')
+      .select('*')
+      .eq('template_key', templateKey)
+      .eq('enterprise_id', enterpriseId)
+      .eq('publish_status', 'PUBLISH')
+      .eq('deactivated', false)
+      .single();
+
+    if (error || !template) {
+      throw new Error(`Template not found: ${templateKey} (enterprise: ${enterpriseId})`);
+    }
+
+    // Cache the template
+    this.cache.set(cacheKey, {
+      subject: template.subject_template || undefined,
+      body: template.body_template,
+      variables: (template.variables_description as Record<string, any>) || {},
+      compiledAt: new Date()
+    });
+
+    return template;
   }
 
   /**
@@ -215,7 +237,7 @@ export class TemplateRenderer {
   ): string {
     // Simple variable interpolation regex
     const variableRegex = /\{\{\s*([^}]+)\s*\}\}/g;
-    
+
     return template.replace(variableRegex, (match, variablePath) => {
       try {
         const value = this.getNestedValue(variables, variablePath.trim());
@@ -278,7 +300,7 @@ export class TemplateRenderer {
     variables: Record<string, any>
   ): Promise<{ subject?: string; body: string }> {
     const template = await this.loadTemplate(templateId, enterpriseId);
-    
+
     const context: TemplateContext = {
       enterpriseId,
       variables
@@ -301,11 +323,11 @@ export class TemplateRenderer {
     enterpriseId: string
   ): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
-    
+
     try {
       // Check xnovu_render syntax
       const xnovuMatches = this.parseXNovuRenderSyntax(template);
-      
+
       // Validate that referenced templates exist
       for (const match of xnovuMatches) {
         try {
@@ -373,18 +395,18 @@ export function getTemplateRenderer(): TemplateRenderer {
   if (!templateRenderer) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
+
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Supabase configuration missing for TemplateRenderer');
     }
-    
+
     templateRenderer = new TemplateRenderer(supabaseUrl, supabaseKey);
-    
+
     // Set up periodic cache cleanup
     setInterval(() => {
       templateRenderer?.clearExpiredCache();
     }, 10 * 60 * 1000); // Cleanup every 10 minutes
   }
-  
+
   return templateRenderer;
 }

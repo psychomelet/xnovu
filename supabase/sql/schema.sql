@@ -59,7 +59,7 @@ create table if not exists notify.typ_notification_category (
   sort_order INTEGER default 0 not null,
   business_id UUID,
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
-  enterprise_id UUID references base.ent_enterprise (id) on delete set null,
+  enterprise_id UUID,
   created_at TIMESTAMPTZ default NOW() not null,
   created_by UUID default auth.user_id (),
   updated_at TIMESTAMPTZ default NOW() not null,
@@ -80,7 +80,7 @@ create table if not exists notify.typ_notification_priority (
   sort_order INTEGER default 0 not null, -- Higher value can mean higher priority
   business_id UUID,
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
-  enterprise_id UUID references base.ent_enterprise (id) on delete set null,
+  enterprise_id UUID,
   created_at TIMESTAMPTZ default NOW() not null,
   created_by UUID default auth.user_id (),
   updated_at TIMESTAMPTZ default NOW() not null,
@@ -108,7 +108,7 @@ create table if not exists notify.ent_notification_template (
   body_template TEXT not null, -- Content template, can use placeholders like {{variable}}
   variables_description JSONB, -- Describes available placeholders and their meanings, e.g., {"username": "Recipient''s name", "event_time": "Time of the event"}
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
-  enterprise_id UUID references base.ent_enterprise (id) on delete set null,
+  enterprise_id UUID,
   created_at TIMESTAMPTZ default NOW() not null,
   created_by UUID default auth.user_id (),
   updated_at TIMESTAMPTZ default NOW() not null,
@@ -134,7 +134,7 @@ create table if not exists notify.ent_notification_workflow (
   control_schema JSONB, -- JSON Schema for workflow controls
   template_overrides JSONB, -- Channel-specific template overrides
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (workflow_key)) STORED,
-  enterprise_id UUID references base.ent_enterprise (id) on delete set null,
+  enterprise_id UUID,
   created_at TIMESTAMPTZ default NOW() not null,
   created_by UUID default auth.user_id (),
   updated_at TIMESTAMPTZ default NOW() not null,
@@ -157,7 +157,7 @@ create table if not exists notify.ent_notification_rule (
   trigger_config JSONB, -- Configuration, e.g., {"event_name": "user.signup"} or {"cron": "0 9 * * MON"}
   rule_payload JSONB, -- For complex rules defined as javascript, as per design document.
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
-  enterprise_id UUID references base.ent_enterprise (id) on delete set null,
+  enterprise_id UUID,
   created_at TIMESTAMPTZ default NOW() not null,
   created_by UUID default auth.user_id (),
   updated_at TIMESTAMPTZ default NOW() not null,
@@ -206,7 +206,7 @@ create table if not exists notify.ent_notification (
 
   repr TEXT GENERATED ALWAYS as (func.normalize_repr (name)) STORED,
 
-  enterprise_id UUID references base.ent_enterprise (id) on delete set null,
+  enterprise_id UUID,
   created_at TIMESTAMPTZ default NOW() not null,
   created_by UUID default auth.user_id (),
   updated_at TIMESTAMPTZ default NOW() not null,

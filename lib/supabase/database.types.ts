@@ -253,6 +253,7 @@ export type Database = {
           publish_status: Database["shared_types"]["Enums"]["publish_status"]
           repr: string | null
           subject_template: string | null
+          template_key: string | null
           typ_notification_category_id: number | null
           updated_at: string
           updated_by: string | null
@@ -272,6 +273,7 @@ export type Database = {
           publish_status?: Database["shared_types"]["Enums"]["publish_status"]
           repr?: string | null
           subject_template?: string | null
+          template_key?: string | null
           typ_notification_category_id?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -291,6 +293,7 @@ export type Database = {
           publish_status?: Database["shared_types"]["Enums"]["publish_status"]
           repr?: string | null
           subject_template?: string | null
+          template_key?: string | null
           typ_notification_category_id?: number | null
           updated_at?: string
           updated_by?: string | null
