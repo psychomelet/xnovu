@@ -6,6 +6,7 @@ import type { TriggerResult } from '@/lib/notifications/trigger'
 export interface AsyncTriggerOptions {
   workflowId?: string
   taskQueue?: string
+  startDelay?: number | string
 }
 
 export class NotificationClient {
@@ -31,6 +32,7 @@ export class NotificationClient {
       args: [{ notificationId }],
       taskQueue,
       workflowId,
+      startDelay: options?.startDelay,
     })
 
     return {
@@ -55,6 +57,7 @@ export class NotificationClient {
       args: [{ notificationIds }],
       taskQueue,
       workflowId,
+      startDelay: options?.startDelay,
     })
 
     return {

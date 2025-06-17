@@ -45,6 +45,9 @@ export class NotificationPollingService {
         query = query.in('notification_status', ['PENDING', 'FAILED'])
       }
 
+      // Only get notifications that are due (scheduled_for is null or in the past)
+      query = query.or(`scheduled_for.is.null,scheduled_for.lte.${new Date().toISOString()}`)
+
       const { data, error } = await query
 
       if (error) {

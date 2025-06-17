@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { notificationClient } from '@/lib/temporal/client/notification-client'
 import { triggerNotificationById } from '@/lib/notifications/trigger'
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/supabase/database.types'
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createClient<Database>(supabaseUrl, supabaseKey)
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,14 +24,46 @@ export async function POST(request: NextRequest) {
     // Handle single notification
     if (notificationId) {
       if (async) {
+        // Fetch notification to check scheduled_for
+        const { data: notification, error } = await supabase
+          .schema('notify')
+          .from('ent_notification')
+          .select('scheduled_for')
+          .eq('id', notificationId)
+          .single()
+
+        if (error) {
+          return NextResponse.json(
+            { error: `Failed to fetch notification: ${error.message}` },
+            { status: 404 }
+          )
+        }
+
+        let startDelay: number | undefined
+        if (notification?.scheduled_for) {
+          const scheduledTime = new Date(notification.scheduled_for)
+          const now = new Date()
+          const delayMs = scheduledTime.getTime() - now.getTime()
+          if (delayMs > 0) {
+            startDelay = delayMs
+          }
+        }
+
         // Async trigger using Temporal
-        const result = await notificationClient.asyncTriggerNotificationById(notificationId)
+        const result = await notificationClient.asyncTriggerNotificationById(
+          notificationId,
+          { startDelay }
+        )
         return NextResponse.json({
           success: true,
           async: true,
           workflowId: result.workflowId,
           runId: result.runId,
-          message: `Notification ${notificationId} queued for async processing`
+          startDelay,
+          scheduledFor: notification?.scheduled_for,
+          message: startDelay 
+            ? `Notification ${notificationId} scheduled for ${notification.scheduled_for}`
+            : `Notification ${notificationId} queued for async processing`
         })
       } else {
         // Sync trigger (fallback)
