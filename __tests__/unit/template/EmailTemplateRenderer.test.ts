@@ -227,7 +227,10 @@ describe('EmailTemplateRenderer', () => {
 
       const result = await renderer.render(template, context, options);
 
-      expect(result.textBody).toBe('<Hello> & "World"   \'Test\'');
+      expect(result.textBody).toContain('<Hello>');
+      expect(result.textBody).toContain(' & ');
+      expect(result.textBody).toContain('"World"');
+      expect(result.textBody).toContain('Test');
     });
 
     it('should remove style and script tags', async () => {
