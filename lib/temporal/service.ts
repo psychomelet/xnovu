@@ -3,21 +3,11 @@ import { createWorker } from './worker'
 import { Worker } from '@temporalio/worker'
 import { logger } from '@/app/services/logger'
 
-export interface TemporalServiceConfig {
-  enterpriseIds: string[]
-}
-
 export class TemporalService {
-  private config: TemporalServiceConfig
   private worker: Worker | null = null
   private isRunning = false
 
-  constructor(config?: Partial<TemporalServiceConfig>) {
-    this.config = {
-      enterpriseIds: process.env.ENTERPRISE_IDS?.split(',') || [],
-      ...config
-    }
-  }
+  constructor() {}
 
   async initialize(): Promise<void> {
     logger.temporal('Initializing Temporal service...')
@@ -119,10 +109,6 @@ export class TemporalService {
 
   isEnabled(): boolean {
     return true // Always enabled now
-  }
-
-  getConfig(): TemporalServiceConfig {
-    return { ...this.config }
   }
 }
 

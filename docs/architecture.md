@@ -34,7 +34,7 @@ The worker is the core service that:
 - Runs an integrated Temporal worker
 
 **Key Features:**
-- Multi-enterprise support
+- Polls all enterprises automatically
 - Health check endpoint
 - Graceful shutdown handling
 - Automatic reconnection for subscriptions
@@ -135,8 +135,8 @@ TEMPORAL_ADDRESS=temporal.production.local:7233
 TEMPORAL_NAMESPACE=xnovu-prod
 TEMPORAL_TASK_QUEUE=xnovu-notification-processing
 
-# Multiple workers can run for different enterprises
-pnpm xnovu worker --enterprises "ent-1,ent-2"
+# Worker automatically processes all enterprises
+pnpm xnovu worker start
 ```
 
 ## Configuration
@@ -152,7 +152,6 @@ TEMPORAL_MAX_CONCURRENT_ACTIVITIES=100
 TEMPORAL_MAX_CONCURRENT_WORKFLOWS=50
 
 # Worker Configuration
-WORKER_ENTERPRISE_IDS=enterprise-1,enterprise-2
 WORKER_HEALTH_PORT=3001
 WORKER_LOG_LEVEL=info
 
@@ -226,7 +225,7 @@ Activities have specific retry policies:
 
 ### Horizontal Scaling
 
-- **Workers**: Run multiple instances for different enterprises
+- **Workers**: Single instance processes all enterprises
 - **Workers**: Temporal workers scale horizontally
 - **Activities**: Concurrent execution controlled by configuration
 
@@ -253,7 +252,7 @@ Activities have specific retry policies:
 
 ### Authorization
 
-- Enterprise isolation at worker level
+- All enterprises processed by single worker
 - Row-level security in Supabase
 - Workflow-level access control in Temporal
 

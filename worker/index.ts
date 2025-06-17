@@ -34,15 +34,8 @@ async function main() {
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
 
-    // Parse enterprise IDs from environment
-    const enterpriseIds = process.env.WORKER_ENTERPRISE_IDS?.split(',').map(id => id.trim()) || [];
-    if (enterpriseIds.length === 0) {
-      logger.warn('No enterprise IDs specified in WORKER_ENTERPRISE_IDS, worker will run without polling workflows');
-    }
-
     // Initialize worker manager
     const workerManager = new WorkerManager({
-      enterpriseIds,
       healthPort: parseInt(process.env.WORKER_HEALTH_PORT || '3001'),
       logLevel: process.env.WORKER_LOG_LEVEL || 'info',
       supabase: {

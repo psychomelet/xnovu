@@ -1,7 +1,9 @@
 import { Connection, WorkflowClient } from '@temporalio/client'
+import { ensureNamespaceExists } from '../namespace'
 
 let connection: Connection | null = null
 let client: WorkflowClient | null = null
+let namespaceInitialized = false
 
 export async function getTemporalConnection(): Promise<Connection> {
   if (!connection) {
@@ -19,9 +21,17 @@ export async function getTemporalConnection(): Promise<Connection> {
 export async function getTemporalClient(): Promise<WorkflowClient> {
   if (!client) {
     const conn = await getTemporalConnection()
+    const namespace = process.env.TEMPORAL_NAMESPACE || 'default'
+    
+    // Ensure namespace exists on first client creation
+    if (!namespaceInitialized) {
+      await ensureNamespaceExists(conn, namespace)
+      namespaceInitialized = true
+    }
+    
     client = new WorkflowClient({
       connection: conn,
-      namespace: process.env.TEMPORAL_NAMESPACE || 'default',
+      namespace,
     })
   }
   return client
@@ -35,4 +45,8 @@ export async function closeTemporalConnection(): Promise<void> {
     await connection.close()
     connection = null
   }
+  namespaceInitialized = false
 }
+
+// Export notification client
+export { NotificationClient, notificationClient } from './notification-client'

@@ -6,7 +6,6 @@ type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
 
 export interface PollingOptions {
   batchSize?: number
-  enterpriseId?: string
   includeProcessed?: boolean
 }
 
@@ -25,7 +24,6 @@ export class NotificationPollingService {
   async pollNotifications(options: PollingOptions = {}): Promise<NotificationRow[]> {
     const {
       batchSize = this.defaultBatchSize,
-      enterpriseId,
       includeProcessed = false
     } = options
 
@@ -41,10 +39,6 @@ export class NotificationPollingService {
         .order('updated_at', { ascending: true })
         .limit(batchSize)
 
-      // Filter by enterprise if specified
-      if (enterpriseId) {
-        query = query.eq('enterprise_id', enterpriseId)
-      }
 
       // Optionally exclude already processed notifications
       if (!includeProcessed) {
@@ -70,8 +64,7 @@ export class NotificationPollingService {
         
         logger.info('Polled notifications successfully', {
           count: data.length,
-          lastTimestamp: mostRecentTimestamp,
-          enterpriseId
+          lastTimestamp: mostRecentTimestamp
         })
       }
 
@@ -79,7 +72,6 @@ export class NotificationPollingService {
     } catch (error) {
       logger.error('Error polling notifications', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        enterpriseId,
         lastPollTimestamp: this.lastPollTimestamp?.toISOString()
       })
       throw error
@@ -91,8 +83,7 @@ export class NotificationPollingService {
    */
   async pollFailedNotifications(options: PollingOptions = {}): Promise<NotificationRow[]> {
     const {
-      batchSize = this.defaultBatchSize,
-      enterpriseId
+      batchSize = this.defaultBatchSize
     } = options
 
     try {
@@ -104,30 +95,24 @@ export class NotificationPollingService {
         .order('updated_at', { ascending: true })
         .limit(batchSize)
 
-      if (enterpriseId) {
-        query = query.eq('enterprise_id', enterpriseId)
-      }
 
       const { data, error } = await query
 
       if (error) {
         logger.error('Failed to poll failed notifications', {
-          error: error.message,
-          enterpriseId
+          error: error.message
         })
         throw error
       }
 
       logger.info('Polled failed notifications', {
-        count: data?.length || 0,
-        enterpriseId
+        count: data?.length || 0
       })
 
       return data || []
     } catch (error) {
       logger.error('Error polling failed notifications', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        enterpriseId
+        error: error instanceof Error ? error.message : 'Unknown error'
       })
       throw error
     }
@@ -138,8 +123,7 @@ export class NotificationPollingService {
    */
   async pollScheduledNotifications(options: PollingOptions = {}): Promise<NotificationRow[]> {
     const {
-      batchSize = this.defaultBatchSize,
-      enterpriseId
+      batchSize = this.defaultBatchSize
     } = options
 
     try {
@@ -155,31 +139,25 @@ export class NotificationPollingService {
         .order('scheduled_for', { ascending: true })
         .limit(batchSize)
 
-      if (enterpriseId) {
-        query = query.eq('enterprise_id', enterpriseId)
-      }
 
       const { data, error } = await query
 
       if (error) {
         logger.error('Failed to poll scheduled notifications', {
-          error: error.message,
-          enterpriseId
+          error: error.message
         })
         throw error
       }
 
       logger.info('Polled scheduled notifications', {
         count: data?.length || 0,
-        enterpriseId,
         currentTime: now
       })
 
       return data || []
     } catch (error) {
       logger.error('Error polling scheduled notifications', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        enterpriseId
+        error: error instanceof Error ? error.message : 'Unknown error'
       })
       throw error
     }
