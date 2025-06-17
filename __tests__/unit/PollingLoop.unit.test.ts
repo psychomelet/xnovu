@@ -6,6 +6,7 @@ import { NotificationPollingLoop } from '@/lib/polling/polling-loop'
 import { createSupabaseAdmin } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/database.types'
 import { v4 as uuidv4 } from 'uuid'
+import { Connection, WorkflowClient } from '@temporalio/client'
 
 // Mock Temporal client
 jest.mock('@temporalio/client', () => ({
