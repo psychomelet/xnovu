@@ -225,9 +225,9 @@ export class SupabaseTemplateLoader implements TemplateLoader {
   private mapDbTemplateToTemplate(dbTemplate: NotificationTemplate): Template {
     return {
       id: dbTemplate.id,
-      templateKey: dbTemplate.template_key,
-      name: dbTemplate.name,
-      bodyTemplate: dbTemplate.body_template,
+      templateKey: dbTemplate.template_key || '',
+      name: dbTemplate.name || '',
+      bodyTemplate: dbTemplate.body_template || '',
       subjectTemplate: dbTemplate.subject_template,
       variablesDescription: dbTemplate.variables_description as Record<string, any> | null,
       channelType: dbTemplate.channel_type,

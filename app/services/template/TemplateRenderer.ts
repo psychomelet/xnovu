@@ -161,7 +161,7 @@ export class TemplateRenderer {
       template_key: template.templateKey,
       body_template: template.bodyTemplate,
       subject_template: template.subjectTemplate || null,
-      variables_description: template.variablesDescription,
+      variables_description: template.variablesDescription || null,
       name: template.name,
       description: null,
       publish_status: 'PUBLISH' as const,

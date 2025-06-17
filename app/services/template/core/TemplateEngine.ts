@@ -22,9 +22,17 @@ export interface RenderResult {
     position?: { start: number; end: number };
   }>;
   metadata?: {
-    templatesLoaded: string[];
-    renderTime: number;
-    depth: number;
+    templatesLoaded?: string[];
+    renderTime?: number;
+    depth?: number;
+    subject?: string;
+    templateKey?: string;
+    templateName?: string;
+    loadedAt?: Date;
+    source?: 'database' | 'cache';
+    cacheKey?: string;
+    enterpriseId?: string;
+    channelType?: string;
   };
 }
 
@@ -53,7 +61,10 @@ export class TemplateEngine {
     options?: RenderOptions
   ): Promise<RenderResult> {
     const startTime = Date.now();
-    const opts = { ...this.defaultOptions, ...options };
+    const opts: Required<RenderOptions> = { 
+      ...this.defaultOptions, 
+      ...options 
+    } as Required<RenderOptions>;
     const errors: RenderResult['errors'] = [];
     const templatesLoaded: string[] = [];
 
@@ -152,7 +163,7 @@ export class TemplateEngine {
       }
 
       return {
-        content: (options?.errorPlaceholder || this.defaultOptions.errorPlaceholder).replace('{{key}}', templateKey),
+        content: (options?.errorPlaceholder || this.defaultOptions.errorPlaceholder!).replace('{{key}}', templateKey),
         errors: [renderError]
       };
     }
