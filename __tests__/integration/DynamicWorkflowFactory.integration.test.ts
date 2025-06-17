@@ -195,7 +195,8 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       DynamicWorkflowFactory.createDynamicWorkflow(config, testEnterpriseId);
 
       // Get the step function that was passed to workflow()
-      const stepFunction = mockWorkflow.mock.calls[0][1];
+      // Get the most recent workflow call (this test's workflow)
+      const stepFunction = mockWorkflow.mock.calls[mockWorkflow.mock.calls.length - 1][1];
 
       // Mock step object that actually calls the step function
       const mockStep = {
@@ -257,7 +258,8 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       DynamicWorkflowFactory.createDynamicWorkflow(config, testEnterpriseId);
 
       // Get the step function
-      const stepFunction = mockWorkflow.mock.calls[0][1];
+      // Get the most recent workflow call (this test's workflow)
+      const stepFunction = mockWorkflow.mock.calls[mockWorkflow.mock.calls.length - 1][1];
 
       // Mock step object that executes the step function
       const mockStep = {
@@ -304,7 +306,8 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
 
       // Create workflow
       DynamicWorkflowFactory.createDynamicWorkflow(config, testEnterpriseId);
-      const stepFunction = mockWorkflow.mock.calls[0][1];
+      // Get the most recent workflow call (this test's workflow)
+      const stepFunction = mockWorkflow.mock.calls[mockWorkflow.mock.calls.length - 1][1];
 
       // Mock successful step execution
       const mockStep = {
@@ -372,7 +375,8 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
         .mockRejectedValueOnce(new Error('SMS template error')); // SMS
 
       DynamicWorkflowFactory.createDynamicWorkflow(config, testEnterpriseId);
-      const stepFunction = mockWorkflow.mock.calls[0][1];
+      // Get the most recent workflow call (this test's workflow)
+      const stepFunction = mockWorkflow.mock.calls[mockWorkflow.mock.calls.length - 1][1];
 
       const mockStep = {
         email: jest.fn().mockImplementation(async (stepId, stepFunc) => {
@@ -393,6 +397,9 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
           data: { message: 'Test message' }
         }
       })).rejects.toThrow('SMS template error');
+
+      // Small delay to ensure database update completes
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Verify notification was marked as failed
       const updatedNotification = await notificationService.getNotification(testNotification.id, testEnterpriseId);
@@ -422,7 +429,8 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
         .mockResolvedValueOnce({ subject: 'Push Title', body: 'Push Body' });
 
       DynamicWorkflowFactory.createDynamicWorkflow(config, testEnterpriseId);
-      const stepFunction = mockWorkflow.mock.calls[0][1];
+      // Get the most recent workflow call (this test's workflow)
+      const stepFunction = mockWorkflow.mock.calls[mockWorkflow.mock.calls.length - 1][1];
 
       const mockStep = {
         email: jest.fn().mockImplementation(async (stepId, stepFunc) => await stepFunc()),
