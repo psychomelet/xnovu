@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { WorkflowDiscovery } from '../../app/services/workflow/WorkflowDiscovery';
+import { WorkflowDiscovery } from '@/app/services/workflow/WorkflowDiscovery';
 
 // This is a unit test that still uses real file system operations
 // as per the "no mocking" principle in __tests__/CLAUDE.md

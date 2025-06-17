@@ -1,5 +1,5 @@
-import { NotificationService } from '../../app/services/database/NotificationService';
-import type { Database } from '../../lib/supabase/database.types';
+import { NotificationService } from '@/app/services/database/NotificationService';
+import type { Database } from '@/lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Types
@@ -21,7 +21,7 @@ describe('NotificationService Unit Tests', () => {
   beforeAll(async () => {
     service = new NotificationService();
     // Create a test workflow for notifications
-    const { WorkflowService } = await import('../../app/services/database/WorkflowService');
+    const { WorkflowService } = await import('@/app/services/database/WorkflowService');
     const workflowService = new WorkflowService();
     const testWorkflow = await workflowService.createWorkflow({
       name: 'Test Notification Workflow',
@@ -48,7 +48,7 @@ describe('NotificationService Unit Tests', () => {
     // Clean up test workflow
     if (testWorkflowId) {
       try {
-        const { WorkflowService } = await import('../../app/services/database/WorkflowService');
+        const { WorkflowService } = await import('@/app/services/database/WorkflowService');
         const workflowService = new WorkflowService();
         await workflowService.deactivateWorkflow(testWorkflowId, testEnterpriseId);
       } catch (error) {

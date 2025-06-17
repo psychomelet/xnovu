@@ -1,5 +1,5 @@
-import { WorkflowService } from '../../app/services/database/WorkflowService';
-import type { Database } from '../../lib/supabase/database.types';
+import { WorkflowService } from '@/app/services/database/WorkflowService';
+import type { Database } from '@/lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Types

@@ -1,8 +1,8 @@
-import { DynamicWorkflowFactory } from '../../app/services/workflow/DynamicWorkflowFactory';
-import { NotificationService } from '../../app/services/database/NotificationService';
+import { DynamicWorkflowFactory } from '@/app/services/workflow/DynamicWorkflowFactory';
+import { NotificationService } from '@/app/services/database/NotificationService';
 import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../../lib/supabase/database.types';
-import type { WorkflowConfig } from '../../app/services/database/WorkflowService';
+import type { Database } from '@/lib/supabase/database.types';
+import type { WorkflowConfig } from '@/app/services/database/WorkflowService';
 import { randomUUID } from 'crypto';
 
 // Types
