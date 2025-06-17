@@ -1,5 +1,6 @@
 import { BaseChannelRenderer } from './BaseChannelRenderer';
-import { TemplateContext, RenderOptions } from '../core/TemplateEngine';
+import { TemplateContext, RenderOptions, RenderResult } from '../core/TemplateEngine';
+import { sanitizeForChannel } from '../utils/sanitizeConfig';
 
 export class InAppTemplateRenderer extends BaseChannelRenderer {
   constructor(templateLoader: any) {
@@ -97,6 +98,16 @@ export class InAppTemplateRenderer extends BaseChannelRenderer {
   }
 
   /**
+   * Apply in-app specific sanitization to the result
+   */
+  protected async sanitizeResult(result: RenderResult): Promise<RenderResult> {
+    return {
+      ...result,
+      content: sanitizeForChannel(result.content, 'in_app')
+    };
+  }
+
+  /**
    * Basic markdown to HTML conversion for in-app display
    */
   private markdownToHtml(markdown: string): string {
@@ -127,6 +138,7 @@ export class InAppTemplateRenderer extends BaseChannelRenderer {
     // Clean up empty paragraphs
     html = html.replace(/<p>\s*<\/p>/g, '');
 
-    return html;
+    // Sanitize the generated HTML for security
+    return sanitizeForChannel(html, 'in_app');
   }
 }

@@ -1,5 +1,6 @@
 import { BaseChannelRenderer, ChannelRenderResult, ChannelRenderOptions } from './BaseChannelRenderer';
-import { TemplateContext, RenderOptions } from '../core/TemplateEngine';
+import { TemplateContext, RenderOptions, RenderResult } from '../core/TemplateEngine';
+import { sanitizeForChannel } from '../utils/sanitizeConfig';
 
 export interface EmailRenderOptions extends ChannelRenderOptions {
   includeTextVersion?: boolean;
@@ -10,6 +11,10 @@ export interface EmailRenderResult extends ChannelRenderResult {
   subject: string;
   body: string;
   textBody?: string;
+  safetyValidation?: {
+    safe: boolean;
+    warnings: string[];
+  };
 }
 
 export class EmailTemplateRenderer extends BaseChannelRenderer {
@@ -37,8 +42,9 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
 
     const emailResult: EmailRenderResult = {
       ...result,
-      subject: finalSubject,
-      body: body
+      subject: sanitizeForChannel(finalSubject, 'email'),
+      body: body,
+      safetyValidation: result.metadata?.safetyValidation
     };
 
     // Generate text version if requested
@@ -77,8 +83,9 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
 
     const emailResult: EmailRenderResult = {
       ...result,
-      subject: finalSubject,
-      body: body
+      subject: sanitizeForChannel(finalSubject, 'email'),
+      body: body,
+      safetyValidation: result.metadata?.safetyValidation
     };
 
     // Generate text version if requested
@@ -148,11 +155,24 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
   }
 
   /**
+   * Apply email-specific sanitization to the result
+   */
+  protected async sanitizeResult(result: RenderResult): Promise<RenderResult> {
+    return {
+      ...result,
+      content: sanitizeForChannel(result.content, 'email')
+    };
+  }
+
+  /**
    * Simple HTML to text conversion
    */
   private htmlToText(html: string): string {
+    // First sanitize the HTML to ensure it's safe
+    const sanitizedHtml = sanitizeForChannel(html, 'email');
+    
     // Remove style and script tags with content
-    let text = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    let text = sanitizedHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
     text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
     
     // Replace common block elements with newlines

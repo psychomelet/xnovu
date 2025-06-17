@@ -1,5 +1,6 @@
 import { BaseChannelRenderer } from './BaseChannelRenderer';
-import { TemplateContext, RenderOptions } from '../core/TemplateEngine';
+import { TemplateContext, RenderOptions, RenderResult } from '../core/TemplateEngine';
+import { sanitizeForChannel } from '../utils/sanitizeConfig';
 
 export class SmsTemplateRenderer extends BaseChannelRenderer {
   private readonly SMS_MAX_LENGTH = 1600; // GSM 7-bit encoding limit for concatenated SMS
@@ -86,6 +87,16 @@ export class SmsTemplateRenderer extends BaseChannelRenderer {
     return {
       ...result,
       metadata
+    };
+  }
+
+  /**
+   * Apply SMS-specific sanitization to the result
+   */
+  protected async sanitizeResult(result: RenderResult): Promise<RenderResult> {
+    return {
+      ...result,
+      content: sanitizeForChannel(result.content, 'sms')
     };
   }
 

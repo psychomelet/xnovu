@@ -33,6 +33,10 @@ export interface RenderResult {
     cacheKey?: string;
     enterpriseId?: string;
     channelType?: string;
+    safetyValidation?: {
+      safe: boolean;
+      warnings: string[];
+    };
   };
 }
 

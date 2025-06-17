@@ -1,15 +1,22 @@
 import { TemplateEngine, TemplateContext, RenderOptions, RenderResult } from '../core/TemplateEngine';
 import { TemplateLoader } from '../loaders/TemplateLoader';
+import { sanitizeVariables, validateContentSafety } from '../utils/sanitizeConfig';
 
 export interface ChannelRenderOptions extends RenderOptions {
   channelType: string;
   format?: 'html' | 'text' | 'markdown';
+  sanitize?: boolean; // Enable/disable sanitization (default: true)
+  validateSafety?: boolean; // Enable/disable safety validation (default: true)
 }
 
 export interface ChannelRenderResult extends RenderResult {
   subject?: string;
   channelType: string;
   format?: string;
+  safetyValidation?: {
+    safe: boolean;
+    warnings: string[];
+  };
 }
 
 export abstract class BaseChannelRenderer {
@@ -29,13 +36,16 @@ export abstract class BaseChannelRenderer {
     context: TemplateContext,
     options?: ChannelRenderOptions
   ): Promise<ChannelRenderResult> {
-    const channelContext = this.prepareContext(context);
+    const channelContext = this.prepareContext(context, options);
     const renderOptions = this.prepareOptions(options);
     
     const result = await this.engine.render(template, channelContext, renderOptions);
     
+    // Apply post-render sanitization and validation
+    const finalResult = await this.postProcessResult(result, options);
+    
     return {
-      ...result,
+      ...finalResult,
       channelType: this.channelType,
       format: options?.format || this.getDefaultFormat()
     };
@@ -50,18 +60,21 @@ export abstract class BaseChannelRenderer {
     options?: ChannelRenderOptions
   ): Promise<ChannelRenderResult> {
     const channelContext = {
-      ...this.prepareContext(context),
+      ...this.prepareContext(context, options),
       channelType: this.channelType
     };
     
     const renderOptions = this.prepareOptions(options);
     const result = await this.engine.renderByKey(templateKey, channelContext, renderOptions);
     
+    // Apply post-render sanitization and validation
+    const finalResult = await this.postProcessResult(result, options);
+    
     return {
-      ...result,
+      ...finalResult,
       channelType: this.channelType,
       format: options?.format || this.getDefaultFormat(),
-      subject: result.metadata?.subject
+      subject: finalResult.metadata?.subject
     };
   }
 
@@ -89,16 +102,25 @@ export abstract class BaseChannelRenderer {
   }
 
   /**
-   * Prepare context with channel-specific defaults
+   * Prepare context with channel-specific defaults and sanitization
    */
-  protected prepareContext(context: TemplateContext): TemplateContext {
+  protected prepareContext(context: TemplateContext, options?: ChannelRenderOptions): TemplateContext {
+    const shouldSanitize = options?.sanitize !== false; // Default to true
+    
+    let variables = {
+      ...this.getDefaultVariables(),
+      ...context.variables
+    };
+    
+    // Sanitize variables if enabled
+    if (shouldSanitize && variables) {
+      variables = sanitizeVariables(variables, this.channelType);
+    }
+    
     return {
       ...context,
       channelType: this.channelType,
-      variables: {
-        ...this.getDefaultVariables(),
-        ...context.variables
-      }
+      variables
     };
   }
 
@@ -134,4 +156,48 @@ export abstract class BaseChannelRenderer {
     template: string,
     context?: Partial<TemplateContext>
   ): { valid: boolean; errors: string[] };
+
+  /**
+   * Post-process rendered result with sanitization and validation
+   */
+  protected async postProcessResult(
+    result: RenderResult,
+    options?: ChannelRenderOptions
+  ): Promise<RenderResult> {
+    const shouldSanitize = options?.sanitize !== false; // Default to true
+    const shouldValidate = options?.validateSafety !== false; // Default to true
+    
+    let processedResult = { ...result };
+    
+    // Validate content safety BEFORE sanitization to detect original threats
+    let safetyValidation;
+    if (shouldValidate) {
+      safetyValidation = validateContentSafety(processedResult.content);
+    }
+    
+    // Apply channel-specific sanitization
+    if (shouldSanitize) {
+      processedResult = await this.sanitizeResult(processedResult);
+    }
+    
+    // Add safety validation results to metadata
+    if (shouldValidate && safetyValidation) {
+      processedResult.metadata = {
+        ...processedResult.metadata,
+        safetyValidation
+      };
+    }
+    
+    return processedResult;
+  }
+
+  /**
+   * Apply channel-specific sanitization to the result
+   * Override in child classes for custom sanitization logic
+   */
+  protected async sanitizeResult(result: RenderResult): Promise<RenderResult> {
+    // Default implementation - no sanitization
+    // Child classes should override this for channel-specific sanitization
+    return result;
+  }
 }
