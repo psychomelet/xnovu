@@ -93,11 +93,45 @@ export async function triggerNotificationsByIds(
 
 ### Starting the Worker
 
+#### Using CLI Commands (Recommended)
+
+```bash
+# Start the unified worker
+pnpm xnovu worker start
+
+# Stop the worker
+pnpm xnovu worker stop
+
+# Check worker status
+pnpm xnovu worker status
+
+# Get detailed health information
+pnpm xnovu worker health
+
+# Restart the worker
+pnpm xnovu worker restart
+```
+
+#### Programmatic Usage
+
 ```typescript
-import { startWorker } from '@/lib/temporal/worker'
+import { WorkerManager } from '@/worker/services/WorkerManager'
+
+// Initialize and start worker manager
+const workerManager = new WorkerManager({
+  healthPort: 3001,
+  logLevel: 'info',
+  supabase: {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  },
+  novu: {
+    secretKey: process.env.NOVU_SECRET_KEY!,
+  }
+})
 
 // Start the worker (includes both Temporal worker and polling loop)
-await startWorker()
+await workerManager.start()
 ```
 
 ### Triggering Notifications Programmatically
@@ -161,6 +195,19 @@ Key fields:
 
 Note: Notifications must have `publish_status = 'PUBLISH'` to be processed. Other statuses (DRAFT, DISCARD, NONE, DELETED) will be rejected.
 
+### Polling Mechanics
+
+The polling system operates outside of Temporal workflows:
+
+1. **Three Independent Polling Loops**:
+   - **New Notifications**: Polls for `notification_status = 'PENDING'` records
+   - **Failed Notifications**: Retries `notification_status = 'FAILED'` records
+   - **Scheduled Notifications**: Checks `scheduled_send_time` for due notifications
+
+2. **Database Queries**: Uses timestamp-based polling with `updated_at` filtering
+3. **Batch Processing**: Configurable batch sizes to optimize database load
+4. **Temporal Integration**: Uses Temporal client to trigger workflows when changes detected
+
 ## Configuration
 
 ### Environment Variables
@@ -168,8 +215,11 @@ Note: Notifications must have `publish_status = 'PUBLISH'` to be processed. Othe
 ```bash
 # Temporal Configuration
 TEMPORAL_ADDRESS=localhost:7233
-TEMPORAL_NAMESPACE=default
-TEMPORAL_TASK_QUEUE=xnovu-notifications
+TEMPORAL_NAMESPACE=xnovu
+TEMPORAL_TASK_QUEUE=xnovu-notification-processing
+TEMPORAL_MAX_CONCURRENT_ACTIVITIES=100
+TEMPORAL_MAX_CONCURRENT_WORKFLOWS=50
+TEMPORAL_MAX_CACHED_WORKFLOWS=100
 
 # Polling Configuration
 POLL_INTERVAL_MS=10000              # New notification polling interval
@@ -177,10 +227,16 @@ FAILED_POLL_INTERVAL_MS=60000       # Failed notification retry interval
 SCHEDULED_POLL_INTERVAL_MS=30000    # Scheduled notification check interval
 POLL_BATCH_SIZE=100                 # Number of notifications per batch
 
+# Worker Configuration
+WORKER_HEALTH_PORT=3001             # Worker health check port
+WORKER_LOG_LEVEL=info               # Worker logging level
+
 # Required for Novu integration
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NOVU_SECRET_KEY=your-novu-secret-key
+DATABASE_URL=your-database-connection-string
 ```
 
 ## Testing
@@ -219,6 +275,49 @@ The function includes comprehensive error handling:
 - Independent scaling: Polling and temporal workers can be scaled separately
 - Temporal provides built-in retry and backoff strategies
 
+## Deployment and Monitoring
+
+### Health Monitoring
+
+The worker provides comprehensive health monitoring through dedicated endpoints:
+
+```bash
+# Basic health check
+curl http://localhost:3001/health
+
+# Detailed status including polling metrics
+curl http://localhost:3001/status
+
+# Performance and processing metrics
+curl http://localhost:3001/metrics
+```
+
+### Docker Deployment
+
+The worker is designed to run in a separate container from the main application:
+
+```yaml
+worker:
+  image: xnovu:latest
+  command: ["pnpm", "xnovu", "worker", "start"]
+  ports:
+    - "3001:3001"  # Health check port
+  environment:
+    - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS}
+    - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-10000}
+    # ... other environment variables
+  healthcheck:
+    test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+```
+
+### Operational Considerations
+
+- **External Dependencies**: Temporal, Supabase, and Novu are expected to be external services
+- **No Local Dependencies**: Redis or other queue systems are not required
+- **Graceful Shutdown**: Worker handles SIGTERM/SIGINT for graceful shutdowns
+- **Auto-Recovery**: Built-in reconnection logic for database and Temporal connections
+- **Resource Management**: Configurable concurrency limits for optimal resource usage
+
 ## Benefits of Simplified Architecture
 
 1. **Clearer Separation of Concerns**: Temporal handles only async execution, polling is a separate concern
@@ -228,3 +327,4 @@ The function includes comprehensive error handling:
 5. **Reduced Complexity**: Fewer temporal activities and workflows to maintain
 6. **Reliable Async Processing**: Temporal provides durability, retries, and monitoring
 7. **Observability**: Built-in workflow tracking and debugging capabilities
+8. **Production Ready**: Comprehensive health monitoring and graceful shutdown handling
