@@ -130,6 +130,10 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     }
 
     createdNotificationIds.push(data.id);
+    
+    // Small delay to ensure notification is properly persisted
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
     return data;
   }
 
@@ -143,6 +147,8 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     beforeEach(() => {
       // Create fresh polling service for each test to avoid timestamp issues
       pollingService = new NotificationPollingService(supabase);
+      // Reset the polling timestamp to ensure we capture all notifications
+      pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
     });
 
     it('should include notifications without scheduled_for', async () => {
@@ -201,6 +207,10 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     });
 
     it('should respect includeProcessed option with scheduled_for filter', async () => {
+      // Create a fresh polling service with a reset timestamp for this test
+      const testPollingService = new NotificationPollingService(supabase);
+      testPollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000));
+
       // First, create a notification with PENDING status
       const notification = await createTestNotification(
         testWorkflow.id,
@@ -209,22 +219,29 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       );
 
       // Poll without includeProcessed to establish a baseline timestamp
-      const firstPoll = await pollingService.pollNotifications({ batchSize: 10 });
+      const firstPoll = await testPollingService.pollNotifications({ batchSize: 10 });
       expect(firstPoll.find(n => n.id === notification.id)).toBeDefined();
 
-      // Update the notification to SENT status
+      // Update the notification to SENT status with a new timestamp
+      const newTimestamp = new Date(Date.now() + 1000).toISOString(); // 1 second in future
       await supabase
         .schema('notify')
         .from('ent_notification')
-        .update({ notification_status: 'SENT' })
+        .update({ 
+          notification_status: 'SENT',
+          updated_at: newTimestamp
+        })
         .eq('id', notification.id);
 
+      // Small delay to ensure update is persisted
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Poll without includeProcessed (default) - should not find SENT notification
-      const resultsExcluded = await pollingService.pollNotifications({ batchSize: 10 });
+      const resultsExcluded = await testPollingService.pollNotifications({ batchSize: 10 });
       expect(resultsExcluded.find(n => n.id === notification.id)).toBeUndefined();
 
       // Poll with includeProcessed - should find SENT notification
-      const resultsIncluded = await pollingService.pollNotifications({ 
+      const resultsIncluded = await testPollingService.pollNotifications({ 
         batchSize: 10,
         includeProcessed: true 
       });
@@ -243,6 +260,8 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     beforeEach(() => {
       // Create fresh polling service for each test to avoid timestamp issues
       pollingService = new NotificationPollingService(supabase);
+      // Reset the polling timestamp to ensure we capture all notifications
+      pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
     });
 
     it('should only return notifications with scheduled_for <= now', async () => {
@@ -325,12 +344,16 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     let testWorkflow: WorkflowRow;
 
     beforeAll(async () => {
+      // Wait a bit to avoid test interference
+      await new Promise(resolve => setTimeout(resolve, 100));
       testWorkflow = await createTestWorkflow();
     });
 
     beforeEach(() => {
       // Create fresh polling service for each test to avoid timestamp issues
       pollingService = new NotificationPollingService(supabase);
+      // Reset the polling timestamp to ensure we capture all notifications
+      pollingService.resetPollTimestamp(new Date(Date.now() - 25 * 60 * 60 * 1000)); // 25 hours ago
     });
 
     it('should include failed notifications regardless of scheduled_for', async () => {
