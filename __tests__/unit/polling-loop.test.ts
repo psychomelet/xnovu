@@ -357,9 +357,9 @@ describe('NotificationPollingLoop', () => {
           recipients: [testSubscriberId],
           notification_workflow_id: testWorkflowId,
           enterprise_id: testEnterpriseId,
-          notification_status: 'SCHEDULED' as const,
+          notification_status: 'PENDING' as const,
           publish_status: 'PUBLISH' as const,
-          scheduled_at: new Date(Date.now() - 1000).toISOString(), // 1 second ago
+          scheduled_for: new Date(Date.now() - 1000).toISOString(), // 1 second ago
           channels: ['IN_APP'] as Database['shared_types']['Enums']['notification_channel_type'][]
         })
         .select()
