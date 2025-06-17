@@ -69,7 +69,7 @@ describe('Trigger Scheduled Notification Integration Tests', () => {
       .from('ent_notification_workflow')
       .insert({
         name: 'Test Scheduled Workflow Integration',
-        workflow_key: `test-scheduled-workflow-integration-${Date.now()}`,
+        workflow_key: 'default-email',
         workflow_type: 'STATIC',
         default_channels: ['EMAIL'],
         publish_status: 'PUBLISH',
@@ -98,7 +98,7 @@ describe('Trigger Scheduled Notification Integration Tests', () => {
       .insert({
         name: `Test Scheduled Notification Integration ${Date.now()}`,
         payload: { test: true, timestamp: new Date().toISOString() },
-        recipients: ['test-user-1'],
+        recipients: [randomUUID()],
         notification_workflow_id: workflowId,
         publish_status: publishStatus,
         notification_status: 'PENDING',

@@ -67,12 +67,26 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
   });
 
   async function createTestWorkflow(): Promise<WorkflowRow> {
+    // First, try to find an existing workflow
+    const { data: existingWorkflow } = await supabase
+      .schema('notify')
+      .from('ent_notification_workflow')
+      .select()
+      .eq('workflow_key', 'default-email')
+      .single();
+
+    if (existingWorkflow) {
+      return existingWorkflow;
+    }
+
+    // If not found, create a new one with unique key
+    const uniqueKey = `test-polling-workflow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const { data, error } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
       .insert({
-        name: 'Test Polling Workflow',
-        workflow_key: `test-polling-workflow-${Date.now()}`,
+        name: `Test Polling Workflow ${Date.now()}`,
+        workflow_key: uniqueKey,
         workflow_type: 'STATIC',
         default_channels: ['EMAIL'],
         publish_status: 'PUBLISH',
@@ -101,7 +115,7 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       .insert({
         name: `Test Polling Notification ${Date.now()}`,
         payload: { test: true },
-        recipients: ['test-user-1'],
+        recipients: [randomUUID()],
         notification_workflow_id: workflowId,
         publish_status: 'PUBLISH',
         notification_status: status,
@@ -124,6 +138,11 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
 
     beforeAll(async () => {
       testWorkflow = await createTestWorkflow();
+    });
+
+    beforeEach(() => {
+      // Create fresh polling service for each test to avoid timestamp issues
+      pollingService = new NotificationPollingService(supabase);
     });
 
     it('should include notifications without scheduled_for', async () => {
@@ -208,6 +227,11 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       testWorkflow = await createTestWorkflow();
     });
 
+    beforeEach(() => {
+      // Create fresh polling service for each test to avoid timestamp issues
+      pollingService = new NotificationPollingService(supabase);
+    });
+
     it('should only return notifications with scheduled_for <= now', async () => {
       // Create notifications with various scheduled times
       const pastNotification = await createTestNotification(
@@ -289,6 +313,11 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
 
     beforeAll(async () => {
       testWorkflow = await createTestWorkflow();
+    });
+
+    beforeEach(() => {
+      // Create fresh polling service for each test to avoid timestamp issues
+      pollingService = new NotificationPollingService(supabase);
     });
 
     it('should include failed notifications regardless of scheduled_for', async () => {
