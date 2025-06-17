@@ -175,14 +175,18 @@ export class WorkerManager {
             this.temporalWorker!.shutdown();
             // Wait for worker to stop
             await new Promise<void>((resolve) => {
+              let shutdownTimeout: NodeJS.Timeout | null = null;
               const checkInterval = setInterval(() => {
                 if (!this.temporalWorker || this.temporalWorker.getState() === 'STOPPED') {
                   clearInterval(checkInterval);
+                  if (shutdownTimeout) {
+                    clearTimeout(shutdownTimeout);
+                  }
                   resolve();
                 }
               }, 100);
               // Force resolve after 10 seconds
-              setTimeout(() => {
+              shutdownTimeout = setTimeout(() => {
                 clearInterval(checkInterval);
                 resolve();
               }, 10000);
@@ -194,12 +198,19 @@ export class WorkerManager {
       }
 
       // Wait for all shutdowns to complete (with timeout)
-      await Promise.race([
-        Promise.all(shutdownPromises),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Shutdown timeout')), 30000)
-        )
-      ]);
+      let overallTimeout: NodeJS.Timeout | null = null;
+      try {
+        await Promise.race([
+          Promise.all(shutdownPromises),
+          new Promise((_, reject) => {
+            overallTimeout = setTimeout(() => reject(new Error('Shutdown timeout')), 30000);
+          })
+        ]);
+      } finally {
+        if (overallTimeout) {
+          clearTimeout(overallTimeout);
+        }
+      }
 
       this.isStarted = false;
       logger.worker('Graceful shutdown completed', {
