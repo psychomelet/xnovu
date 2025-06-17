@@ -18,6 +18,7 @@ const customJestConfig = {
   ],
   verbose: true, // Show individual test results
   silent: false, // Allow console output
+  forceExit: true, // Force Jest to exit after all tests have completed
   collectCoverageFrom: [
     'app/**/*.{ts,tsx}',
     'lib/**/*.{ts,tsx}',
