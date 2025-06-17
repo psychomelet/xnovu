@@ -201,22 +201,35 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     });
 
     it('should respect includeProcessed option with scheduled_for filter', async () => {
-      const sentNotification = await createTestNotification(
+      // First, create a notification with PENDING status
+      const notification = await createTestNotification(
         testWorkflow.id,
         null,
-        'SENT'
+        'PENDING'
       );
 
-      // Without includeProcessed (default)
-      const resultsExcluded = await pollingService.pollNotifications({ batchSize: 10 });
-      expect(resultsExcluded.find(n => n.id === sentNotification.id)).toBeUndefined();
+      // Poll without includeProcessed to establish a baseline timestamp
+      const firstPoll = await pollingService.pollNotifications({ batchSize: 10 });
+      expect(firstPoll.find(n => n.id === notification.id)).toBeDefined();
 
-      // With includeProcessed
+      // Update the notification to SENT status
+      await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .update({ notification_status: 'SENT' })
+        .eq('id', notification.id);
+
+      // Poll without includeProcessed (default) - should not find SENT notification
+      const resultsExcluded = await pollingService.pollNotifications({ batchSize: 10 });
+      expect(resultsExcluded.find(n => n.id === notification.id)).toBeUndefined();
+
+      // Poll with includeProcessed - should find SENT notification
       const resultsIncluded = await pollingService.pollNotifications({ 
         batchSize: 10,
         includeProcessed: true 
       });
-      expect(resultsIncluded.find(n => n.id === sentNotification.id)).toBeDefined();
+      
+      expect(resultsIncluded.find(n => n.id === notification.id)).toBeDefined();
     });
   });
 
