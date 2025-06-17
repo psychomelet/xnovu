@@ -412,8 +412,8 @@ describe('NotificationPollingLoop', () => {
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait longer for failed polling (has initial delay)
-      await new Promise(resolve => setTimeout(resolve, 31000))
+      // Wait for failed polling (has initial delay)
+      await new Promise(resolve => setTimeout(resolve, 2000))
       
       // Only check if notification exists and workflow was triggered
       if (notification) {
@@ -427,6 +427,6 @@ describe('NotificationPollingLoop', () => {
         // If failed notification wasn't inserted, skip the check
         expect(notification).toBeDefined()
       }
-    }, 35000) // Increase timeout for this test
+    }, 10000) // Increase timeout for this test
   })
 })

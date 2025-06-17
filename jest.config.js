@@ -7,14 +7,20 @@ const createJestConfig = nextJest({
 
 // Add any custom config to be passed to Jest
 const customJestConfig = {
+  globalSetup: '<rootDir>/__tests__/setup/global-setup.ts',
+  globalTeardown: '<rootDir>/__tests__/setup/global-teardown.ts',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js', '<rootDir>/jest.console.setup.js'],
   testEnvironment: 'jest-environment-node', // Use node environment for server-side tests
   testEnvironmentOptions: {
     customExportConditions: ['node', 'node-addons'],
   },
   testMatch: [
-    '**/__tests__/**/*.(ts|tsx|js)',
+    '**/__tests__/**/*.(test|spec).(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)'
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__tests__/setup/'
   ],
   verbose: true, // Show individual test results
   silent: false, // Allow console output

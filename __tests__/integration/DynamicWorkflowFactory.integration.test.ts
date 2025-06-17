@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import type { WorkflowConfig } from '@/app/services/database/WorkflowService';
 import { randomUUID } from 'crypto';
+import { getTestEnterpriseId, generateTestUserId, generateTestWorkflowKey, generateTemporalWorkflowId } from '../setup/test-data';
 
 // Types
 type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
@@ -32,8 +33,8 @@ jest.mock('../../app/services/template/TemplateRenderer', () => ({
 describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
   let supabase: SupabaseClient;
   let notificationService: NotificationService;
-  const testEnterpriseId = randomUUID();
-  const testUserId = randomUUID();
+  let testEnterpriseId: string;
+  let testUserId: string;
   const createdNotificationIds: number[] = [];
   const createdWorkflowIds: number[] = [];
 
@@ -55,6 +56,10 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       throw new Error('Real Supabase credentials required for DynamicWorkflowFactory integration tests. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     }
 
+    // Get shared test enterprise ID
+    testEnterpriseId = getTestEnterpriseId();
+    testUserId = generateTestUserId();
+
     supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
       global: { headers: { 'x-application-name': 'xnovu-test-dynamic-workflow-factory-integration' } }
@@ -75,60 +80,22 @@ describe('DynamicWorkflowFactory Integration Tests with Real Services', () => {
       renderTemplate: mockRenderTemplate
     });
 
-    // Clean up any existing test data
-    await cleanupTestData();
+    // No need for cleanup - handled by global teardown
   });
 
   afterEach(async () => {
-    // Clean up test data after each test
-    await cleanupTestData();
+    jest.clearAllMocks();
+    // Clear tracking arrays (data cleanup handled by global teardown)
+    createdNotificationIds.length = 0;
+    createdWorkflowIds.length = 0;
   });
 
-  async function cleanupTestData() {
-    if (!hasRealCredentials) return;
-
-    try {
-      // Delete test notifications
-      if (createdNotificationIds.length > 0) {
-        await supabase
-          .schema('notify')
-          .from('ent_notification')
-          .delete()
-          .in('id', createdNotificationIds);
-        createdNotificationIds.length = 0;
-      }
-
-      // Delete test workflows
-      if (createdWorkflowIds.length > 0) {
-        await supabase
-          .schema('notify')
-          .from('ent_notification_workflow')
-          .delete()
-          .in('id', createdWorkflowIds);
-        createdWorkflowIds.length = 0;
-      }
-
-      // Delete by exact enterprise ID
-      await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .delete()
-        .eq('enterprise_id', testEnterpriseId);
-
-      await supabase
-        .schema('notify')
-        .from('ent_notification_workflow')
-        .delete()
-        .eq('enterprise_id', testEnterpriseId);
-    } catch (error) {
-      console.warn('Cleanup warning:', error);
-    }
-  }
+  // Cleanup handled by global teardown - no need for individual cleanup
 
   async function createTestWorkflow(overrides: Partial<WorkflowInsert> = {}): Promise<WorkflowRow> {
     const defaultWorkflow: WorkflowInsert = {
       name: `Test Workflow ${Date.now()}-${Math.random().toString(36).substring(7)}`,
-      workflow_key: `test-workflow-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      workflow_key: generateTestWorkflowKey(`test-workflow-${Date.now()}-${Math.random().toString(36).substring(7)}`),
       workflow_type: 'DYNAMIC',
       default_channels: ['EMAIL'],
       enterprise_id: testEnterpriseId,
