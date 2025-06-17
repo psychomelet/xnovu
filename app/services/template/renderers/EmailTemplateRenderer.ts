@@ -172,7 +172,12 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
     const sanitizedHtml = sanitizeForChannel(html, 'email');
     
     // Remove style and script tags with content
-    let text = sanitizedHtml.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    let text = sanitizedHtml;
+    let previousText;
+    do {
+      previousText = text;
+      text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    } while (text !== previousText);
     text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
     
     // Replace common block elements with newlines
