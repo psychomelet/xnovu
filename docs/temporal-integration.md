@@ -139,11 +139,16 @@ await workerManager.start()
 ```typescript
 import { notificationClient } from '@/lib/temporal/client/notification-client'
 
-// Trigger single notification
+// Trigger single notification immediately
 const { workflowId, runId } = await notificationClient.asyncTriggerNotificationById(123)
 
 // Trigger multiple notifications
 const result = await notificationClient.asyncTriggerMultipleNotifications([123, 456, 789])
+
+// Trigger notification with scheduled delay (using Start Delay)
+const scheduledResult = await notificationClient.asyncTriggerNotificationById(123, {
+  startDelay: '1h 30m'  // Delay notation: combinations of d, h, m, s
+})
 
 // Check workflow status
 const status = await notificationClient.getWorkflowStatus(workflowId)
@@ -151,6 +156,80 @@ const status = await notificationClient.getWorkflowStatus(workflowId)
 // Get workflow result
 const triggerResult = await notificationClient.getWorkflowResult(workflowId)
 ```
+
+### Scheduled Notifications
+
+The system supports scheduled notifications using Temporal's Start Delay feature:
+
+#### API Usage
+
+```typescript
+// Trigger notification scheduled for the future via API
+const response = await fetch('/api/trigger-async', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    notificationId: 123,
+    scheduled_for: '2025-06-18T15:30:00Z'  // ISO 8601 timestamp
+  })
+})
+```
+
+#### Database-driven Scheduling
+
+```sql
+-- Create a notification with scheduled_for field
+INSERT INTO notify.ent_notification (
+  name,
+  payload,
+  recipients,
+  notification_workflow_id,
+  scheduled_for,
+  notification_status,
+  publish_status,
+  enterprise_id
+) VALUES (
+  'Scheduled Building Maintenance',
+  '{"buildingId": "bldg-123", "message": "Maintenance scheduled"}',
+  ARRAY['user-456'],
+  1,
+  '2025-06-18T15:30:00Z',  -- Schedule for future
+  'PENDING',
+  'PUBLISH',
+  'ent-789'
+);
+```
+
+#### Polling Behavior with Scheduling
+
+The polling system intelligently handles scheduled notifications:
+
+1. **Regular Polling**: Only processes notifications where `scheduled_for` is null or in the past
+2. **Scheduled Polling**: Dedicated polling loop for scheduled notifications using `pollScheduledNotifications()`
+3. **Start Delay Calculation**: Automatically calculates Temporal Start Delay from `scheduled_for` timestamp
+
+```typescript
+// Example of how delays are calculated internally
+const scheduledFor = new Date('2025-06-18T15:30:00Z')
+const now = new Date()
+const delayMs = scheduledFor.getTime() - now.getTime()
+
+if (delayMs > 0) {
+  // Triggers with Start Delay
+  await notificationClient.asyncTriggerNotificationById(123, {
+    startDelay: `${delayMs}ms`
+  })
+} else {
+  // Triggers immediately for past/current timestamps
+  await notificationClient.asyncTriggerNotificationById(123)
+}
+```
+
+#### Validation Rules
+
+- **Past Scheduled Times**: Sync triggers (immediate) reject notifications with past `scheduled_for` timestamps
+- **Future Scheduled Times**: Async triggers calculate appropriate Start Delay
+- **Invalid Formats**: Malformed timestamps are rejected with validation errors
 
 ### Usage in Temporal Activity
 
@@ -185,6 +264,7 @@ Key fields:
 - `payload` - JSON data passed to the Novu workflow
 - `channels` - Updated with workflow's default_channels after processing
 - `error_details` - Stores Novu transaction IDs (returned by Novu) and processing results
+- `scheduled_for` - Optional timestamp for future delivery (uses Temporal Start Delay)
 
 ## Status Flow
 
@@ -200,13 +280,37 @@ Note: Notifications must have `publish_status = 'PUBLISH'` to be processed. Othe
 The polling system operates outside of Temporal workflows:
 
 1. **Three Independent Polling Loops**:
-   - **New Notifications**: Polls for `notification_status = 'PENDING'` records
-   - **Failed Notifications**: Retries `notification_status = 'FAILED'` records
-   - **Scheduled Notifications**: Checks `scheduled_send_time` for due notifications
+   - **New Notifications**: Polls for `notification_status = 'PENDING'` records where `scheduled_for` is null or in the past
+   - **Failed Notifications**: Retries `notification_status = 'FAILED'` records regardless of scheduling
+   - **Scheduled Notifications**: Specifically polls for notifications with `scheduled_for <= now` and `notification_status = 'PENDING'`
 
 2. **Database Queries**: Uses timestamp-based polling with `updated_at` filtering
 3. **Batch Processing**: Configurable batch sizes to optimize database load
 4. **Temporal Integration**: Uses Temporal client to trigger workflows when changes detected
+5. **Scheduling Logic**: Automatically calculates Start Delay for future-scheduled notifications
+
+#### Scheduled Notification Polling
+
+The `NotificationPollingService` provides specialized methods for scheduled notifications:
+
+```typescript
+// Poll for notifications that are due for delivery
+const dueNotifications = await pollingService.pollScheduledNotifications({
+  batchSize: 100
+})
+
+// Regular polling excludes future-scheduled notifications
+const currentNotifications = await pollingService.pollNotifications({
+  batchSize: 100,
+  includeProcessed: false  // Only PENDING/FAILED by default
+})
+```
+
+Key behaviors:
+- **Time-based Filtering**: Only returns notifications where `scheduled_for <= now`
+- **Status Filtering**: Scheduled polling only includes `PENDING` status notifications
+- **Ordering**: Results ordered by `scheduled_for` ascending (earliest first)
+- **Integration**: Seamlessly works with Temporal Start Delay for precise timing
 
 ## Configuration
 
@@ -255,6 +359,9 @@ pnpm exec tsx scripts/test-yogo-email.ts
 
 # Test unpublished notification rejection
 pnpm exec tsx scripts/test-unpublished-notification.ts
+
+# Test scheduled notification functionality
+pnpm exec tsx scripts/test-scheduled-notification.ts
 ```
 
 ## Error Handling
