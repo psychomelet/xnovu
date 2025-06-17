@@ -120,7 +120,7 @@ export class LiquidTemplateEngine {
           }
           
           // Check max depth
-          const maxDepth = context._maxDepth || this.liquid.options.globals?.maxTemplateDepth || 10;
+          const maxDepth = context._maxDepth || (this.liquid.options.globals as any)?.maxTemplateDepth || 10;
           if (renderPath.length >= maxDepth) {
             throw new Error(`Maximum template depth (${maxDepth}) exceeded`);
           }
@@ -150,8 +150,8 @@ export class LiquidTemplateEngine {
 
           // Convert legacy syntax in loaded template if needed
           let templateContent = loadResult.template.bodyTemplate;
-          if (this.liquid.options.hasLegacySyntax && this.liquid.options.hasLegacySyntax(templateContent)) {
-            templateContent = this.liquid.options.convertLegacyToLiquid(templateContent);
+          if ((this.liquid.options as any).hasLegacySyntax && (this.liquid.options as any).hasLegacySyntax(templateContent)) {
+            templateContent = (this.liquid.options as any).convertLegacyToLiquid(templateContent);
           }
 
           // Render the loaded template
@@ -166,7 +166,7 @@ export class LiquidTemplateEngine {
           console.error(`[LiquidTemplateEngine] Error rendering template '${this.templateKey}':`, errorMessage);
           
           // Add error to context if available
-          const ctx = scope.getAll();
+          const ctx = scope.getAll() as any;
           if (ctx._errors) {
             ctx._errors.push({
               templateKey: this.templateKey,
