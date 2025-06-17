@@ -1,6 +1,4 @@
-import { TemplateParser, XNovuRenderMatch } from './TemplateParser';
-import { VariableInterpolator } from './VariableInterpolator';
-import { TemplateLoader, TemplateNotFoundError } from '../loaders/TemplateLoader';
+import { TemplateLoader } from '../loaders/TemplateLoader';
 import { LiquidTemplateEngine } from './LiquidTemplateEngine';
 
 export interface TemplateContext {
@@ -42,20 +40,9 @@ export interface RenderResult {
 }
 
 export class TemplateEngine {
-  private parser: TemplateParser;
-  private interpolator: VariableInterpolator;
-  private templateLoader: TemplateLoader;
   private liquidEngine: LiquidTemplateEngine;
-  private readonly defaultOptions: RenderOptions = {
-    maxDepth: 10,
-    throwOnError: false,
-    errorPlaceholder: '[Template Error: {{key}}]'
-  };
 
   constructor(templateLoader: TemplateLoader) {
-    this.parser = new TemplateParser();
-    this.interpolator = new VariableInterpolator();
-    this.templateLoader = templateLoader;
     this.liquidEngine = new LiquidTemplateEngine(templateLoader);
   }
 
@@ -67,15 +54,7 @@ export class TemplateEngine {
     context: TemplateContext,
     options?: RenderOptions
   ): Promise<RenderResult> {
-    // Delegate to Liquid engine for rendering
-    const result = await this.liquidEngine.render(template, context, options);
-    
-    // Apply any error handling options
-    if (options?.throwOnError && result.errors.length > 0) {
-      throw result.errors[0].error;
-    }
-    
-    return result;
+    return this.liquidEngine.render(template, context, options);
   }
 
   /**
@@ -103,6 +82,7 @@ export class TemplateEngine {
 
   /**
    * Extract all variables used in a template (including nested templates)
+   * For now, use regex-based extraction. Could be enhanced with Liquid's AST in the future.
    */
   async extractVariables(
     template: string,
@@ -110,11 +90,7 @@ export class TemplateEngine {
   ): Promise<string[]> {
     const variables = new Set<string>();
     
-    // Extract from current template
-    const directVars = this.parser.extractVariablePlaceholders(template);
-    directVars.forEach(v => variables.add(v));
-
-    // Also check for Liquid variables
+    // Extract Liquid variables
     const liquidVarRegex = /\{\{\s*([^}|]+)(?:\s*\|[^}]+)?\s*\}\}/g;
     let match;
     while ((match = liquidVarRegex.exec(template)) !== null) {
@@ -123,45 +99,32 @@ export class TemplateEngine {
         variables.add(varName);
       }
     }
-
-    // Extract from nested templates (both legacy and Liquid syntax)
-    const xnovuMatches = this.parser.parseXNovuRenderSyntax(template);
-    const liquidMatches = template.matchAll(/\{%\s*xnovu_render\s+["']([^"']+)["'].*?\s*%\}/g);
     
-    const allMatches = [
-      ...xnovuMatches.map(m => m.templateKey),
-      ...Array.from(liquidMatches).map(m => m[1])
-    ];
-
-    for (const templateKey of allMatches) {
-      try {
-        const loadResult = await this.templateLoader.loadTemplate(
-          templateKey,
-          context
-        );
-        const nestedVars = await this.extractVariables(
-          loadResult.template.bodyTemplate,
-          context
-        );
-        nestedVars.forEach(v => variables.add(v));
-      } catch (error) {
-        console.warn(`Failed to extract variables from ${templateKey}:`, error);
+    // Extract variables from xnovu_render tags
+    const xnovuRegex = /\{%\s*xnovu_render\s+["']([^"']+)["'](?:\s*,\s*([^%]+))?\s*%\}/g;
+    while ((match = xnovuRegex.exec(template)) !== null) {
+      if (match[2]) {
+        // Extract variable references from the arguments
+        const argStr = match[2];
+        const varMatches = argStr.match(/[a-zA-Z_][a-zA-Z0-9_.]*/g);
+        if (varMatches) {
+          varMatches.forEach(v => {
+            if (!['true', 'false', 'null', 'undefined'].includes(v)) {
+              variables.add(v);
+            }
+          });
+        }
       }
     }
-
+    
     return Array.from(variables);
   }
 
 
   /**
-   * Get the underlying components for advanced usage
+   * Get the underlying Liquid engine for advanced usage
    */
-  getComponents() {
-    return {
-      parser: this.parser,
-      interpolator: this.interpolator,
-      templateLoader: this.templateLoader,
-      liquidEngine: this.liquidEngine
-    };
+  getLiquidEngine(): LiquidTemplateEngine {
+    return this.liquidEngine;
   }
 }

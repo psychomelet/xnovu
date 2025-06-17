@@ -166,50 +166,21 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
 
   /**
    * Simple HTML to text conversion
+   * @deprecated Use {{ content | html_to_text }} filter in templates instead
    */
   private htmlToText(html: string): string {
-    // First sanitize the HTML to ensure it's safe
+    // Get Liquid engine and use the filter
+    const engine = this.getEngine();
+    if (engine && 'getLiquidEngine' in engine) {
+      const liquid = (engine as any).getLiquidEngine().getLiquid();
+      const filter = liquid.filters.get('html_to_text');
+      if (filter) {
+        return filter(html);
+      }
+    }
+    
+    // Fallback to simple conversion
     const sanitizedHtml = sanitizeForChannel(html, 'email');
-    
-    let text = sanitizedHtml;
-    let previousText;
-    
-    // Remove style tags with content - use loop to handle nested/malformed tags
-    do {
-      previousText = text;
-      text = text.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
-    } while (text !== previousText);
-    
-    // Remove script tags with content - use loop to handle nested/malformed tags
-    do {
-      previousText = text;
-      text = text.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '');
-    } while (text !== previousText);
-    
-    // Replace common block elements with newlines
-    text = text.replace(/<\/?(p|div|h[1-6]|br|hr|li)[^>]*>/gi, '\n');
-    
-    // Replace links with text and URL
-    text = text.replace(/<a[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)');
-    
-    // Remove all other HTML tags - use loop to handle nested/malformed tags
-    do {
-      previousText = text;
-      text = text.replace(/<[^>]*>/g, '');
-    } while (text !== previousText);
-    
-    // Decode HTML entities
-    text = text.replace(/&nbsp;/g, ' ');
-    text = text.replace(/&lt;/g, '<');
-    text = text.replace(/&gt;/g, '>');
-    text = text.replace(/&quot;/g, '"');
-    text = text.replace(/&#39;/g, "'");
-    text = text.replace(/&amp;/g, '&');
-    
-    // Clean up whitespace
-    text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
-    text = text.trim();
-    
-    return text;
+    return sanitizedHtml.replace(/<[^>]*>/g, '').trim();
   }
 }

@@ -6,6 +6,13 @@ export class LiquidTemplateEngine {
   private liquid: Liquid;
   private templateLoader: TemplateLoader;
   private renderCache = new Map<string, Set<string>>();
+  
+  /**
+   * Get the underlying Liquid instance for advanced usage
+   */
+  getLiquid(): Liquid {
+    return this.liquid;
+  }
 
   constructor(templateLoader: TemplateLoader) {
     this.templateLoader = templateLoader;
@@ -25,6 +32,9 @@ export class LiquidTemplateEngine {
 
     // Register custom xnovu_render tag
     this.registerXnovuRenderTag();
+    
+    // Register utility filters
+    this.registerUtilityFilters();
     
     // Add helper methods to liquid options
     (this.liquid.options as any).hasLegacySyntax = (template: string) => this.hasLegacySyntax(template);
@@ -441,5 +451,139 @@ export class LiquidTemplateEngine {
     }
     
     return [...new Set(tags)];
+  }
+
+  /**
+   * Register utility filters for template processing
+   */
+  private registerUtilityFilters() {
+    // Import sanitization functions
+    const { sanitizeForChannel } = require('../utils/sanitizeConfig');
+
+    // HTML to text conversion filter
+    this.liquid.registerFilter('html_to_text', (html: string) => {
+      if (!html) return '';
+      
+      let text = html;
+      let previousText;
+      
+      // Remove style tags with content
+      do {
+        previousText = text;
+        text = text.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
+      } while (text !== previousText);
+      
+      // Remove script tags with content
+      do {
+        previousText = text;
+        text = text.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '');
+      } while (text !== previousText);
+      
+      // Replace common block elements with newlines
+      text = text.replace(/<\/?(p|div|h[1-6]|br|hr|li)[^>]*>/gi, '\n');
+      
+      // Replace links with text and URL
+      text = text.replace(/<a[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>/gi, '$2 ($1)');
+      
+      // Remove all other HTML tags
+      do {
+        previousText = text;
+        text = text.replace(/<[^>]*>/g, '');
+      } while (text !== previousText);
+      
+      // Decode HTML entities
+      text = text.replace(/&nbsp;/g, ' ');
+      text = text.replace(/&lt;/g, '<');
+      text = text.replace(/&gt;/g, '>');
+      text = text.replace(/&quot;/g, '"');
+      text = text.replace(/&#39;/g, "'");
+      text = text.replace(/&amp;/g, '&');
+      
+      // Clean up whitespace
+      text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
+      text = text.trim();
+      
+      return text;
+    });
+
+    // Markdown to HTML conversion filter
+    this.liquid.registerFilter('markdown_to_html', (markdown: string) => {
+      if (!markdown) return '';
+      
+      let html = markdown;
+
+      // Headers
+      html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
+      html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+      // Bold and italic
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+      // Links
+      html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+      // Lists
+      html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+
+      // Line breaks
+      html = html.replace(/\n\n/g, '</p><p>');
+      html = `<p>${html}</p>`;
+
+      // Clean up empty paragraphs
+      html = html.replace(/<p>\s*<\/p>/g, '');
+
+      return html;
+    });
+
+    // Channel-specific sanitization filters
+    this.liquid.registerFilter('sanitize_email', (content: string) => {
+      return sanitizeForChannel(content || '', 'email');
+    });
+
+    this.liquid.registerFilter('sanitize_inapp', (content: string) => {
+      return sanitizeForChannel(content || '', 'in_app');
+    });
+
+    this.liquid.registerFilter('sanitize_sms', (content: string) => {
+      return sanitizeForChannel(content || '', 'sms');
+    });
+
+    this.liquid.registerFilter('strip_html', (content: string) => {
+      return sanitizeForChannel(content || '', 'sms'); // SMS sanitization strips all HTML
+    });
+
+    // Extract email subject filter
+    this.liquid.registerFilter('extract_subject', (content: string) => {
+      if (!content) return { subject: '', body: content };
+      
+      const subjectMatch = content.match(/^Subject:\s*(.+?)(\n|$)/i);
+      
+      if (subjectMatch) {
+        const subject = subjectMatch[1].trim();
+        const body = content.substring(subjectMatch[0].length).trim();
+        return { subject, body };
+      }
+
+      return { subject: '', body: content };
+    });
+
+    // Safe JSON stringify filter
+    this.liquid.registerFilter('json', (value: any) => {
+      try {
+        return JSON.stringify(value);
+      } catch (e) {
+        return '{}';
+      }
+    });
+
+    // Default value filter
+    this.liquid.registerFilter('default', (value: any, defaultValue: any) => {
+      return value !== undefined && value !== null && value !== '' ? value : defaultValue;
+    });
   }
 }

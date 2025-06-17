@@ -109,36 +109,22 @@ export class InAppTemplateRenderer extends BaseChannelRenderer {
 
   /**
    * Basic markdown to HTML conversion for in-app display
+   * @deprecated Use {{ content | markdown_to_html | sanitize_inapp }} filters in templates instead
    */
   private markdownToHtml(markdown: string): string {
-    let html = markdown;
-
-    // Headers
-    html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
-    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-    // Bold and italic
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-    // Lists
-    html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-
-    // Line breaks
-    html = html.replace(/\n\n/g, '</p><p>');
-    html = `<p>${html}</p>`;
-
-    // Clean up empty paragraphs
-    html = html.replace(/<p>\s*<\/p>/g, '');
-
-    // Sanitize the generated HTML for security
-    return sanitizeForChannel(html, 'in_app');
+    // Get Liquid engine and use the filters
+    const engine = this.getEngine();
+    if (engine && 'getLiquidEngine' in engine) {
+      const liquid = (engine as any).getLiquidEngine().getLiquid();
+      const markdownFilter = liquid.filters.get('markdown_to_html');
+      const sanitizeFilter = liquid.filters.get('sanitize_inapp');
+      if (markdownFilter && sanitizeFilter) {
+        const html = markdownFilter(markdown);
+        return sanitizeFilter(html);
+      }
+    }
+    
+    // Fallback to simple conversion
+    return sanitizeForChannel(markdown, 'in_app');
   }
 }
