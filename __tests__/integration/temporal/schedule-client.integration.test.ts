@@ -104,14 +104,14 @@ describe('Schedule Client Integration', () => {
       // Verify schedule was created
       const description = await getSchedule(scheduleId)
       expect(description).toBeDefined()
-      console.log('Final description structure:', JSON.stringify(description?.schedule?.spec, null, 2))
-      expect(description?.schedule?.spec?.timezoneName).toBe('UTC')
+      console.log('Final description structure:', JSON.stringify(description?.spec, null, 2))
+      expect(description?.spec?.timezone).toBe('UTC')
       // Check that structured calendar exists (cron expressions are converted to structured format)
-      expect(description?.schedule?.spec?.structuredCalendar).toBeDefined()
-      expect(description?.schedule?.spec?.structuredCalendar?.[0]?.hour).toEqual([{ start: 9, end: 9, step: 1 }])
-      expect(description?.schedule?.spec?.structuredCalendar?.[0]?.dayOfWeek).toEqual([{ start: 1, end: 1, step: 1 }])
+      expect(description?.spec?.calendars).toBeDefined()
+      expect(description?.spec?.calendars?.[0]?.hour).toEqual([{ start: 9, end: 9, step: 1 }])
+      expect(description?.spec?.calendars?.[0]?.dayOfWeek).toEqual([{ start: 'MONDAY', end: 'MONDAY', step: 1 }])
       // Check that schedule is not paused (default state)
-      expect(description?.schedule?.state?.paused).not.toBe(true)
+      expect(description?.state?.paused).not.toBe(true)
     })
 
     it('should pause schedule if rule is deactivated', async () => {
@@ -128,7 +128,7 @@ describe('Schedule Client Integration', () => {
       // For deactivated schedules, check that it was created successfully
       // The paused state is managed internally by Temporal
       expect(description).toBeDefined()
-      expect(description?.schedule?.spec?.timezoneName).toBe('UTC')
+      expect(description?.spec?.timezone).toBe('UTC')
     })
 
     it('should update existing schedule', async () => {
@@ -151,14 +151,14 @@ describe('Schedule Client Integration', () => {
       // Wait for update to be reflected
       await waitForCondition(async () => {
         const description = await getSchedule(scheduleId)
-        return description?.schedule?.spec?.timezoneName === 'America/New_York'
+        return description?.spec?.timezone === 'America/New_York'
       }, 10000)
 
       const description = await getSchedule(scheduleId)
-      expect(description?.schedule?.spec?.timezoneName).toBe('America/New_York')
+      expect(description?.spec?.timezone).toBe('America/New_York')
       // Check Tuesday (day 2) and hour 10
-      expect(description?.schedule?.spec?.structuredCalendar?.[0]?.hour).toEqual([{ start: 10, end: 10, step: 1 }])
-      expect(description?.schedule?.spec?.structuredCalendar?.[0]?.dayOfWeek).toEqual([{ start: 2, end: 2, step: 1 }])
+      expect(description?.spec?.calendars?.[0]?.hour).toEqual([{ start: 10, end: 10, step: 1 }])
+      expect(description?.spec?.calendars?.[0]?.dayOfWeek).toEqual([{ start: 'TUESDAY', end: 'TUESDAY', step: 1 }])
     })
 
     it('should create new schedule if not found during update', async () => {
@@ -224,7 +224,7 @@ describe('Schedule Client Integration', () => {
       }, 10000)
 
       const description = await getSchedule(scheduleId)
-      expect(description?.schedule?.spec?.timezoneName).toBe('UTC')
+      expect(description?.spec?.timezone).toBe('UTC')
     })
   })
 
@@ -311,8 +311,8 @@ describe('Schedule Client Integration', () => {
       const description = await getSchedule(scheduleId)
       
       expect(description).toBeDefined()
-      expect(description?.schedule?.spec).toBeDefined()
-      expect(description?.schedule?.state).toBeDefined()
+      expect(description?.spec).toBeDefined()
+      expect(description?.state).toBeDefined()
       // Memo fields are base64 encoded in Temporal, so let's just check they exist
       expect(description?.memo?.fields?.ruleId).toBeDefined()
       expect(description?.memo?.fields?.enterpriseId).toBeDefined()

@@ -85,10 +85,12 @@ describe('RuleSyncService Integration', () => {
           return description !== null
         }, 10000)
         
+        // Get the schedule description after waiting
         const description = await getSchedule(scheduleId)
+        
         expect(description).toBeDefined()
         // Just verify schedule was created and is well-formed
-        expect(description?.schedule?.spec).toBeDefined()
+        expect(description?.spec).toBeDefined()
       }
     })
 
@@ -158,7 +160,7 @@ describe('RuleSyncService Integration', () => {
       const description = await getSchedule(scheduleId)
       expect(description).toBeDefined()
       // Just verify schedule was created and is well-formed
-      expect(description?.schedule?.spec).toBeDefined()
+      expect(description?.spec).toBeDefined()
     })
 
     it('should skip non-CRON rules', async () => {

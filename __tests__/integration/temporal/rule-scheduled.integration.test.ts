@@ -9,12 +9,18 @@ import {
   cleanupTestNotifications,
 } from '../../helpers/supabase-test-helpers'
 import type { NotificationRule, NotificationWorkflow } from '@/types/rule-engine'
+import { v4 as uuidv4 } from 'uuid'
 
 describe('Rule Scheduled Activity Integration', () => {
   const supabase = createTestSupabaseClient()
   const testEnterpriseIds: string[] = []
   let testRule: NotificationRule
   let testWorkflow: NotificationWorkflow
+  
+  // Generate UUIDs for consistent test recipients
+  const testRecipient1 = uuidv4()
+  const testRecipient2 = uuidv4()
+  const testSingleRecipient = uuidv4()
 
   beforeAll(async () => {
     // Create test workflow and rule
@@ -22,7 +28,7 @@ describe('Rule Scheduled Activity Integration', () => {
       default_channels: ['EMAIL', 'IN_APP'],
     }, {
       rule_payload: {
-        recipients: ['user-1', 'user-2'],
+        recipients: [testRecipient1, testRecipient2],
         customData: 'test',
       },
     })
@@ -70,7 +76,7 @@ describe('Rule Scheduled Activity Integration', () => {
       const notification = notifications![0]
       expect(notification.name).toBe(`Scheduled: ${testRule.name}`)
       expect(notification.notification_workflow_id).toBe(testWorkflow.id)
-      expect(notification.recipients).toEqual(['user-1', 'user-2'])
+      expect(notification.recipients).toEqual([testRecipient1, testRecipient2])
       expect(notification.channels).toEqual(['EMAIL', 'IN_APP'])
       expect(notification.notification_status).toBe('PENDING')
       expect(notification.publish_status).toBe('PUBLISH')
@@ -195,7 +201,7 @@ describe('Rule Scheduled Activity Integration', () => {
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
         workflowId: testWorkflow.id,
-        rulePayload: { recipient: 'user-single' },
+        rulePayload: { recipient: testSingleRecipient },
       }
 
       await createNotificationFromRule(input)
@@ -208,7 +214,7 @@ describe('Rule Scheduled Activity Integration', () => {
         .eq('notification_rule_id', testRule.id)
 
       expect(notifications).toHaveLength(1)
-      expect(notifications![0].recipients).toEqual(['user-single'])
+      expect(notifications![0].recipients).toEqual([testSingleRecipient])
     })
 
     it('should throw error if no recipients specified', async () => {
@@ -235,11 +241,14 @@ describe('Rule Scheduled Activity Integration', () => {
           workflow_type: 'STATIC',
           enterprise_id: testRule.enterprise_id,
           default_channels: null,
+          publish_status: 'PUBLISH', // Ensure it's published
+          deactivated: false, // Ensure it's not deactivated
         })
         .select()
         .single()
 
       expect(error).toBeNull()
+      expect(workflowNoChannels).not.toBeNull()
 
       const input: RuleScheduledWorkflowInput = {
         ruleId: testRule.id,
@@ -271,8 +280,9 @@ describe('Rule Scheduled Activity Integration', () => {
     })
 
     it('should handle complex rule payload', async () => {
+      const testRecipient3 = uuidv4()
       const complexPayload = {
-        recipients: ['user-1', 'user-2', 'user-3'],
+        recipients: [testRecipient1, testRecipient2, testRecipient3],
         buildingId: 'building-123',
         alert: {
           type: 'temperature',
@@ -304,7 +314,7 @@ describe('Rule Scheduled Activity Integration', () => {
 
       expect(notifications).toHaveLength(1)
       expect(notifications![0].payload).toEqual(complexPayload)
-      expect(notifications![0].recipients).toEqual(['user-1', 'user-2', 'user-3'])
+      expect(notifications![0].recipients).toEqual([testRecipient1, testRecipient2, testRecipient3])
     })
   })
 })
