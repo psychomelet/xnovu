@@ -185,6 +185,7 @@ export class EmailTemplateRenderer extends BaseChannelRenderer {
     
     // Fallback to simple conversion
     const sanitizedHtml = sanitizeForChannel(html, 'email');
-    return sanitizedHtml.replace(/<[^>]*>/g, '').trim();
+    // Use text-only sanitization to strip all HTML tags safely
+    return sanitizeForChannel(sanitizedHtml, 'sms').trim();
   }
 }

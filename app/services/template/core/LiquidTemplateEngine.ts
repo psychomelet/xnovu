@@ -367,7 +367,7 @@ export class LiquidTemplateEngine {
       // Match strings that start and end with single quotes
       cleaned = cleaned.replace(/:\s*'([^']*)'/g, (match, content) => {
         // Escape any double quotes in the content
-        const escaped = content.replace(/"/g, '\\"');
+        const escaped = content.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
         return `:"${escaped}"`;
       });
       
