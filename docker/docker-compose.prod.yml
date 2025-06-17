@@ -27,12 +27,12 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       # Novu
       NOVU_SECRET_KEY: ${NOVU_SECRET_KEY}
-      NEXT_PUBLIC_NOVU_APP_ID: ${NEXT_PUBLIC_NOVU_APP_ID}
-      NEXT_PUBLIC_NOVU_BACKEND_URL: ${NEXT_PUBLIC_NOVU_BACKEND_URL}
-      NEXT_PUBLIC_NOVU_SOCKET_URL: ${NEXT_PUBLIC_NOVU_SOCKET_URL}
+      NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER}
+      NOVU_API_URL: ${NOVU_API_URL:-https://api.novu.co}
+      NOVU_BRIDGE_URL: ${NOVU_BRIDGE_URL}
       # Temporal (External)
       TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS}
-      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-xnovu}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-xnovu-notification-processing}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/api/health"]
@@ -63,10 +63,15 @@ services:
       NOVU_SECRET_KEY: ${NOVU_SECRET_KEY}
       # Temporal (External)
       TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS}
-      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-xnovu}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-xnovu-notification-processing}
       TEMPORAL_MAX_CONCURRENT_ACTIVITIES: ${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-100}
       TEMPORAL_MAX_CONCURRENT_WORKFLOWS: ${TEMPORAL_MAX_CONCURRENT_WORKFLOWS:-50}
+      # Polling Configuration
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-10000}
+      FAILED_POLL_INTERVAL_MS: ${FAILED_POLL_INTERVAL_MS:-60000}
+      SCHEDULED_POLL_INTERVAL_MS: ${SCHEDULED_POLL_INTERVAL_MS:-30000}
+      POLL_BATCH_SIZE: ${POLL_BATCH_SIZE:-100}
       # Worker config
       WORKER_HEALTH_PORT: 3001
       WORKER_LOG_LEVEL: ${WORKER_LOG_LEVEL:-info}
@@ -86,9 +91,10 @@ networks:
     driver: bridge
 
 # Production Notes:
-# 1. Temporal is expected to be running as an external service
+# 1. Temporal, Supabase, and Novu are expected to be external services
 # 2. Configure TEMPORAL_ADDRESS to point to your Temporal cluster
-# 3. Ensure all required environment variables are set
+# 3. Ensure all required environment variables are set (see .env.example)
 # 4. Configure your load balancer/reverse proxy for SSL termination
-# 5. Consider using a managed database service for PostgreSQL
-# 6. Monitor worker health endpoint for operational status
+# 5. Monitor both app (port 4000) and worker (port 3001) health endpoints
+# 6. Worker uses unified polling system outside of Temporal scope
+# 7. Polling intervals can be tuned based on notification volume
