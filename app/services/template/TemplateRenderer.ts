@@ -171,9 +171,9 @@ export class TemplateRenderer {
       channel_type: (template.channelType as ChannelType) || 'EMAIL',
       repr: null,
       enterprise_id: enterpriseId,
-      created_at: new Date().toISOString(),
+      created_at: '',
       created_by: null,
-      updated_at: new Date().toISOString(),
+      updated_at: '',
       updated_by: null
     };
   }

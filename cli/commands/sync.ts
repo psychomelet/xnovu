@@ -102,10 +102,7 @@ async function syncToDatabase() {
         const { error } = await supabase
           .schema('notify')
           .from('ent_notification_workflow')
-          .update({
-            ...workflowData,
-            updated_at: new Date().toISOString()
-          } as Database['notify']['Tables']['ent_notification_workflow']['Update'])
+          .update(workflowData as Database['notify']['Tables']['ent_notification_workflow']['Update'])
           .eq('workflow_key', metadata.workflow_key);
         
         if (error) {
