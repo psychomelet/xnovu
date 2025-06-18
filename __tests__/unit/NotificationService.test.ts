@@ -1,6 +1,7 @@
 import { NotificationService } from '@/app/services/database/NotificationService';
 import type { Database } from '@/lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
+import { getTestEnterpriseId } from '../setup/test-data';
 
 // Types
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
@@ -13,7 +14,7 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
 
 describe('NotificationService Unit Tests', () => {
   let service: NotificationService;
-  const testEnterpriseId = uuidv4(); // Use proper UUID
+  const testEnterpriseId = getTestEnterpriseId(); // Use shared enterprise ID
   const testUserId = uuidv4(); // Use proper UUID
   let testNotificationIds: number[] = [];
   let testWorkflowId: number | null = null;

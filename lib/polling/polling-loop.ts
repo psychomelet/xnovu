@@ -10,6 +10,7 @@ export interface PollingLoopConfig {
   failedPollIntervalMs: number
   scheduledPollIntervalMs: number
   batchSize: number
+  enterpriseId?: string
   temporal: {
     address: string
     namespace: string
@@ -88,7 +89,8 @@ export class NotificationPollingLoop {
 
       try {
         const notifications = await pollNotifications({
-          batchSize: this.config.batchSize
+          batchSize: this.config.batchSize,
+          enterpriseId: this.config.enterpriseId
         })
 
         if (notifications.length > 0) {
@@ -118,7 +120,8 @@ export class NotificationPollingLoop {
 
       try {
         const notifications = await pollFailedNotifications({
-          batchSize: this.config.batchSize
+          batchSize: this.config.batchSize,
+          enterpriseId: this.config.enterpriseId
         })
 
         if (notifications.length > 0) {
@@ -148,7 +151,8 @@ export class NotificationPollingLoop {
 
       try {
         const notifications = await pollScheduledNotifications({
-          batchSize: this.config.batchSize
+          batchSize: this.config.batchSize,
+          enterpriseId: this.config.enterpriseId
         })
 
         if (notifications.length > 0) {
