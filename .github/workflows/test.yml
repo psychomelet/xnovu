@@ -17,6 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install Temporal CLI
+      uses: temporalio/setup-temporal@v0
+
     - name: Install pnpm
       uses: pnpm/action-setup@v4
       with:
