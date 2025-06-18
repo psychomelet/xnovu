@@ -30,7 +30,7 @@ echo ""
 
 # Get all namespaces with the specified prefix
 echo "Searching for namespaces with prefix '$NAMESPACE_PREFIX'..."
-namespaces=$(temporal operator namespace list --address "$TEMPORAL_ADDRESS" 2>&1 | \
+namespaces=$(temporal operator namespace list --address "$TEMPORAL_ADDRESS" --tls 2>&1 | \
   grep -A1 "NamespaceInfo.Name.*${NAMESPACE_PREFIX}" | \
   grep "NamespaceInfo.Name" | \
   awk '{print $2}')
@@ -48,8 +48,8 @@ echo "$namespaces" | sed 's/^/  - /'
 echo ""
 
 # Confirm deletion
-read -p "Are you sure you want to delete these $total namespace(s)? (yes/no): " confirm
-if [ "$confirm" != "yes" ]; then
+read -p "Are you sure you want to delete these $total namespace(s)? (yes/y/no): " confirm
+if [ "$confirm" != "yes" ] && [ "$confirm" != "y" ]; then
     echo "Deletion cancelled"
     exit 0
 fi
@@ -72,6 +72,7 @@ for namespace in $namespaces; do
     if temporal operator namespace delete \
         --namespace "$namespace" \
         --address "$TEMPORAL_ADDRESS" \
+        --tls \
         --yes 2>&1 | grep -q "has been deleted"; then
         echo "  ✓ Successfully deleted $namespace"
         success=$((success + 1))
@@ -91,7 +92,7 @@ echo "Failed to delete: $failed"
 echo ""
 
 # Final verification
-remaining=$(temporal operator namespace list --address "$TEMPORAL_ADDRESS" 2>&1 | \
+remaining=$(temporal operator namespace list --address "$TEMPORAL_ADDRESS" --tls 2>&1 | \
   grep -c "NamespaceInfo.Name.*${NAMESPACE_PREFIX}")
 echo "Remaining namespaces with prefix '$NAMESPACE_PREFIX': $remaining"
 
