@@ -7,28 +7,27 @@ import {
 import {
   createTestSupabaseClient,
   setupTestWorkflowWithRule,
-  cleanupTestRules,
-  cleanupTestWorkflows,
   waitForCondition,
 } from '../../helpers/supabase-test-helpers'
+import { getTestEnterpriseId } from '../../setup/test-data'
 import type { NotificationRule } from '@/types/rule-engine'
 
 describe('RulePollingLoop Integration', () => {
   const supabase = createTestSupabaseClient()
-  const testEnterpriseIds: string[] = []
+  const testEnterpriseId = getTestEnterpriseId()
   let pollingLoop: RulePollingLoop
   let testRules: NotificationRule[] = []
 
   const config = {
     pollIntervalMs: 500, // Fast polling for tests
     batchSize: 10,
+    enterpriseId: testEnterpriseId, // Filter polling to test enterprise only
   }
 
   beforeAll(async () => {
     // Create test rules
     for (let i = 0; i < 2; i++) {
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-      testEnterpriseIds.push(workflow.enterprise_id!)
       testRules.push(rule as NotificationRule)
     }
   })
@@ -42,10 +41,7 @@ describe('RulePollingLoop Integration', () => {
         // Schedule might not exist
       }
     }
-
-    // Cleanup test data
-    await cleanupTestRules(supabase, testEnterpriseIds)
-    await cleanupTestWorkflows(supabase, testEnterpriseIds)
+    // Test data cleanup handled by global teardown
   })
 
   beforeEach(() => {
@@ -85,10 +81,13 @@ describe('RulePollingLoop Integration', () => {
 
     it('should continue polling even if initial sync fails', async () => {
       // Create a rule with invalid configuration
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
-        trigger_config: null // Invalid config
-      })
-      testEnterpriseIds.push(workflow.enterprise_id!)
+      const { workflow, rule } = await setupTestWorkflowWithRule(
+        supabase, 
+        {}, 
+        {
+          trigger_config: null // Invalid config
+        }
+      )
 
       await pollingLoop.start()
       expect(pollingLoop.getIsRunning()).toBe(true)
@@ -133,7 +132,6 @@ describe('RulePollingLoop Integration', () => {
     it('should detect and sync new rules', async () => {
       // Create a new rule after polling started
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-      testEnterpriseIds.push(workflow.enterprise_id!)
       newRule = rule as NotificationRule
 
       // Wait for polling to pick up the new rule
@@ -251,7 +249,6 @@ describe('RulePollingLoop Integration', () => {
     it('should reconcile schedules when running', async () => {
       // Create an orphaned schedule by deleting a rule
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-      testEnterpriseIds.push(workflow.enterprise_id!)
       
       // Create schedule
       const scheduleId = getScheduleId(rule as NotificationRule)

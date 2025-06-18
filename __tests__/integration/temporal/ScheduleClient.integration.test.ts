@@ -9,15 +9,12 @@ import {
 import {
   createTestSupabaseClient,
   setupTestWorkflowWithRule,
-  cleanupTestRules,
-  cleanupTestWorkflows,
   waitForCondition,
 } from '../../helpers/supabase-test-helpers'
 import type { NotificationRule } from '@/types/rule-engine'
 
 describe('Schedule Client Integration', () => {
   const supabase = createTestSupabaseClient()
-  const testEnterpriseIds: string[] = []
   let testRule: NotificationRule
   let testWorkflowId: number
 
@@ -26,36 +23,15 @@ describe('Schedule Client Integration', () => {
     const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
     testWorkflowId = workflow.id
     testRule = rule as NotificationRule
-    testEnterpriseIds.push(workflow.enterprise_id!)
   })
 
   afterAll(async () => {
-    // Cleanup all test schedules
+    // Cleanup test schedule
     try {
-      const schedules = await listSchedules()
-      for (const schedule of schedules) {
-        if (schedule.id.startsWith('rule-')) {
-          // Extract rule info from schedule ID to create a mock rule for deletion
-          const parts = schedule.id.split('-')
-          if (parts.length >= 3) {
-            const ruleId = parseInt(parts[1], 10)
-            const enterpriseId = parts.slice(2).join('-')
-            if (!isNaN(ruleId) && testEnterpriseIds.includes(enterpriseId)) {
-              await deleteSchedule({
-                id: ruleId,
-                enterprise_id: enterpriseId,
-              } as NotificationRule)
-            }
-          }
-        }
-      }
+      await deleteSchedule(testRule)
     } catch (error) {
-      console.error('Failed to cleanup schedules:', error)
+      // Schedule might not exist
     }
-
-    // Cleanup test data
-    await cleanupTestRules(supabase, testEnterpriseIds)
-    await cleanupTestWorkflows(supabase, testEnterpriseIds)
   })
 
   describe('getScheduleId', () => {
@@ -281,7 +257,6 @@ describe('Schedule Client Integration', () => {
       // Create multiple schedules
       for (let i = 0; i < 3; i++) {
         const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-        testEnterpriseIds.push(workflow.enterprise_id!)
         
         await createSchedule(rule as NotificationRule)
         createdScheduleIds.push(getScheduleId(rule as NotificationRule))

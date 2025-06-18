@@ -1,6 +1,17 @@
+/**
+ * Test helpers for Supabase integration tests
+ * 
+ * All tests use the shared enterprise ID from global setup.
+ * Cleanup is handled automatically by global teardown.
+ * 
+ * Usage:
+ * const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
+ */
+
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 import { v4 as uuidv4 } from 'uuid'
+import { getTestEnterpriseId } from '../setup/test-data'
 
 // Create Supabase client for tests
 export function createTestSupabaseClient() {
@@ -15,13 +26,15 @@ export function createTestSupabaseClient() {
 }
 
 // Test data factories
-export function createTestWorkflow(overrides?: Partial<Database['notify']['Tables']['ent_notification_workflow']['Insert']>) {
+export function createTestWorkflow(
+  overrides?: Partial<Database['notify']['Tables']['ent_notification_workflow']['Insert']>
+) {
   return {
     name: `Test Workflow ${uuidv4()}`,
     workflow_key: `test-workflow-${uuidv4()}`,
     workflow_type: 'STATIC' as const,
     default_channels: ['IN_APP'] as Database['shared_types']['Enums']['notification_channel_type'][],
-    enterprise_id: uuidv4(), // Use valid UUID format
+    enterprise_id: getTestEnterpriseId(),
     publish_status: 'PUBLISH' as const,
     deactivated: false,
     ...overrides,
@@ -32,6 +45,7 @@ export function createTestRule(
   workflowId: number,
   overrides?: Partial<Database['notify']['Tables']['ent_notification_rule']['Insert']>
 ) {
+  const enterpriseId = overrides?.enterprise_id || getTestEnterpriseId()
   return {
     name: `Test Rule ${uuidv4()}`,
     notification_workflow_id: workflowId,
@@ -41,11 +55,11 @@ export function createTestRule(
       timezone: 'UTC',
     },
     rule_payload: {
-      recipients: [`user-${uuidv4()}`],
+      recipients: [uuidv4()],
       test: true,
     },
-    enterprise_id: overrides?.enterprise_id || uuidv4(), // Use valid UUID format
-    business_id: overrides?.business_id || uuidv4(), // Use valid UUID format
+    enterprise_id: enterpriseId,
+    business_id: overrides?.business_id || uuidv4(),
     publish_status: 'PUBLISH' as const,
     deactivated: false,
     ...overrides,
@@ -60,54 +74,11 @@ export function createTestNotification(
     name: `Test Notification ${uuidv4()}`,
     notification_workflow_id: workflowId,
     payload: { test: true },
-    recipients: [`user-${uuidv4()}`],
-    enterprise_id: overrides?.enterprise_id || uuidv4(), // Use valid UUID format
+    recipients: [uuidv4()],
+    enterprise_id: overrides?.enterprise_id || getTestEnterpriseId(),
     notification_status: 'PENDING' as const,
     publish_status: 'PUBLISH' as const,
     ...overrides,
-  }
-}
-
-// Cleanup helpers
-export async function cleanupTestWorkflows(supabase: ReturnType<typeof createTestSupabaseClient>, enterpriseIds: string[]) {
-  if (enterpriseIds.length === 0) return
-
-  const { error } = await supabase
-    .schema('notify')
-    .from('ent_notification_workflow')
-    .delete()
-    .in('enterprise_id', enterpriseIds)
-
-  if (error) {
-    console.error('Failed to cleanup test workflows:', error)
-  }
-}
-
-export async function cleanupTestRules(supabase: ReturnType<typeof createTestSupabaseClient>, enterpriseIds: string[]) {
-  if (enterpriseIds.length === 0) return
-
-  const { error } = await supabase
-    .schema('notify')
-    .from('ent_notification_rule')
-    .delete()
-    .in('enterprise_id', enterpriseIds)
-
-  if (error) {
-    console.error('Failed to cleanup test rules:', error)
-  }
-}
-
-export async function cleanupTestNotifications(supabase: ReturnType<typeof createTestSupabaseClient>, enterpriseIds: string[]) {
-  if (enterpriseIds.length === 0) return
-
-  const { error } = await supabase
-    .schema('notify')
-    .from('ent_notification')
-    .delete()
-    .in('enterprise_id', enterpriseIds)
-
-  if (error) {
-    console.error('Failed to cleanup test notifications:', error)
   }
 }
 
@@ -174,9 +145,6 @@ describe('supabase-test-helpers', () => {
     expect(createTestWorkflow).toBeDefined()
     expect(createTestRule).toBeDefined()
     expect(createTestNotification).toBeDefined()
-    expect(cleanupTestWorkflows).toBeDefined()
-    expect(cleanupTestRules).toBeDefined()
-    expect(cleanupTestNotifications).toBeDefined()
     expect(setupTestWorkflowWithRule).toBeDefined()
     expect(waitForCondition).toBeDefined()
   })

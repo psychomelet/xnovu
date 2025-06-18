@@ -19,13 +19,17 @@ export class RuleSyncService {
   /**
    * Sync all active rules with Temporal schedules on startup
    */
-  async syncAllRules(): Promise<void> {
-    logger.info('Starting full rule sync with Temporal schedules')
+  async syncAllRules(enterpriseId?: string): Promise<void> {
+    logger.info('Starting full rule sync with Temporal schedules', {
+      enterpriseId: enterpriseId || 'all'
+    })
     
     try {
       // Get all active CRON rules from database
-      const activeRules = await this.ruleService.getActiveCronRules()
-      logger.info(`Found ${activeRules.length} active CRON rules to sync`)
+      const activeRules = await this.ruleService.getActiveCronRules(enterpriseId)
+      logger.info(`Found ${activeRules.length} active CRON rules to sync`, {
+        enterpriseId: enterpriseId || 'all'
+      })
       
       // Get all existing schedules from Temporal
       const existingSchedules = await listSchedules()
@@ -70,23 +74,29 @@ export class RuleSyncService {
       // Delete schedules that no longer have active rules
       for (const schedule of existingSchedules) {
         if (!expectedScheduleIds.has(schedule.id) && schedule.id.startsWith('rule-')) {
-          try {
-            logger.info('Deleting orphaned schedule', { scheduleId: schedule.id })
-            // Create a minimal rule object for deletion
-            const parts = schedule.id.split('-')
-            if (parts.length >= 3) {
+          // Extract enterprise ID from schedule ID
+          const parts = schedule.id.split('-')
+          if (parts.length >= 3) {
+            const scheduleEnterpriseId = parts.slice(2).join('-')
+            
+            // Skip if filtering by enterprise ID and this schedule belongs to a different enterprise
+            if (enterpriseId && scheduleEnterpriseId !== enterpriseId) {
+              continue
+            }
+            
+            try {
+              logger.info('Deleting orphaned schedule', { scheduleId: schedule.id })
               const ruleId = parseInt(parts[1], 10)
-              const enterpriseId = parts.slice(2).join('-')
               await deleteSchedule({
                 id: ruleId,
-                enterprise_id: enterpriseId,
+                enterprise_id: scheduleEnterpriseId,
               } as NotificationRule)
+            } catch (error) {
+              logger.error('Failed to delete orphaned schedule', {
+                scheduleId: schedule.id,
+                error: error instanceof Error ? error.message : 'Unknown error'
+              })
             }
-          } catch (error) {
-            logger.error('Failed to delete orphaned schedule', {
-              scheduleId: schedule.id,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            })
           }
         }
       }
@@ -166,7 +176,7 @@ export class RuleSyncService {
   /**
    * Reconcile schedules between database and Temporal
    */
-  async reconcileSchedules(): Promise<{
+  async reconcileSchedules(enterpriseId?: string): Promise<{
     created: number
     updated: number
     deleted: number
@@ -181,7 +191,7 @@ export class RuleSyncService {
     
     try {
       // Get all active rules
-      const activeRules = await this.ruleService.getActiveCronRules()
+      const activeRules = await this.ruleService.getActiveCronRules(enterpriseId)
       const ruleMap = new Map<string, NotificationRule>()
       
       for (const rule of activeRules) {
@@ -216,24 +226,30 @@ export class RuleSyncService {
       // Delete orphaned schedules
       for (const schedule of schedules) {
         if (!ruleMap.has(schedule.id) && schedule.id.startsWith('rule-')) {
-          try {
-            // Extract rule info from schedule ID
-            const parts = schedule.id.split('-')
-            if (parts.length >= 3) {
+          // Extract rule info from schedule ID
+          const parts = schedule.id.split('-')
+          if (parts.length >= 3) {
+            const scheduleEnterpriseId = parts.slice(2).join('-')
+            
+            // Skip if filtering by enterprise ID and this schedule belongs to a different enterprise
+            if (enterpriseId && scheduleEnterpriseId !== enterpriseId) {
+              continue
+            }
+            
+            try {
               const ruleId = parseInt(parts[1], 10)
-              const enterpriseId = parts.slice(2).join('-')
               await deleteSchedule({
                 id: ruleId,
-                enterprise_id: enterpriseId,
+                enterprise_id: scheduleEnterpriseId,
               } as NotificationRule)
               stats.deleted++
+            } catch (error) {
+              stats.errors++
+              logger.error('Failed to delete orphaned schedule', {
+                scheduleId: schedule.id,
+                error: error instanceof Error ? error.message : 'Unknown error'
+              })
             }
-          } catch (error) {
-            stats.errors++
-            logger.error('Failed to delete orphaned schedule', {
-              scheduleId: schedule.id,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            })
           }
         }
       }

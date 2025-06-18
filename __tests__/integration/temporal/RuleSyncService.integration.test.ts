@@ -8,8 +8,6 @@ import {
 import {
   createTestSupabaseClient,
   setupTestWorkflowWithRule,
-  cleanupTestRules,
-  cleanupTestWorkflows,
   createTestRule,
   waitForCondition,
 } from '../../helpers/supabase-test-helpers'
@@ -17,7 +15,6 @@ import type { NotificationRule } from '@/types/rule-engine'
 
 describe('RuleSyncService Integration', () => {
   const supabase = createTestSupabaseClient()
-  const testEnterpriseIds: string[] = []
   let service: RuleSyncService
   let testRules: NotificationRule[] = []
 
@@ -27,7 +24,6 @@ describe('RuleSyncService Integration', () => {
     // Create test rules
     for (let i = 0; i < 3; i++) {
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-      testEnterpriseIds.push(workflow.enterprise_id!)
       testRules.push(rule as NotificationRule)
     }
   })
@@ -42,9 +38,6 @@ describe('RuleSyncService Integration', () => {
       }
     }
 
-    // Cleanup test data
-    await cleanupTestRules(supabase, testEnterpriseIds)
-    await cleanupTestWorkflows(supabase, testEnterpriseIds)
     await service.shutdown()
   })
 
@@ -97,7 +90,6 @@ describe('RuleSyncService Integration', () => {
     it('should delete orphaned schedules', async () => {
       // Create a schedule for a rule that will be "deleted"
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-      testEnterpriseIds.push(workflow.enterprise_id!)
       
       const orphanScheduleId = getScheduleId(rule as NotificationRule)
       await createSchedule(rule as NotificationRule)
@@ -122,7 +114,6 @@ describe('RuleSyncService Integration', () => {
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
         trigger_config: { cron: 'invalid-cron' }
       })
-      testEnterpriseIds.push(workflow.enterprise_id!)
 
       // Sync should complete despite the error
       await expect(service.syncAllRules()).resolves.not.toThrow()
@@ -134,7 +125,6 @@ describe('RuleSyncService Integration', () => {
 
     beforeEach(async () => {
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-      testEnterpriseIds.push(workflow.enterprise_id!)
       testRule = rule as NotificationRule
     })
 
@@ -242,7 +232,6 @@ describe('RuleSyncService Integration', () => {
 
       // Create an orphaned schedule
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
-      testEnterpriseIds.push(workflow.enterprise_id!)
       await createSchedule(rule as NotificationRule)
       
       // Delete the rule to make it orphaned
@@ -265,7 +254,6 @@ describe('RuleSyncService Integration', () => {
       const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
         trigger_config: null // Invalid config
       })
-      testEnterpriseIds.push(workflow.enterprise_id!)
 
       const stats = await service.reconcileSchedules()
 
