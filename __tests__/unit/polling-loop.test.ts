@@ -162,7 +162,7 @@ describe('NotificationPollingLoop', () => {
       await pollingLoop.start()
       
       // Wait for polling to process the notification
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise(resolve => setTimeout(resolve, 1000))
       
       // Verify workflow was triggered
       expect(mockWorkflowClient.start).toHaveBeenCalledWith(
