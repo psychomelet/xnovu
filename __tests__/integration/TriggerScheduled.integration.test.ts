@@ -47,27 +47,34 @@ describe('Trigger Scheduled Notification Integration Tests', () => {
     createdWorkflowIds.length = 0;
   });
 
-  async function createTestWorkflow(): Promise<WorkflowRow> {
-    const { data, error } = await supabase
+  async function getTestWorkflow(): Promise<WorkflowRow> {
+    // First try to find the workflow for the test enterprise
+    let { data, error } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
-      .insert({
-        name: 'Test Scheduled Workflow Integration',
-        workflow_key: 'default-email',
-        workflow_type: 'STATIC',
-        default_channels: ['EMAIL'],
-        publish_status: 'PUBLISH',
-        deactivated: false,
-        enterprise_id: testEnterpriseId,
-      } satisfies WorkflowInsert)
       .select()
+      .eq('workflow_key', 'default-email')
+      .eq('enterprise_id', testEnterpriseId)
       .single();
 
-    if (error || !data) {
-      throw new Error(`Failed to create test workflow: ${error?.message}`);
+    if (error?.code === 'PGRST116') { // Not found for test enterprise
+      // Try to find any default-email workflow (it might be a global workflow)
+      const result = await supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .select()
+        .eq('workflow_key', 'default-email')
+        .limit(1)
+        .single();
+      
+      data = result.data;
+      error = result.error;
     }
 
-    createdWorkflowIds.push(data.id);
+    if (error || !data) {
+      throw new Error(`Failed to get test workflow: ${error?.message}. Make sure default-email workflow exists in the database.`);
+    }
+
     return data;
   }
 
@@ -104,7 +111,7 @@ describe('Trigger Scheduled Notification Integration Tests', () => {
     let testWorkflow: WorkflowRow;
 
     beforeAll(async () => {
-      testWorkflow = await createTestWorkflow();
+      testWorkflow = await getTestWorkflow();
     });
 
     it('should process notification immediately when scheduled_for is null', async () => {
