@@ -1,6 +1,7 @@
 import { WorkflowService } from '@/app/services/database/WorkflowService';
 import type { Database } from '@/lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
+import { getTestEnterpriseId } from '../setup/test-data';
 
 // Types
 type WorkflowRow = Database['notify']['Tables']['ent_notification_workflow']['Row'];
@@ -13,7 +14,7 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
 
 describe('WorkflowService Unit Tests', () => {
   let service: WorkflowService;
-  const testEnterpriseId = uuidv4(); // Use proper UUID
+  const testEnterpriseId = getTestEnterpriseId(); // Use shared test enterprise ID
   let testWorkflowId: number | null = null;
   let testWorkflowKey: string;
 
@@ -133,7 +134,8 @@ describe('WorkflowService Unit Tests', () => {
     });
 
     it('should return null when workflow belongs to different enterprise', async () => {
-      const result = await service.getWorkflow(createdWorkflowId, uuidv4()); // Use different UUID
+      const differentEnterpriseId = uuidv4(); // Use a valid UUID for different enterprise
+      const result = await service.getWorkflow(createdWorkflowId, differentEnterpriseId);
       expect(result).toBeNull();
     });
   });
