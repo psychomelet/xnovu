@@ -54,7 +54,6 @@ export class NotificationService {
   ): Promise<void> {
     const updateData: NotificationUpdate = {
       notification_status: status,
-      updated_at: new Date().toISOString(),
     };
 
     if (errorMessage) {

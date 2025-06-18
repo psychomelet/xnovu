@@ -231,8 +231,7 @@ export class RuleService {
   ): Promise<void> {
     try {
       const updates: NotificationUpdate = {
-        notification_status: status,
-        updated_at: new Date().toISOString()
+        notification_status: status
       };
 
       if (status === 'PROCESSING') {
@@ -320,8 +319,7 @@ export class RuleService {
   ): Promise<void> {
     try {
       const updates: NotificationUpdate = {
-        notification_status: status,
-        updated_at: new Date().toISOString()
+        notification_status: status
       };
 
       if (status === 'PROCESSING') {
