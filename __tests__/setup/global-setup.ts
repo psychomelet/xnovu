@@ -15,8 +15,6 @@ export default async function globalSetup() {
   const testNamespace = `test-ns-${enterpriseId}`;
   process.env.TEMPORAL_NAMESPACE = testNamespace;
   
-  console.log(`🔧 Creating test namespace: ${testNamespace}`);
-  
   let connection: Connection | null = null;
   try {
     const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
@@ -28,7 +26,6 @@ export default async function globalSetup() {
     });
     
     await ensureNamespaceExists(connection, testNamespace);
-    console.log(`✅ Test namespace created: ${testNamespace}`);
   } catch (error) {
     console.error('❌ Failed to create test namespace:', error);
     throw error;

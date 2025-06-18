@@ -273,7 +273,6 @@ async function verifyCleanup(enterpriseId: string) {
 
 async function cleanupTestNamespace(enterpriseId: string) {
   const testNamespace = `test-ns-${enterpriseId}`;
-  console.log(`🗑️  Deleting test namespace: ${testNamespace}`);
   
   const temporalAddress = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
   const isSecure = temporalAddress.includes(':443');
@@ -298,23 +297,21 @@ async function cleanupTestNamespace(enterpriseId: string) {
     const { stdout, stderr } = await execAsync(cmd, { env, timeout: 10000 });
     
     if (stderr && !stderr.includes('Namespace deletion') && !stderr.includes('already deleted')) {
-      console.error(`  ❌ Error deleting namespace: ${stderr}`);
-    } else {
-      console.log(`  ✅ Deleted test namespace: ${testNamespace}`);
+      console.error(`  ❌ Error deleting test namespace: ${stderr}`);
     }
   } catch (error: any) {
     // Check if it's a timeout
     if (error.killed || error.code === 'ETIMEDOUT') {
-      console.warn(`  ⚠️  Timeout deleting namespace - cleanup may continue in background`);
+      console.warn(`  ⚠️  Timeout during test namespace cleanup - may continue in background`);
     } else if (error.message?.includes('Namespace not found') || 
         error.message?.includes('namespace not found') ||
         error.stderr?.includes('Namespace not found') ||
         error.stderr?.includes('namespace not found')) {
-      console.log(`  ⚠️  Namespace already deleted or not found`);
+      // Namespace already gone, this is fine
     } else if (error.message?.includes('deadline exceeded')) {
-      console.warn(`  ⚠️  Deadline exceeded - may require manual cleanup`);
+      console.warn(`  ⚠️  Deadline exceeded during test namespace cleanup`);
     } else {
-      console.error(`  ❌ Failed to delete namespace:`, error.message || error);
+      console.error(`  ❌ Failed to clean up test namespace:`, error.message || error);
     }
   }
 }
