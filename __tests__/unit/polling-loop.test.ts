@@ -33,8 +33,8 @@ describe('NotificationPollingLoop', () => {
   let mockWorkflowClient: any
   let mockConnection: any
   
-  // Test data
-  const testEnterpriseId = '00000000-0000-0000-0000-000000000001'
+  // Test data - use unique enterprise ID to avoid conflicts with other tests
+  const testEnterpriseId = uuidv4()
   const testSubscriberId = uuidv4() // Recipients field expects a UUID
   let testWorkflowId: number
 
@@ -79,6 +79,11 @@ describe('NotificationPollingLoop', () => {
     if (pollingLoop) {
       await pollingLoop.stop()
     }
+    
+    // Reset the polling timestamp to ensure we pick up new notifications
+    // Import the reset function at the top of the file
+    const { resetPollingTimestamp } = await import('@/lib/polling/notification-polling')
+    await resetPollingTimestamp()
     
     // Setup mock workflow client
     mockWorkflowClient = {

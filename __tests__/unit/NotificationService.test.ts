@@ -142,20 +142,16 @@ describe('NotificationService Unit Tests', () => {
   });
 
   describe('updateNotificationStatus', () => {
-    let notificationToUpdate: NotificationRow;
-
-    beforeAll(async () => {
-      // Create a notification for testing updates
-      const insertData = createTestNotificationInsert({
-        name: 'Notification for Status Updates'
-      });
-      notificationToUpdate = await service.createNotification(insertData);
-      testNotificationIds.push(notificationToUpdate.id);
-    });
-
     it('should update status successfully', async () => {
+      // Create a fresh notification for this specific test
+      const insertData = createTestNotificationInsert({
+        name: `Notification for Status Update Test ${Date.now()}`
+      });
+      const notification = await service.createNotification(insertData);
+      testNotificationIds.push(notification.id);
+      
       await service.updateNotificationStatus(
-        notificationToUpdate.id,
+        notification.id,
         'PROCESSING',
         testEnterpriseId,
         undefined,
@@ -163,21 +159,28 @@ describe('NotificationService Unit Tests', () => {
       );
 
       // Verify the status was updated by retrieving the notification
-      const updated = await service.getNotification(notificationToUpdate.id, testEnterpriseId);
+      const updated = await service.getNotification(notification.id, testEnterpriseId);
       expect(updated!.notification_status).toBe('PROCESSING');
       expect(updated!.transaction_id).toBe('txn-123');
     });
 
     it('should update status with error message', async () => {
+      // Create a fresh notification for this specific test
+      const insertData = createTestNotificationInsert({
+        name: `Notification for Error Status Test ${Date.now()}`
+      });
+      const notification = await service.createNotification(insertData);
+      testNotificationIds.push(notification.id);
+      
       await service.updateNotificationStatus(
-        notificationToUpdate.id,
+        notification.id,
         'FAILED',
         testEnterpriseId,
         'Template rendering failed'
       );
 
       // Verify the status and error were updated
-      const updated = await service.getNotification(notificationToUpdate.id, testEnterpriseId);
+      const updated = await service.getNotification(notification.id, testEnterpriseId);
       expect(updated!.notification_status).toBe('FAILED');
       expect(updated!.error_details).toBe('Template rendering failed');
     });
