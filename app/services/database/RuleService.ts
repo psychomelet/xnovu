@@ -354,6 +354,141 @@ export class RuleService {
   }
 
   /**
+   * Get rules updated after a specific timestamp
+   */
+  async getRulesUpdatedAfter(timestamp: Date, limit: number = 100, enterpriseId?: string): Promise<NotificationRule[]> {
+    try {
+      let query = this.supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .select(`
+          *,
+          ent_notification_workflow!inner(*)
+        `)
+        .gt('updated_at', timestamp.toISOString())
+        .eq('trigger_type', 'CRON')
+        .order('updated_at', { ascending: true })
+        .limit(limit);
+
+      if (enterpriseId) {
+        query = query.eq('enterprise_id', enterpriseId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new RuleEngineError(
+          `Failed to fetch updated rules: ${error.message}`,
+          'DATABASE_ERROR',
+          undefined,
+          enterpriseId
+        );
+      }
+
+      return data || [];
+    } catch (error) {
+      if (error instanceof RuleEngineError) {
+        throw error;
+      }
+      throw new RuleEngineError(
+        `Unexpected error fetching updated rules: ${error}`,
+        'UNKNOWN_ERROR',
+        undefined,
+        enterpriseId
+      );
+    }
+  }
+
+  /**
+   * Get the timestamp of the most recently updated rule
+   */
+  async getLastRuleUpdateTime(enterpriseId?: string): Promise<Date | null> {
+    try {
+      let query = this.supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .select('updated_at')
+        .eq('trigger_type', 'CRON')
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (enterpriseId) {
+        query = query.eq('enterprise_id', enterpriseId);
+      }
+
+      const { data, error } = await query.single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw new RuleEngineError(
+          `Failed to fetch last update time: ${error.message}`,
+          'DATABASE_ERROR',
+          undefined,
+          enterpriseId
+        );
+      }
+
+      return data ? new Date(data.updated_at) : null;
+    } catch (error) {
+      if (error instanceof RuleEngineError) {
+        throw error;
+      }
+      throw new RuleEngineError(
+        `Unexpected error fetching last update time: ${error}`,
+        'UNKNOWN_ERROR',
+        undefined,
+        enterpriseId
+      );
+    }
+  }
+
+  /**
+   * Get all active rules for initial sync
+   */
+  async getAllActiveRules(enterpriseId?: string): Promise<NotificationRule[]> {
+    try {
+      let query = this.supabase
+        .schema('notify')
+        .from('ent_notification_rule')
+        .select(`
+          *,
+          ent_notification_workflow!inner(*)
+        `)
+        .eq('trigger_type', 'CRON')
+        .eq('publish_status', 'PUBLISH')
+        .eq('deactivated', false)
+        .eq('ent_notification_workflow.publish_status', 'PUBLISH')
+        .eq('ent_notification_workflow.deactivated', false);
+
+      if (enterpriseId) {
+        query = query.eq('enterprise_id', enterpriseId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new RuleEngineError(
+          `Failed to fetch all active rules: ${error.message}`,
+          'DATABASE_ERROR',
+          undefined,
+          enterpriseId
+        );
+      }
+
+      return data || [];
+    } catch (error) {
+      if (error instanceof RuleEngineError) {
+        throw error;
+      }
+      throw new RuleEngineError(
+        `Unexpected error fetching all active rules: ${error}`,
+        'UNKNOWN_ERROR',
+        undefined,
+        enterpriseId
+      );
+    }
+  }
+
+  /**
    * Gracefully shut down the service and its connections
    */
   async shutdown(): Promise<void> {
