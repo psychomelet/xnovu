@@ -276,6 +276,7 @@ export class RuleService {
    */
   async getWorkflow(workflowId: number, enterpriseId: string) {
     try {
+      // First try enterprise-specific workflow lookup
       const { data, error } = await this.supabase
         .schema('notify')
         .from('ent_notification_workflow')
@@ -295,7 +296,32 @@ export class RuleService {
         );
       }
 
-      return data || null;
+      // If found, return it
+      if (data) {
+        return data;
+      }
+
+      // If not found, try global workflow lookup (null enterprise_id)
+      const { data: globalData, error: globalError } = await this.supabase
+        .schema('notify')
+        .from('ent_notification_workflow')
+        .select('*')
+        .eq('id', workflowId)
+        .is('enterprise_id', null)
+        .eq('publish_status', 'PUBLISH')
+        .eq('deactivated', false)
+        .single();
+
+      if (globalError && globalError.code !== 'PGRST116') {
+        throw new RuleEngineError(
+          `Failed to fetch global workflow: ${globalError.message}`,
+          'DATABASE_ERROR',
+          undefined,
+          enterpriseId
+        );
+      }
+
+      return globalData || null;
     } catch (error) {
       if (error instanceof RuleEngineError) {
         throw error;

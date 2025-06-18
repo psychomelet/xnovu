@@ -48,41 +48,19 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
     createdWorkflowIds.length = 0;
   });
 
-  async function createTestWorkflow(): Promise<WorkflowRow> {
-    // First, try to find an existing workflow
-    const { data: existingWorkflow } = await supabase
+  async function getTestWorkflow(): Promise<WorkflowRow> {
+    // Get the default-email workflow (workflow_key is globally unique)
+    const { data, error } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
       .select()
       .eq('workflow_key', 'default-email')
       .single();
 
-    if (existingWorkflow) {
-      return existingWorkflow;
-    }
-
-    // If not found, create a new one with unique key
-    const uniqueKey = `test-async-workflow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const { data, error } = await supabase
-      .schema('notify')
-      .from('ent_notification_workflow')
-      .insert({
-        name: `Test Async Workflow ${Date.now()}`,
-        workflow_key: uniqueKey,
-        workflow_type: 'STATIC',
-        default_channels: ['EMAIL'],
-        publish_status: 'PUBLISH',
-        deactivated: false,
-        enterprise_id: testEnterpriseId,
-      } satisfies WorkflowInsert)
-      .select()
-      .single();
-
     if (error || !data) {
-      throw new Error(`Failed to create test workflow: ${error?.message}`);
+      throw new Error(`Failed to get test workflow: ${error?.message}. Make sure default-email workflow exists in the database.`);
     }
 
-    createdWorkflowIds.push(data.id);
     return data;
   }
 
@@ -118,7 +96,7 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
     let testWorkflow: WorkflowRow;
 
     beforeAll(async () => {
-      testWorkflow = await createTestWorkflow();
+      testWorkflow = await getTestWorkflow();
     });
 
     it('should trigger immediately for notification without scheduled_for', async () => {
@@ -289,7 +267,7 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
   describe('GET /api/trigger-async workflow status', () => {
     it('should return workflow status', async () => {
       // First create and trigger a notification
-      const testWorkflow = await createTestWorkflow();
+      const testWorkflow = await getTestWorkflow();
       const notification = await createTestNotification(testWorkflow.id);
 
       const triggerRequest = new NextRequest('http://localhost:3000/api/trigger-async', {

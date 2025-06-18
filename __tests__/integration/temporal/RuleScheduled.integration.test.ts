@@ -19,9 +19,7 @@ describe('Rule Scheduled Activity Integration', () => {
   describe('createNotificationFromRule', () => {
     it('should create notification for valid scheduled rule', async () => {
       // Create test workflow and rule for this specific test
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-        default_channels: ['EMAIL', 'IN_APP'],
-      }, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-multi-channel', {
         rule_payload: {
           recipients: [testRecipient1, testRecipient2],
           customData: 'test',
@@ -35,7 +33,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -56,13 +54,13 @@ describe('Rule Scheduled Activity Integration', () => {
       expect(notification.name).toBe(`Scheduled: ${testRule.name}`)
       expect(notification.notification_workflow_id).toBe(testWorkflow.id)
       expect(notification.recipients).toEqual([testRecipient1, testRecipient2])
-      expect(notification.channels).toEqual(['EMAIL', 'IN_APP'])
+      expect(notification.channels).toEqual(['EMAIL', 'IN_APP', 'SMS', 'PUSH', 'CHAT'])
       expect(notification.notification_status).toBe('PENDING')
       expect(notification.publish_status).toBe('PUBLISH')
     })
 
     it('should throw error if enterprise ID is missing', async () => {
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email')
       const testWorkflow = workflow as NotificationWorkflow
       const testRule = rule as NotificationRule
 
@@ -70,7 +68,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: null,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -79,7 +77,7 @@ describe('Rule Scheduled Activity Integration', () => {
     })
 
     it('should throw error if rule not found', async () => {
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email')
       const testWorkflow = workflow as NotificationWorkflow
       const testRule = rule as NotificationRule
 
@@ -87,7 +85,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: 999999, // Non-existent rule
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -97,7 +95,7 @@ describe('Rule Scheduled Activity Integration', () => {
 
     it('should skip notification for deactivated rule', async () => {
       // Create a deactivated rule for this test
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email', {
         deactivated: true
       })
       
@@ -108,7 +106,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -127,7 +125,7 @@ describe('Rule Scheduled Activity Integration', () => {
 
     it('should skip notification for unpublished rule', async () => {
       // Create an unpublished rule for this test
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email', {
         publish_status: 'DRAFT'
       })
       
@@ -138,7 +136,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -156,7 +154,7 @@ describe('Rule Scheduled Activity Integration', () => {
     })
 
     it('should throw error if workflow not found', async () => {
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase)
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email')
       const testRule = rule as NotificationRule
 
       const input: RuleScheduledWorkflowInput = {
@@ -173,7 +171,7 @@ describe('Rule Scheduled Activity Integration', () => {
 
     it('should extract single recipient from rule payload', async () => {
       // Create rule with single recipient string
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email', {
         rule_payload: {
           recipient: testSingleRecipient,
           customData: 'test',
@@ -187,7 +185,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -207,7 +205,7 @@ describe('Rule Scheduled Activity Integration', () => {
 
     it('should throw error if no recipients specified', async () => {
       // Create rule without recipients
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email', {
         rule_payload: {
           customData: 'test',
           // No recipients field
@@ -221,7 +219,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -230,10 +228,8 @@ describe('Rule Scheduled Activity Integration', () => {
     })
 
     it('should use workflow default channels', async () => {
-      // Create workflow with empty default channels
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {
-        default_channels: [],
-      })
+      // Use existing workflow which has default channels
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email')
       
       const testWorkflow = workflow as NotificationWorkflow
       const testRule = rule as NotificationRule
@@ -242,7 +238,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 
@@ -257,7 +253,7 @@ describe('Rule Scheduled Activity Integration', () => {
         .eq('enterprise_id', testRule.enterprise_id!)
 
       expect(notifications).toHaveLength(1)
-      expect(notifications![0].channels).toEqual([])
+      expect(notifications![0].channels).toEqual(['EMAIL'])
     })
 
     it('should handle complex rule payload', async () => {
@@ -277,7 +273,7 @@ describe('Rule Scheduled Activity Integration', () => {
         },
       }
 
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email', {
         rule_payload: complexPayload,
       })
       
@@ -288,7 +284,7 @@ describe('Rule Scheduled Activity Integration', () => {
         ruleId: testRule.id,
         enterpriseId: testRule.enterprise_id!,
         businessId: testRule.business_id,
-        workflowId: testWorkflow.id,
+        workflowId: testRule.notification_workflow_id,
         rulePayload: testRule.rule_payload,
       }
 

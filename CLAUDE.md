@@ -210,6 +210,51 @@ For detailed sync documentation, see [docs/workflow-sync.md](docs/workflow-sync.
 
 Note: The workflow index is automatically regenerated during `pnpm build`
 
+### Utilizing Existing Workflows
+
+**IMPORTANT**: Always use existing workflows from `app/novu/workflow-loader.ts` instead of creating temporary test workflows or inventing new ones.
+
+#### Available Workflows
+The following workflows are available for use in tests and development:
+
+```typescript
+// Available workflow keys from app/novu/workflow-loader.ts
+export const WORKFLOW_KEYS = {
+  chat: 'default-chat',
+  email: 'default-email', 
+  inApp: 'default-in-app',
+  multiChannel: 'default-multi-channel',
+  push: 'default-push',
+  sms: 'default-sms',
+  templateDemo: 'template-demo-workflow',
+  welcome: 'welcome-onboarding-email',
+  yogo: 'yogo-email'
+} as const;
+```
+
+#### Best Practices for Tests
+1. **Use existing workflows**: Reference workflows by their `workflow_key` from the available list above
+2. **Global uniqueness**: `workflow_key` is globally unique - search without `enterprise_id` filter
+3. **No temporary workflows**: Avoid creating workflows like `minimal-workflow-*`, `test-workflow-*`, `building-alert-*` in tests
+4. **Proper cleanup**: Tests should use existing workflows to ensure proper cleanup in global teardown
+
+#### Example Usage
+```typescript
+// ✅ Good - Use existing workflow
+const { data: workflow } = await supabase
+  .schema('notify')
+  .from('ent_notification_workflow')
+  .select()
+  .eq('workflow_key', 'default-email')
+  .single();
+
+// ❌ Bad - Don't create temporary workflows
+const workflow = await createTestWorkflow({
+  workflow_key: `test-workflow-${uuidv4()}`,
+  // ...
+});
+```
+
 ## Documentation To Follow
 
 ### Template Rendering System

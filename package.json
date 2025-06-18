@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "pnpm test:connection && pnpm test:unit && pnpm test:integration",
+    "test": "jest --runInBand",
     "test:connection": "jest __tests__/services/",
     "test:unit": "jest __tests__/unit/ --runInBand",
     "test:integration": "TEST_INTEGRATION=true jest __tests__/integration/ --runInBand",

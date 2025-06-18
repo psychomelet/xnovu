@@ -111,7 +111,7 @@ describe('RuleSyncService Integration', () => {
 
     it('should handle sync errors gracefully', async () => {
       // Create a rule with invalid cron expression
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email', {
         trigger_config: { cron: 'invalid-cron' }
       })
 
@@ -251,7 +251,7 @@ describe('RuleSyncService Integration', () => {
 
     it('should track errors in stats', async () => {
       // Create a rule with invalid configuration
-      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, {}, {
+      const { workflow, rule } = await setupTestWorkflowWithRule(supabase, 'default-email', {
         trigger_config: null // Invalid config
       })
 
