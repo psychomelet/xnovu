@@ -48,28 +48,13 @@ describe('Trigger Scheduled Notification Integration Tests', () => {
   });
 
   async function getTestWorkflow(): Promise<WorkflowRow> {
-    // First try to find the workflow for the test enterprise
-    let { data, error } = await supabase
+    // Get the default-email workflow (workflow_key is globally unique)
+    const { data, error } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
       .select()
       .eq('workflow_key', 'default-email')
-      .eq('enterprise_id', testEnterpriseId)
       .single();
-
-    if (error?.code === 'PGRST116') { // Not found for test enterprise
-      // Try to find any default-email workflow (it might be a global workflow)
-      const result = await supabase
-        .schema('notify')
-        .from('ent_notification_workflow')
-        .select()
-        .eq('workflow_key', 'default-email')
-        .limit(1)
-        .single();
-      
-      data = result.data;
-      error = result.error;
-    }
 
     if (error || !data) {
       throw new Error(`Failed to get test workflow: ${error?.message}. Make sure default-email workflow exists in the database.`);
