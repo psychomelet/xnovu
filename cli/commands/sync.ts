@@ -146,9 +146,8 @@ class SyncManager {
       console.log(`   ✅ Bridge URL verified - Workflows: ${data.discovered?.workflows || 0}, Steps: ${data.discovered?.steps || 0}`);
 
       // Execute the Novu sync command
-      const command = `npx novu@latest sync --bridge-url=${bridgeUrl} --secret-key=${SECRET_KEY}`;
       console.log('   Running sync command...');
-      console.log(`   Command: ${command}`);
+      console.log(`   Command: npx novu@latest sync --bridge-url=${bridgeUrl} --secret-key=***`);
 
       try {
         // Use execa instead of execSync for better error handling
@@ -185,7 +184,7 @@ class SyncManager {
       // If it's a timeout error, provide helpful message
       if (error.message?.includes('timeout') || error.message?.includes('Bridge request timeout')) {
         console.log('\n💡 Tip: The tunnel might be slow. Try running the sync command manually:');
-        console.log(`   npx novu@latest sync --bridge-url=${bridgeUrl} --secret-key=${SECRET_KEY}\n`);
+        console.log(`   npx novu@latest sync --bridge-url=${bridgeUrl} --secret-key=<YOUR_SECRET_KEY>\n`);
       }
 
       throw error;
