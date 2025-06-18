@@ -12,9 +12,9 @@
     "test:connection": "jest __tests__/services/ --runInBand",
     "test:unit": "jest __tests__/unit/ --runInBand",
     "test:integration": "TEST_INTEGRATION=true jest __tests__/integration/ --runInBand",
-    "test:watch": "jest --watch --runInBand",
-    "test:coverage": "jest --coverage --runInBand",
-    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest",
     "test:lint": "eslint __tests__/**/*.{ts,tsx}",
     "test:type-check": "tsc --noEmit",
     "xnovu": "tsx cli/index.ts"
