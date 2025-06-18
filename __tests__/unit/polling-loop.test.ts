@@ -7,6 +7,7 @@ import { createSupabaseAdmin } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/database.types'
 import { v4 as uuidv4 } from 'uuid'
 import { Connection, WorkflowClient } from '@temporalio/client'
+import { getTestEnterpriseId } from '../setup/test-data'
 
 // Mock Temporal client
 jest.mock('@temporalio/client', () => ({
@@ -33,8 +34,8 @@ describe('NotificationPollingLoop', () => {
   let mockWorkflowClient: any
   let mockConnection: any
   
-  // Test data - use unique enterprise ID to avoid conflicts with other tests
-  const testEnterpriseId = uuidv4()
+  // Test data - use shared enterprise ID from global setup
+  const testEnterpriseId = getTestEnterpriseId()
   const testSubscriberId = uuidv4() // Recipients field expects a UUID
   let testWorkflowId: number
 
@@ -42,12 +43,13 @@ describe('NotificationPollingLoop', () => {
     // Setup real database connection
     supabase = createSupabaseAdmin()
     
-    // Ensure test workflow exists
+    // Ensure test workflow exists for this enterprise
     const { data: workflow } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
       .select('*')
       .eq('workflow_key', 'test-polling-workflow')
+      .eq('enterprise_id', testEnterpriseId)
       .maybeSingle()
     
     if (workflow) {
@@ -80,11 +82,6 @@ describe('NotificationPollingLoop', () => {
       await pollingLoop.stop()
     }
     
-    // Reset the polling timestamp to ensure we pick up new notifications
-    // Import the reset function at the top of the file
-    const { resetPollingTimestamp } = await import('@/lib/polling/notification-polling')
-    await resetPollingTimestamp()
-    
     // Setup mock workflow client
     mockWorkflowClient = {
       start: jest.fn().mockResolvedValue({
@@ -104,6 +101,7 @@ describe('NotificationPollingLoop', () => {
       failedPollIntervalMs: 200,
       scheduledPollIntervalMs: 200,
       batchSize: 10,
+      enterpriseId: testEnterpriseId, // Filter by test enterprise ID
       temporal: {
         address: 'localhost:7233',
         namespace: 'default',
@@ -125,12 +123,13 @@ describe('NotificationPollingLoop', () => {
   })
 
   afterAll(async () => {
-    // Clean up test workflow
+    // Clean up test workflow for this enterprise
     await supabase
       .schema('notify')
       .from('ent_notification_workflow')
       .delete()
       .eq('workflow_key', 'test-polling-workflow')
+      .eq('enterprise_id', testEnterpriseId)
   })
 
   describe('polling functionality', () => {

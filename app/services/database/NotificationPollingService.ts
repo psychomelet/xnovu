@@ -7,6 +7,7 @@ type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
 export interface PollingOptions {
   batchSize?: number
   includeProcessed?: boolean
+  enterpriseId?: string
 }
 
 export class NotificationPollingService {
@@ -24,7 +25,8 @@ export class NotificationPollingService {
   async pollNotifications(options: PollingOptions = {}): Promise<NotificationRow[]> {
     const {
       batchSize = this.defaultBatchSize,
-      includeProcessed = false
+      includeProcessed = false,
+      enterpriseId
     } = options
 
     try {
@@ -38,6 +40,11 @@ export class NotificationPollingService {
         .gt('updated_at', sinceTimestamp.toISOString())
         .order('updated_at', { ascending: true })
         .limit(batchSize)
+      
+      // Filter by enterprise ID if provided
+      if (enterpriseId) {
+        query = query.eq('enterprise_id', enterpriseId)
+      }
 
 
       // Optionally exclude already processed notifications
@@ -86,7 +93,8 @@ export class NotificationPollingService {
    */
   async pollFailedNotifications(options: PollingOptions = {}): Promise<NotificationRow[]> {
     const {
-      batchSize = this.defaultBatchSize
+      batchSize = this.defaultBatchSize,
+      enterpriseId
     } = options
 
     try {
@@ -97,6 +105,11 @@ export class NotificationPollingService {
         .eq('notification_status', 'FAILED')
         .order('updated_at', { ascending: true })
         .limit(batchSize)
+      
+      // Filter by enterprise ID if provided
+      if (enterpriseId) {
+        query = query.eq('enterprise_id', enterpriseId)
+      }
 
 
       const { data, error } = await query
@@ -126,7 +139,8 @@ export class NotificationPollingService {
    */
   async pollScheduledNotifications(options: PollingOptions = {}): Promise<NotificationRow[]> {
     const {
-      batchSize = this.defaultBatchSize
+      batchSize = this.defaultBatchSize,
+      enterpriseId
     } = options
 
     try {
@@ -141,6 +155,11 @@ export class NotificationPollingService {
         .lte('scheduled_for', now)
         .order('scheduled_for', { ascending: true })
         .limit(batchSize)
+      
+      // Filter by enterprise ID if provided
+      if (enterpriseId) {
+        query = query.eq('enterprise_id', enterpriseId)
+      }
 
 
       const { data, error } = await query

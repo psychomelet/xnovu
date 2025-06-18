@@ -1,6 +1,7 @@
 import { NotificationService } from '@/app/services/database/NotificationService';
 import type { Database } from '@/lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
+import { getTestEnterpriseId } from '../setup/test-data';
 
 // Types
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
@@ -13,7 +14,7 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
 
 describe('NotificationService Unit Tests', () => {
   let service: NotificationService;
-  const testEnterpriseId = uuidv4(); // Use proper UUID
+  const testEnterpriseId = getTestEnterpriseId(); // Use shared enterprise ID
   const testUserId = uuidv4(); // Use proper UUID
   let testNotificationIds: number[] = [];
   let testWorkflowId: number | null = null;
@@ -142,18 +143,20 @@ describe('NotificationService Unit Tests', () => {
   });
 
   describe('updateNotificationStatus', () => {
-    it('should update status successfully', async () => {
-      // Create a fresh notification for this specific test
-      // Start with SENT status to avoid being picked up by polling loops
+    let notificationToUpdate: NotificationRow;
+
+    beforeAll(async () => {
+      // Create a notification for testing updates
       const insertData = createTestNotificationInsert({
-        name: `Notification for Status Update Test ${Date.now()}`,
-        notification_status: 'SENT' as const
+        name: 'Notification for Status Updates'
       });
-      const notification = await service.createNotification(insertData);
-      testNotificationIds.push(notification.id);
-      
+      notificationToUpdate = await service.createNotification(insertData);
+      testNotificationIds.push(notificationToUpdate.id);
+    });
+
+    it('should update status successfully', async () => {
       await service.updateNotificationStatus(
-        notification.id,
+        notificationToUpdate.id,
         'PROCESSING',
         testEnterpriseId,
         undefined,
@@ -161,30 +164,21 @@ describe('NotificationService Unit Tests', () => {
       );
 
       // Verify the status was updated by retrieving the notification
-      const updated = await service.getNotification(notification.id, testEnterpriseId);
+      const updated = await service.getNotification(notificationToUpdate.id, testEnterpriseId);
       expect(updated!.notification_status).toBe('PROCESSING');
       expect(updated!.transaction_id).toBe('txn-123');
     });
 
     it('should update status with error message', async () => {
-      // Create a fresh notification for this specific test
-      // Start with SENT status to avoid being picked up by polling loops
-      const insertData = createTestNotificationInsert({
-        name: `Notification for Error Status Test ${Date.now()}`,
-        notification_status: 'SENT' as const
-      });
-      const notification = await service.createNotification(insertData);
-      testNotificationIds.push(notification.id);
-      
       await service.updateNotificationStatus(
-        notification.id,
+        notificationToUpdate.id,
         'FAILED',
         testEnterpriseId,
         'Template rendering failed'
       );
 
       // Verify the status and error were updated
-      const updated = await service.getNotification(notification.id, testEnterpriseId);
+      const updated = await service.getNotification(notificationToUpdate.id, testEnterpriseId);
       expect(updated!.notification_status).toBe('FAILED');
       expect(updated!.error_details).toBe('Template rendering failed');
     });
