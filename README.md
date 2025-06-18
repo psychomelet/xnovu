@@ -71,6 +71,28 @@ pnpm temporal:ui
 
 All three services must be running for full functionality.
 
+## 🚀 Simplified Workflow Sync
+
+Deploy your workflows with a single command:
+
+```bash
+# Development: Automatically creates tunnel and syncs
+pnpm xnovu sync
+
+# Production: Uses NOVU_BRIDGE_URL from environment
+pnpm xnovu sync --production
+```
+
+This single command handles:
+- Finding an available port automatically (avoids conflicts)
+- Starting the Next.js server (dev mode)
+- Creating a public tunnel via LocalTunnel (dev mode)
+- Syncing workflows to Novu Cloud
+- Updating workflow metadata in database
+- Cleaning up resources when done (unless --keep-alive is used)
+
+See [docs/workflow-sync.md](docs/workflow-sync.md) for detailed documentation.
+
 ## Available Scripts
 
 ```bash
@@ -81,6 +103,11 @@ pnpm lint             # Run ESLint
 pnpm test             # Run unit tests
 pnpm test:integration # Run integration tests
 pnpm xnovu            # CLI commands for utilities
+
+# Workflow sync (NEW: simplified single-command deployment)
+pnpm xnovu sync              # Auto-starts server on random port, creates tunnel, syncs
+pnpm xnovu sync --keep-alive # Keep tunnel running after sync (for testing)
+pnpm xnovu sync --production # Production sync with existing bridge URL
 
 # Temporal commands
 pnpm temporal:start   # Start Temporal services

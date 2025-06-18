@@ -44,7 +44,11 @@ npx novu@latest dev
 pnpm xnovu generate-types
 
 # Sync workflows to Novu Cloud and database
+# This single command handles everything: server startup, tunnel creation, sync, and cleanup
 pnpm xnovu sync
+
+# For production deployments with existing bridge URL
+pnpm xnovu sync --production
 
 # Build for production
 pnpm build
@@ -178,14 +182,23 @@ Each workflow has a `metadata.ts` file that defines:
 ### Syncing Workflows
 
 ```bash
-# Sync all workflows to Novu Cloud and database
+# Development: Sync with automatic server startup and tunnel creation
 pnpm xnovu sync
 
-# This command:
-# 1. Syncs workflows to Novu Cloud using the bridge URL
-# 2. Reads metadata from each workflow's metadata.ts
-# 3. Creates/updates records in ent_notification_workflow table
+# Production: Sync using NOVU_BRIDGE_URL from environment
+pnpm xnovu sync --production
+
+# This single command now handles:
+# 1. Starting Next.js server (dev mode only)
+# 2. Creating public tunnel via LocalTunnel (dev mode only)
+# 3. Syncing workflows to Novu Cloud
+# 4. Reading metadata from each workflow's metadata.ts
+# 5. Creating/updating records in ent_notification_workflow table
+# 6. Verifying the sync
+# 7. Cleaning up resources (stopping server, closing tunnel)
 ```
+
+For detailed sync documentation, see [docs/workflow-sync.md](docs/workflow-sync.md).
 
 ### Creating New Workflows
 
@@ -255,6 +268,10 @@ For comprehensive async notification processing with Temporal, including workflo
 ### Novu Workflow Development
 
 For comprehensive Novu workflow development documentation, including workflow patterns, channel steps, triggering, and smart building specific use cases, see [docs/novu-workflow.md](docs/novu-workflow.md).
+
+### Workflow Synchronization
+
+For the simplified workflow sync process, including automatic tunnel creation and CI/CD integration, see [docs/workflow-sync.md](docs/workflow-sync.md).
 
 ### Deployment
 
