@@ -1,6 +1,5 @@
 import localtunnel from 'localtunnel';
 import type { Tunnel } from 'localtunnel';
-import { execSync } from 'child_process';
 
 export interface TunnelOptions {
   port: number;

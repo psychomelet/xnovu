@@ -1,5 +1,4 @@
 import { Command } from 'commander';
-import { execSync } from 'child_process';
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
