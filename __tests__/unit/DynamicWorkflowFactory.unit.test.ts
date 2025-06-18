@@ -28,10 +28,23 @@ describe('DynamicWorkflowFactory Unit Tests', () => {
     jest.clearAllMocks();
   });
 
+  // Available workflow keys from app/novu/workflow-loader.ts
+  const WORKFLOW_KEYS = {
+    chat: 'default-chat',
+    email: 'default-email',
+    inApp: 'default-in-app',
+    multiChannel: 'default-multi-channel',
+    push: 'default-push',
+    sms: 'default-sms',
+    templateDemo: 'template-demo-workflow',
+    welcome: 'welcome-onboarding-email',
+    yogo: 'yogo-email'
+  };
+
   describe('createDynamicWorkflow', () => {
     it('should create workflow with EMAIL channel', () => {
       const config: WorkflowConfig = {
-        workflow_key: 'test-email-workflow',
+        workflow_key: WORKFLOW_KEYS.email,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL'],
         emailTemplateId: 123,
@@ -42,7 +55,7 @@ describe('DynamicWorkflowFactory Unit Tests', () => {
       const result = DynamicWorkflowFactory.createDynamicWorkflow(config, testEnterpriseId);
 
       expect(mockWorkflow).toHaveBeenCalledWith(
-        'test-email-workflow',
+        WORKFLOW_KEYS.email,
         expect.any(Function),
         expect.objectContaining({
           name: 'Test Email Workflow',
@@ -55,7 +68,7 @@ describe('DynamicWorkflowFactory Unit Tests', () => {
 
     it('should create workflow with multiple channels', () => {
       const config: WorkflowConfig = {
-        workflow_key: 'multi-channel-workflow',
+        workflow_key: WORKFLOW_KEYS.multiChannel,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL', 'IN_APP', 'SMS', 'PUSH'],
         emailTemplateId: 123,
@@ -68,7 +81,7 @@ describe('DynamicWorkflowFactory Unit Tests', () => {
       const result = DynamicWorkflowFactory.createDynamicWorkflow(config, testEnterpriseId);
 
       expect(mockWorkflow).toHaveBeenCalledWith(
-        'multi-channel-workflow',
+        WORKFLOW_KEYS.multiChannel,
         expect.any(Function),
         expect.objectContaining({
           tags: ['multi-channel', 'important']
@@ -79,7 +92,7 @@ describe('DynamicWorkflowFactory Unit Tests', () => {
 
     it('should handle EMAIL step execution logic', async () => {
       const config: WorkflowConfig = {
-        workflow_key: 'email-workflow',
+        workflow_key: WORKFLOW_KEYS.email,
         workflow_type: 'DYNAMIC',
         channels: ['EMAIL'],
         emailTemplateId: 123

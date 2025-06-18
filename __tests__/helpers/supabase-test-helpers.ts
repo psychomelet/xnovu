@@ -25,20 +25,35 @@ export function createTestSupabaseClient() {
   return createClient<Database>(supabaseUrl, supabaseKey)
 }
 
-// Test data factories
-export function createTestWorkflow(
-  overrides?: Partial<Database['notify']['Tables']['ent_notification_workflow']['Insert']>
-) {
-  return {
-    name: `Test Workflow ${uuidv4()}`,
-    workflow_key: `test-workflow-${uuidv4()}`,
-    workflow_type: 'STATIC' as const,
-    default_channels: ['IN_APP'] as Database['shared_types']['Enums']['notification_channel_type'][],
-    enterprise_id: getTestEnterpriseId(),
-    publish_status: 'PUBLISH' as const,
-    deactivated: false,
-    ...overrides,
+// Available workflow keys from app/novu/workflow-loader.ts
+export const WORKFLOW_KEYS = {
+  chat: 'default-chat',
+  email: 'default-email',
+  inApp: 'default-in-app',
+  multiChannel: 'default-multi-channel',
+  push: 'default-push',
+  sms: 'default-sms',
+  templateDemo: 'template-demo-workflow',
+  welcome: 'welcome-onboarding-email',
+  yogo: 'yogo-email'
+} as const;
+
+// Helper to get existing workflow from database
+export async function getExistingWorkflow(
+  supabase: ReturnType<typeof createClient<Database>>,
+  workflowKey: string
+): Promise<Database['notify']['Tables']['ent_notification_workflow']['Row']> {
+  const { data, error } = await supabase
+    .schema('notify')
+    .from('ent_notification_workflow')
+    .select()
+    .eq('workflow_key', workflowKey)
+    .single();
+    
+  if (error || !data) {
+    throw new Error(`Workflow ${workflowKey} must exist in database. Run pnpm xnovu sync`);
   }
+  return data;
 }
 
 export function createTestRule(

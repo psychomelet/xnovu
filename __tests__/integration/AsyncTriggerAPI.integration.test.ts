@@ -217,21 +217,21 @@ describe('/api/trigger-async Integration Tests', () => {
         isRunning: true
       })
 
-      const req = createMockRequest({}, { workflowId: 'test-workflow-123' })
+      const req = createMockRequest({}, { workflowId: 'trigger-notification-default-email-123' })
 
       const response = await GET(req)
       const data = await response.json()
 
       expect(response.status).toBe(200)
       expect(data).toEqual({
-        workflowId: 'test-workflow-123',
+        workflowId: 'trigger-notification-default-email-123',
         status: 'RUNNING',
         historyLength: 5,
         isRunning: true,
         result: null
       })
 
-      expect(notificationClient.getWorkflowStatus).toHaveBeenCalledWith('test-workflow-123')
+      expect(notificationClient.getWorkflowStatus).toHaveBeenCalledWith('trigger-notification-default-email-123')
     })
 
     it('should return workflow status and result for completed workflow', async () => {
@@ -249,14 +249,14 @@ describe('/api/trigger-async Integration Tests', () => {
         novuTransactionId: 'novu-tx-456'
       })
 
-      const req = createMockRequest({}, { workflowId: 'completed-workflow-456' })
+      const req = createMockRequest({}, { workflowId: 'trigger-notification-default-sms-456' })
 
       const response = await GET(req)
       const data = await response.json()
 
       expect(response.status).toBe(200)
       expect(data).toEqual({
-        workflowId: 'completed-workflow-456',
+        workflowId: 'trigger-notification-default-sms-456',
         status: 'COMPLETED',
         historyLength: 10,
         isRunning: false,
@@ -287,7 +287,7 @@ describe('/api/trigger-async Integration Tests', () => {
         new Error('Workflow not found')
       )
 
-      const req = createMockRequest({}, { workflowId: 'nonexistent-workflow' })
+      const req = createMockRequest({}, { workflowId: 'trigger-notification-nonexistent-workflow-999' })
 
       const response = await GET(req)
       const data = await response.json()

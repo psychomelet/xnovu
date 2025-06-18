@@ -2,6 +2,7 @@ import { NotificationService } from '@/app/services/database/NotificationService
 import type { Database } from '@/lib/supabase/database.types';
 import { v4 as uuidv4 } from 'uuid';
 import { getTestEnterpriseId } from '../setup/test-data';
+import { createClient } from '@supabase/supabase-js';
 
 // Types
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row'];
@@ -19,20 +20,37 @@ describe('NotificationService Unit Tests', () => {
   let testNotificationIds: number[] = [];
   let testWorkflowId: number | null = null;
 
+  // Available workflow keys from app/novu/workflow-loader.ts
+  const WORKFLOW_KEYS = {
+    chat: 'default-chat',
+    email: 'default-email',
+    inApp: 'default-in-app',
+    multiChannel: 'default-multi-channel',
+    push: 'default-push',
+    sms: 'default-sms',
+    templateDemo: 'template-demo-workflow',
+    welcome: 'welcome-onboarding-email',
+    yogo: 'yogo-email'
+  };
+
   beforeAll(async () => {
     service = new NotificationService();
-    // Create a test workflow for notifications
-    const { WorkflowService } = await import('@/app/services/database/WorkflowService');
-    const workflowService = new WorkflowService();
-    const testWorkflow = await workflowService.createWorkflow({
-      name: 'Test Notification Workflow',
-      workflow_key: 'test-notification-workflow-' + Date.now(),
-      workflow_type: 'DYNAMIC',
-      default_channels: ['EMAIL'],
-      enterprise_id: testEnterpriseId,
-      publish_status: 'DRAFT',
-      deactivated: false
-    });
+    // Get existing workflow for notifications (workflow_key is globally unique)
+    const supabase = createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
+    const { data: testWorkflow, error } = await supabase
+      .schema('notify')
+      .from('ent_notification_workflow')
+      .select()
+      .eq('workflow_key', WORKFLOW_KEYS.email)
+      .single();
+    
+    if (error || !testWorkflow) {
+      throw new Error('default-email workflow must exist in database. Run pnpm xnovu sync');
+    }
     testWorkflowId = testWorkflow.id;
   });
 
@@ -46,16 +64,7 @@ describe('NotificationService Unit Tests', () => {
       }
     }
     
-    // Clean up test workflow
-    if (testWorkflowId) {
-      try {
-        const { WorkflowService } = await import('@/app/services/database/WorkflowService');
-        const workflowService = new WorkflowService();
-        await workflowService.deactivateWorkflow(testWorkflowId, testEnterpriseId);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-    }
+    // No need to clean up workflow - using existing workflow
   });
 
   beforeEach(() => {
