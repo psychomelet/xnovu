@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import { Client as TemporalClient, Connection } from '@temporalio/client';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export default async function globalTeardown() {
   console.log('\n🧹 Global test teardown starting...');
@@ -18,6 +22,9 @@ export default async function globalTeardown() {
   
   // Clean up Temporal workflows
   await cleanupTemporal(enterpriseId);
+  
+  // Clean up test namespace
+  await cleanupTestNamespace(enterpriseId);
   
   // Verify cleanup is complete
   await verifyCleanup(enterpriseId);
@@ -261,5 +268,53 @@ async function verifyCleanup(enterpriseId: string) {
     
   } catch (error) {
     console.error('❌ Verification error:', error);
+  }
+}
+
+async function cleanupTestNamespace(enterpriseId: string) {
+  const testNamespace = `test-ns-${enterpriseId}`;
+  console.log(`🗑️  Deleting test namespace: ${testNamespace}`);
+  
+  const temporalAddress = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
+  const isSecure = temporalAddress.includes(':443');
+  
+  try {
+    // Build temporal command with explicit namespace flag
+    let cmd = `temporal operator namespace delete -n "${testNamespace}"`;
+    
+    // Add TLS flag if secure
+    if (isSecure) {
+      cmd += ' --tls';
+    }
+    
+    // Add address
+    cmd += ` --address "${temporalAddress}"`;
+    
+    // Execute command with cleared TEMPORAL_NAMESPACE env to avoid conflicts
+    const env = { ...process.env };
+    delete env.TEMPORAL_NAMESPACE;
+    
+    // Set a timeout for namespace deletion
+    const { stdout, stderr } = await execAsync(cmd, { env, timeout: 10000 });
+    
+    if (stderr && !stderr.includes('Namespace deletion') && !stderr.includes('already deleted')) {
+      console.error(`  ❌ Error deleting namespace: ${stderr}`);
+    } else {
+      console.log(`  ✅ Deleted test namespace: ${testNamespace}`);
+    }
+  } catch (error: any) {
+    // Check if it's a timeout
+    if (error.killed || error.code === 'ETIMEDOUT') {
+      console.warn(`  ⚠️  Timeout deleting namespace - cleanup may continue in background`);
+    } else if (error.message?.includes('Namespace not found') || 
+        error.message?.includes('namespace not found') ||
+        error.stderr?.includes('Namespace not found') ||
+        error.stderr?.includes('namespace not found')) {
+      console.log(`  ⚠️  Namespace already deleted or not found`);
+    } else if (error.message?.includes('deadline exceeded')) {
+      console.warn(`  ⚠️  Deadline exceeded - may require manual cleanup`);
+    } else {
+      console.error(`  ❌ Failed to delete namespace:`, error.message || error);
+    }
   }
 }

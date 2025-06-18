@@ -57,6 +57,36 @@ pnpm lint
 
 # Docker deployment
 # See docs/deployment.md for Docker commands and deployment strategies
+```
+
+## Testing
+
+### Test Commands
+
+```bash
+# Run all tests
+pnpm test
+
+# Run integration tests
+pnpm test:integration
+
+# Run with coverage
+pnpm test:coverage
+```
+
+### Temporal Namespace Management in Tests
+
+All tests run in an isolated Temporal namespace created specifically for the test run:
+- Namespace pattern: `test-ns-{enterprise-id}`
+- Created automatically in global setup using the test enterprise ID
+- Deleted automatically in global teardown
+- All Temporal operations (workflows, schedules) are isolated to this namespace
+
+This ensures:
+- Complete isolation between test runs
+- No interference with production or development namespaces  
+- Clean test environment for each test run
+- Automatic cleanup of all test resources
 
 ## Project Structure
 
