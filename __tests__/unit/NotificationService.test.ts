@@ -144,8 +144,10 @@ describe('NotificationService Unit Tests', () => {
   describe('updateNotificationStatus', () => {
     it('should update status successfully', async () => {
       // Create a fresh notification for this specific test
+      // Start with SENT status to avoid being picked up by polling loops
       const insertData = createTestNotificationInsert({
-        name: `Notification for Status Update Test ${Date.now()}`
+        name: `Notification for Status Update Test ${Date.now()}`,
+        notification_status: 'SENT' as const
       });
       const notification = await service.createNotification(insertData);
       testNotificationIds.push(notification.id);
@@ -166,8 +168,10 @@ describe('NotificationService Unit Tests', () => {
 
     it('should update status with error message', async () => {
       // Create a fresh notification for this specific test
+      // Start with SENT status to avoid being picked up by polling loops
       const insertData = createTestNotificationInsert({
-        name: `Notification for Error Status Test ${Date.now()}`
+        name: `Notification for Error Status Test ${Date.now()}`,
+        notification_status: 'SENT' as const
       });
       const notification = await service.createNotification(insertData);
       testNotificationIds.push(notification.id);
