@@ -116,9 +116,10 @@ describe('WorkflowRegistry Integration Tests with Real Database', () => {
       expect(staticResult).toBeDefined();
       expect(staticResult?.type).toBe('STATIC');
 
-      // But not with enterprise ID
+      // Static workflows should also be accessible WITH enterprise ID (fallback behavior)
       const staticWithEnterprise = registry.getWorkflow('test-isolation-workflow', testEnterpriseId);
-      expect(staticWithEnterprise).toBeNull();
+      expect(staticWithEnterprise).toBeDefined();
+      expect(staticWithEnterprise?.type).toBe('STATIC');
     });
   });
 

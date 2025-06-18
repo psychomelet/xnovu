@@ -267,7 +267,7 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
   describe('GET /api/trigger-async workflow status', () => {
     it('should return workflow status', async () => {
       // First create and trigger a notification
-      const testWorkflow = await createTestWorkflow();
+      const testWorkflow = await getTestWorkflow();
       const notification = await createTestNotification(testWorkflow.id);
 
       const triggerRequest = new NextRequest('http://localhost:3000/api/trigger-async', {

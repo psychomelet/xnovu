@@ -119,22 +119,32 @@ describe('WorkflowService Unit Tests', () => {
   });
 
   describe('getWorkflow', () => {
-    let testWorkflow: WorkflowRow | null;
+    let testWorkflow: WorkflowRow;
 
     beforeAll(async () => {
-      // Get an existing workflow for testing retrieval
-      testWorkflow = await getExistingWorkflow(WORKFLOW_KEYS.email);
-      if (!testWorkflow) {
-        throw new Error('default-email workflow must exist in database. Run pnpm xnovu sync');
+      // Create a workflow specifically for testing retrieval since we need enterprise_id filtering
+      const insertData = createTestWorkflowInsert({
+        name: 'Test Workflow for Retrieval',
+        workflow_key: 'test-retrieval-' + Date.now() + '-' + Math.random().toString(36).substring(7)
+      });
+      testWorkflow = await service.createWorkflow(insertData);
+    });
+
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(testWorkflow.id, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
       }
     });
 
     it('should retrieve workflow by ID', async () => {
-      const result = await service.getWorkflow(testWorkflow!.id, testWorkflow!.enterprise_id!);
+      const result = await service.getWorkflow(testWorkflow.id, testEnterpriseId);
 
       expect(result).toBeDefined();
-      expect(result!.id).toBe(testWorkflow!.id);
-      expect(result!.workflow_key).toBe(WORKFLOW_KEYS.email);
+      expect(result!.id).toBe(testWorkflow.id);
+      expect(result!.workflow_key).toBe(testWorkflow.workflow_key);
       expect(result!.workflow_type).toBeDefined();
       expect(result!.default_channels).toBeDefined();
     });
@@ -146,34 +156,45 @@ describe('WorkflowService Unit Tests', () => {
 
     it('should return null when workflow belongs to different enterprise', async () => {
       const differentEnterpriseId = uuidv4(); // Use a valid UUID for different enterprise
-      const result = await service.getWorkflow(testWorkflow!.id, differentEnterpriseId);
+      const result = await service.getWorkflow(testWorkflow.id, differentEnterpriseId);
       expect(result).toBeNull();
     });
   });
 
   describe('getWorkflowByKey', () => {
-    let testWorkflow: WorkflowRow | null;
+    let testWorkflow: WorkflowRow;
 
     beforeAll(async () => {
-      // Get an existing multi-channel workflow for testing
-      testWorkflow = await getExistingWorkflow(WORKFLOW_KEYS.multiChannel);
-      if (!testWorkflow) {
-        throw new Error('default-multi-channel workflow must exist in database. Run pnpm xnovu sync');
+      // Create a workflow specifically for testing key retrieval since we need enterprise_id filtering
+      const insertData = createTestWorkflowInsert({
+        name: 'Test Workflow for Key Retrieval',
+        workflow_key: 'test-key-retrieval-' + Date.now() + '-' + Math.random().toString(36).substring(7),
+        default_channels: ['EMAIL', 'IN_APP']
+      });
+      testWorkflow = await service.createWorkflow(insertData);
+    });
+
+    afterAll(async () => {
+      // Clean up
+      try {
+        await service.deactivateWorkflow(testWorkflow.id, testEnterpriseId);
+      } catch (error) {
+        // Ignore cleanup errors
       }
     });
 
     it('should retrieve workflow by key', async () => {
-      const result = await service.getWorkflowByKey(WORKFLOW_KEYS.multiChannel, testWorkflow!.enterprise_id!);
+      const result = await service.getWorkflowByKey(testWorkflow.workflow_key, testEnterpriseId);
 
       expect(result).toBeDefined();
-      expect(result!.workflow_key).toBe(WORKFLOW_KEYS.multiChannel);
+      expect(result!.workflow_key).toBe(testWorkflow.workflow_key);
       expect(result!.workflow_type).toBeDefined();
       expect(result!.default_channels).toBeDefined();
       expect(Array.isArray(result!.default_channels)).toBe(true);
     });
 
     it('should return null when workflow key not found', async () => {
-      const result = await service.getWorkflowByKey('non-existent-workflow-key-12345', testWorkflow!.enterprise_id!);
+      const result = await service.getWorkflowByKey('non-existent-workflow-key-12345', testEnterpriseId);
       expect(result).toBeNull();
     });
   });

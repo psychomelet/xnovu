@@ -100,25 +100,15 @@ export function createTestNotification(
 // Test setup helpers
 export async function setupTestWorkflowWithRule(
   supabase: ReturnType<typeof createTestSupabaseClient>,
-  workflowOverrides?: Partial<Database['notify']['Tables']['ent_notification_workflow']['Insert']>,
+  workflowKey: string = WORKFLOW_KEYS.email,
   ruleOverrides?: Partial<Database['notify']['Tables']['ent_notification_rule']['Insert']>
 ) {
-  // Create workflow
-  const workflowData = createTestWorkflow(workflowOverrides)
-  const { data: workflow, error: workflowError } = await supabase
-    .schema('notify')
-    .from('ent_notification_workflow')
-    .insert(workflowData)
-    .select()
-    .single()
-
-  if (workflowError || !workflow) {
-    throw new Error(`Failed to create test workflow: ${workflowError?.message}`)
-  }
+  // Get existing workflow instead of creating one
+  const workflow = await getExistingWorkflow(supabase, workflowKey);
 
   // Create rule
   const ruleData = createTestRule(workflow.id, {
-    enterprise_id: workflow.enterprise_id,
+    enterprise_id: workflow.enterprise_id || getTestEnterpriseId(),
     ...ruleOverrides,
   })
   const { data: rule, error: ruleError } = await supabase
@@ -157,7 +147,7 @@ export async function waitForCondition(
 describe('supabase-test-helpers', () => {
   it('should export helper functions', () => {
     expect(createTestSupabaseClient).toBeDefined()
-    expect(createTestWorkflow).toBeDefined()
+    expect(getExistingWorkflow).toBeDefined()
     expect(createTestRule).toBeDefined()
     expect(createTestNotification).toBeDefined()
     expect(setupTestWorkflowWithRule).toBeDefined()
