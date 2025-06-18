@@ -195,7 +195,8 @@ export class NotificationPollingService {
   ): Promise<void> {
     try {
       const updateData: any = {
-        notification_status: status
+        notification_status: status,
+        updated_at: new Date().toISOString()
       }
 
       if (status === 'SENT') {

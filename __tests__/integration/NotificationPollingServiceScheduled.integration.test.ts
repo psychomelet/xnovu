@@ -263,7 +263,8 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
         .schema('notify')
         .from('ent_notification')
         .update({
-          notification_status: 'SENT'
+          notification_status: 'SENT',
+          updated_at: newTimestamp
         })
         .eq('id', notification.id);
 
