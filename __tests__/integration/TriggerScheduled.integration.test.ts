@@ -47,27 +47,19 @@ describe('Trigger Scheduled Notification Integration Tests', () => {
     createdWorkflowIds.length = 0;
   });
 
-  async function createTestWorkflow(): Promise<WorkflowRow> {
+  async function getTestWorkflow(): Promise<WorkflowRow> {
+    // Get the default-email workflow (workflow_key is globally unique)
     const { data, error } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
-      .insert({
-        name: 'Test Scheduled Workflow Integration',
-        workflow_key: 'default-email',
-        workflow_type: 'STATIC',
-        default_channels: ['EMAIL'],
-        publish_status: 'PUBLISH',
-        deactivated: false,
-        enterprise_id: testEnterpriseId,
-      } satisfies WorkflowInsert)
       .select()
+      .eq('workflow_key', 'default-email')
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to create test workflow: ${error?.message}`);
+      throw new Error(`Failed to get test workflow: ${error?.message}. Make sure default-email workflow exists in the database.`);
     }
 
-    createdWorkflowIds.push(data.id);
     return data;
   }
 
@@ -104,7 +96,7 @@ describe('Trigger Scheduled Notification Integration Tests', () => {
     let testWorkflow: WorkflowRow;
 
     beforeAll(async () => {
-      testWorkflow = await createTestWorkflow();
+      testWorkflow = await getTestWorkflow();
     });
 
     it('should process notification immediately when scheduled_for is null', async () => {

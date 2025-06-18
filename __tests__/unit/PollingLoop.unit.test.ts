@@ -43,35 +43,19 @@ describe('NotificationPollingLoop', () => {
     // Setup real database connection
     supabase = createSupabaseAdmin()
     
-    // Ensure test workflow exists for this enterprise
-    const { data: workflow } = await supabase
+    // Use existing default-in-app workflow for polling tests
+    const { data: workflow, error } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
       .select('*')
-      .eq('workflow_key', 'test-polling-workflow')
-      .eq('enterprise_id', testEnterpriseId)
-      .maybeSingle()
+      .eq('workflow_key', 'default-in-app')
+      .single()
     
-    if (workflow) {
-      testWorkflowId = workflow.id
-    } else {
-      const { data: newWorkflow, error } = await supabase
-        .schema('notify')
-        .from('ent_notification_workflow')
-        .insert({
-          name: 'Test Polling Workflow',
-          workflow_key: 'test-polling-workflow',
-          description: 'Workflow for polling tests',
-          workflow_type: 'STATIC',
-          enterprise_id: testEnterpriseId,
-          default_channels: ['IN_APP']
-        })
-        .select()
-        .single()
-      
-      if (error) throw error
-      testWorkflowId = newWorkflow!.id
+    if (error || !workflow) {
+      throw new Error('default-in-app workflow must exist in database. Run pnpm xnovu sync')
     }
+    
+    testWorkflowId = workflow.id
   })
 
   beforeEach(async () => {
@@ -123,13 +107,7 @@ describe('NotificationPollingLoop', () => {
   })
 
   afterAll(async () => {
-    // Clean up test workflow for this enterprise
-    await supabase
-      .schema('notify')
-      .from('ent_notification_workflow')
-      .delete()
-      .eq('workflow_key', 'test-polling-workflow')
-      .eq('enterprise_id', testEnterpriseId)
+    // No need to clean up workflows - using existing workflows
   })
 
   describe('polling functionality', () => {

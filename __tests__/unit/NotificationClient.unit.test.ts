@@ -146,7 +146,7 @@ describe('NotificationClient', () => {
 
   describe('getWorkflowResult', () => {
     it('should return workflow result', async () => {
-      const workflowId = 'test-workflow-id'
+      const workflowId = 'trigger-notification-default-email-123'
       const mockResult = {
         success: true,
         notificationId: 123,

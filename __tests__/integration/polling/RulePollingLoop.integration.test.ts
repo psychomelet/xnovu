@@ -83,7 +83,7 @@ describe('RulePollingLoop Integration', () => {
       // Create a rule with invalid configuration
       const { workflow, rule } = await setupTestWorkflowWithRule(
         supabase, 
-        {}, 
+        'default-email', 
         {
           trigger_config: null // Invalid config
         }
