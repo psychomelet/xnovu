@@ -155,40 +155,8 @@ async function cleanupTemporal(enterpriseId: string) {
         }
       }
     } catch (listError: any) {
-      // Try with a query if supported
-      if (listError.message?.includes('invalid query') || listError.message?.includes('invalid operator')) {
-        console.log('⚠️  Query-based workflow listing not supported, attempting alternative approach');
-        
-        try {
-          // Try listing with a simple equality check on WorkflowType
-          const handle = client.workflow.list({
-            query: 'ExecutionStatus = "Running"',
-            pageSize: 100,
-          });
-          
-          for await (const workflow of handle) {
-            if (workflow.workflowId.includes(enterpriseId)) {
-              try {
-                const wfHandle = client.workflow.getHandle(workflow.workflowId);
-                await wfHandle.cancel();
-                cancelledCount++;
-              } catch (error) {
-                // Workflow might already be completed
-              }
-            }
-          }
-        } catch (secondError: any) {
-          // If we still can't list workflows, that's okay
-          if (secondError.code === 12 || 
-              secondError.message?.includes('404') || 
-              secondError.message?.includes('PermissionDenied') ||
-              secondError.message?.includes('Unauthorized')) {
-            console.log('⚠️  Temporal workflow listing not available (insufficient permissions or mock service)');
-          } else {
-            console.log('⚠️  Could not list Temporal workflows:', secondError.message);
-          }
-        }
-      } else if (listError.code === 12 || 
+      // If we can't list workflows, that's okay in test environment
+      if (listError.code === 12 || 
           listError.message?.includes('404') || 
           listError.message?.includes('PermissionDenied') ||
           listError.message?.includes('Unauthorized')) {
