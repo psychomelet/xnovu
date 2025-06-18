@@ -19,6 +19,9 @@ export default async function globalTeardown() {
   // Clean up Temporal workflows
   await cleanupTemporal(enterpriseId);
   
+  // Verify cleanup is complete
+  await verifyCleanup(enterpriseId);
+  
   console.log('✅ Global test teardown complete\n');
 }
 
@@ -36,7 +39,9 @@ async function cleanupSupabase(enterpriseId: string) {
       auth: { persistSession: false }
     });
     
-    // Delete notifications
+    // Delete in correct order to respect foreign key constraints
+    
+    // 1. Delete notifications (references workflows, rules, categories, priorities)
     const { error: notificationError, count: notificationCount } = await supabase
       .schema('notify')
       .from('ent_notification')
@@ -49,7 +54,33 @@ async function cleanupSupabase(enterpriseId: string) {
       console.log(`🗑️  Deleted ${notificationCount || 0} test notifications`);
     }
     
-    // Delete workflows created by tests
+    // 2. Delete notification rules (references workflows)
+    const { error: ruleError, count: ruleCount } = await supabase
+      .schema('notify')
+      .from('ent_notification_rule')
+      .delete()
+      .eq('enterprise_id', enterpriseId);
+    
+    if (ruleError) {
+      console.error('❌ Error deleting notification rules:', ruleError);
+    } else {
+      console.log(`🗑️  Deleted ${ruleCount || 0} test notification rules`);
+    }
+    
+    // 3. Delete templates (references workflows)
+    const { error: templateError, count: templateCount } = await supabase
+      .schema('notify')
+      .from('ent_notification_template')
+      .delete()
+      .eq('enterprise_id', enterpriseId);
+    
+    if (templateError) {
+      console.error('❌ Error deleting templates:', templateError);
+    } else {
+      console.log(`🗑️  Deleted ${templateCount || 0} test templates`);
+    }
+    
+    // 4. Delete workflows (no dependencies after above deletions)
     const { error: workflowError, count: workflowCount } = await supabase
       .schema('notify')
       .from('ent_notification_workflow')
@@ -62,18 +93,8 @@ async function cleanupSupabase(enterpriseId: string) {
       console.log(`🗑️  Deleted ${workflowCount || 0} test workflows`);
     }
     
-    // Delete templates
-    const { error: templateError, count: templateCount } = await supabase
-      .schema('notify')
-      .from('ent_notification_template')
-      .delete()
-      .eq('enterprise_id', enterpriseId);
-    
-    if (templateError) {
-      console.error('❌ Error deleting templates:', templateError);
-    } else {
-      console.log(`🗑️  Deleted ${templateCount || 0} test templates`);
-    }
+    // Note: typ_notification_category and typ_notification_priority are typically
+    // shared reference tables and should not have test-specific data
     
   } catch (error) {
     console.error('❌ Supabase cleanup error:', error);
@@ -189,5 +210,56 @@ async function cleanupTemporal(enterpriseId: string) {
         // Ignore close errors
       }
     }
+  }
+}
+
+async function verifyCleanup(enterpriseId: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return;
+  }
+  
+  try {
+    const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false }
+    });
+    
+    console.log('\n🔍 Verifying cleanup completeness...');
+    
+    // Check each table for remaining data
+    const tables = [
+      { name: 'ent_notification', displayName: 'notifications' },
+      { name: 'ent_notification_rule', displayName: 'notification rules' },
+      { name: 'ent_notification_template', displayName: 'templates' },
+      { name: 'ent_notification_workflow', displayName: 'workflows' }
+    ];
+    
+    let hasRemainingData = false;
+    
+    for (const table of tables) {
+      const { count, error } = await supabase
+        .schema('notify')
+        .from(table.name as any)
+        .select('*', { count: 'exact', head: true })
+        .eq('enterprise_id', enterpriseId);
+      
+      if (error) {
+        console.error(`❌ Error checking ${table.displayName}:`, error.message);
+      } else if (count && count > 0) {
+        console.warn(`⚠️  Found ${count} remaining ${table.displayName} for enterprise ${enterpriseId}`);
+        hasRemainingData = true;
+      }
+    }
+    
+    if (!hasRemainingData) {
+      console.log('✅ All test data successfully cleaned up');
+    } else {
+      console.warn('⚠️  Some test data remains - manual cleanup may be required');
+    }
+    
+  } catch (error) {
+    console.error('❌ Verification error:', error);
   }
 }
