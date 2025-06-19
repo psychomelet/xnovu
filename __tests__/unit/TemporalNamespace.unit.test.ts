@@ -208,7 +208,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       // Assert that test namespace has minimal retention period and correct description
       expect(registerSpy).toHaveBeenCalled()
       const registerCall = registerSpy.mock.calls[0][0] as any
-      expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(60 * 60) // 1 hour
+      expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(24 * 60 * 60) // 1 day (minimum)
       expect(registerCall.description).toBe('XNovu test namespace (temporary)')
       expect(registerCall.isGlobalNamespace).toBe(false)
 
