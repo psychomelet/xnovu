@@ -26,8 +26,14 @@ export async function ensureNamespaceExists(connection: Connection, namespace: s
           isGlobalNamespace: false
         }
         
-        // Only set retention period for non-test namespaces
-        if (!isTestNamespace) {
+        // Set shorter retention period for test namespaces, normal for production
+        if (isTestNamespace) {
+          // Test namespaces get minimal retention (1 hour) for temporary data
+          namespaceConfig.workflowExecutionRetentionPeriod = {
+            seconds: 60 * 60 as any // 1 hour retention
+          }
+        } else {
+          // Production namespaces get standard retention
           namespaceConfig.workflowExecutionRetentionPeriod = {
             seconds: 7 * 24 * 60 * 60 as any // 7 days retention
           }
