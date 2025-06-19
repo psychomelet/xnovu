@@ -30,6 +30,7 @@ jobs:
       with:
         node-version: '20'
         cache: 'pnpm'
+        registry-url: 'http://172.20.60.129:4873'
 
     - name: Cache Jest
       uses: actions/cache@v4
@@ -38,6 +39,9 @@ jobs:
         key: jest-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
         restore-keys: |
           jest-${{ runner.os }}-
+
+    - name: Configure pnpm registry
+      run: pnpm config set registry http://172.20.60.129:4873
 
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
