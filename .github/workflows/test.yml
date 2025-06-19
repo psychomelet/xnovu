@@ -10,10 +10,11 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  setup:
     runs-on: self-hosted
     environment: Test
-
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
     steps:
     - uses: actions/checkout@v4
 
@@ -28,20 +29,6 @@ jobs:
         node-version: '20'
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
-
-    - name: Cache Jest
-      uses: actions/cache@v4
-      with:
-        path: .jest-cache
-        key: jest-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
-        restore-keys: |
-          jest-${{ runner.os }}-
-
-    - name: Install Temporal CLI
-      uses: temporalio/setup-temporal@v0
-
-    - name: Verify Temporal CLI
-      run: temporal operator cluster health --address ${{ secrets.TEMPORAL_ADDRESS }}
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
@@ -65,11 +52,54 @@ jobs:
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
+    - name: Generate cache key
+      id: cache-key
+      run: echo "key=jest-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+
+  test-connection:
+    needs: setup
+    runs-on: self-hosted
+    environment: Test
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+        registry-url: 'http://172.20.60.129:4873'
+
+    - name: Cache Jest
+      uses: actions/cache@v4
+      with:
+        path: .jest-cache
+        key: ${{ needs.setup.outputs.cache-key }}-connection
+        restore-keys: |
+          ${{ needs.setup.outputs.cache-key }}-
+          jest-${{ runner.os }}-
+
+    - name: Install Temporal CLI
+      uses: temporalio/setup-temporal@v0
+
+    - name: Verify Temporal CLI
+      run: temporal operator cluster health --address ${{ secrets.TEMPORAL_ADDRESS }}
+
+    - name: Configure pnpm registry
+      run: pnpm config set registry http://172.20.60.129:4873
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+
     - name: Run connection tests
       run: pnpm test:connection
       env:
         CI: true
-        # Connection test credentials
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -79,13 +109,46 @@ jobs:
         TEMPORAL_ADDRESS: ${{ secrets.TEMPORAL_ADDRESS }}
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
+
+  test-unit:
+    needs: setup
+    runs-on: self-hosted
+    environment: Test
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+        registry-url: 'http://172.20.60.129:4873'
+
+    - name: Cache Jest
+      uses: actions/cache@v4
+      with:
+        path: .jest-cache
+        key: ${{ needs.setup.outputs.cache-key }}-unit
+        restore-keys: |
+          ${{ needs.setup.outputs.cache-key }}-
+          jest-${{ runner.os }}-
+
+    - name: Configure pnpm registry
+      run: pnpm config set registry http://172.20.60.129:4873
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
 
     - name: Run unit tests
       run: pnpm test:unit
       env:
         CI: true
         NODE_ENV: test
-        # Connection test credentials
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -95,13 +158,46 @@ jobs:
         TEMPORAL_ADDRESS: ${{ secrets.TEMPORAL_ADDRESS }}
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
+
+  test-integration:
+    needs: setup
+    runs-on: self-hosted
+    environment: Test
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+        registry-url: 'http://172.20.60.129:4873'
+
+    - name: Cache Jest
+      uses: actions/cache@v4
+      with:
+        path: .jest-cache
+        key: ${{ needs.setup.outputs.cache-key }}-integration
+        restore-keys: |
+          ${{ needs.setup.outputs.cache-key }}-
+          jest-${{ runner.os }}-
+
+    - name: Configure pnpm registry
+      run: pnpm config set registry http://172.20.60.129:4873
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
 
     - name: Run integration tests
       run: pnpm test:integration
       env:
         CI: true
         NODE_ENV: test
-        # Connection test credentials
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -112,9 +208,15 @@ jobs:
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
+  upload-results:
+    needs: [test-connection, test-unit, test-integration]
+    runs-on: self-hosted
+    if: always()
+    steps:
+    - uses: actions/checkout@v4
+
     - name: Upload test results
       uses: actions/upload-artifact@v4
-      if: always()
       with:
         name: test-results
         path: |

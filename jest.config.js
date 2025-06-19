@@ -7,6 +7,7 @@ const createJestConfig = nextJest({
 
 // Add any custom config to be passed to Jest
 const customJestConfig = {
+  cacheDirectory: '.jest-cache',
   globalSetup: '<rootDir>/__tests__/setup/global-setup.ts',
   globalTeardown: '<rootDir>/__tests__/setup/global-teardown.ts',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js', '<rootDir>/jest.console.setup.js'],
