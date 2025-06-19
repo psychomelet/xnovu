@@ -14,6 +14,7 @@ const customJestConfig = {
   testEnvironmentOptions: {
     customExportConditions: ['node', 'node-addons'],
   },
+  cacheDirectory: '<rootDir>/.jest-cache',
   testMatch: [
     '**/__tests__/**/*.(test|spec).(ts|tsx|js)',
     '**/*.(test|spec).(ts|tsx|js)'
