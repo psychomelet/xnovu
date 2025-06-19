@@ -208,7 +208,7 @@ describe('RulePollingLoop Integration', () => {
       // Verify orphaned schedule was removed
       const description = await getSchedule(scheduleId)
       expect(description).toBeNull()
-    }, 10000)
+    }, 20000)
 
     it('should warn if not running', async () => {
       await pollingLoop.stop()

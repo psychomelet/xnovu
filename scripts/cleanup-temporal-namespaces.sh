@@ -1,36 +1,34 @@
 #!/bin/bash
 
 # Script to clean up Temporal namespaces by prefix
-# Usage: ./cleanup-temporal-namespaces.sh <namespace-prefix>
+# Usage: ./cleanup-temporal-namespaces.sh <namespace-prefix> <env-name>
+# Examples:
+#   ./cleanup-temporal-namespaces.sh test-ns- lan         # Use lan environment
+#   ./cleanup-temporal-namespaces.sh test-ns- hooloovoo   # Use hooloovoo environment
 
-# Check if prefix argument is provided
-if [ $# -eq 0 ]; then
-    echo "Error: No namespace prefix provided"
-    echo "Usage: $0 <namespace-prefix>"
-    echo "Example: $0 test-ns-unit-"
+# Check if arguments are provided
+if [ $# -lt 2 ]; then
+    echo "Error: Missing required arguments"
+    echo "Usage: $0 <namespace-prefix> <env-name>"
+    echo "Examples:"
+    echo "  $0 test-ns- lan         # Use lan environment"
+    echo "  $0 test-ns- hooloovoo   # Use hooloovoo environment"
     exit 1
 fi
 
 NAMESPACE_PREFIX=$1
-
-# Load environment variables if .env exists
-if [ -f .env ]; then
-    source .env
-fi
-
-# Use TEMPORAL_ADDRESS from env or default
-TEMPORAL_ADDRESS="${TEMPORAL_ADDRESS:-localhost:7233}"
+ENV_NAME=$2
 
 echo "================================================"
 echo "Temporal Namespace Cleanup Script"
 echo "================================================"
-echo "Server: $TEMPORAL_ADDRESS"
+echo "Environment: $ENV_NAME"
 echo "Prefix: $NAMESPACE_PREFIX"
 echo ""
 
 # Get all namespaces with the specified prefix
 echo "Searching for namespaces with prefix '$NAMESPACE_PREFIX'..."
-namespaces=$(temporal operator namespace list --address "$TEMPORAL_ADDRESS" --tls 2>&1 | \
+namespaces=$(temporal --env "$ENV_NAME" operator namespace list 2>&1 | \
   grep -A1 "NamespaceInfo.Name.*${NAMESPACE_PREFIX}" | \
   grep "NamespaceInfo.Name" | \
   awk '{print $2}')
@@ -69,11 +67,11 @@ for namespace in $namespaces; do
     echo "[$count/$total] Deleting namespace: $namespace"
     
     # Attempt to delete the namespace
-    if temporal operator namespace delete \
+    result=$(temporal --env "$ENV_NAME" operator namespace delete \
         --namespace "$namespace" \
-        --address "$TEMPORAL_ADDRESS" \
-        --tls \
-        --yes 2>&1 | grep -q "has been deleted"; then
+        --yes 2>&1)
+    
+    if echo "$result" | grep -q "has been deleted"; then
         echo "  ✓ Successfully deleted $namespace"
         success=$((success + 1))
     else
@@ -92,7 +90,7 @@ echo "Failed to delete: $failed"
 echo ""
 
 # Final verification
-remaining=$(temporal operator namespace list --address "$TEMPORAL_ADDRESS" --tls 2>&1 | \
+remaining=$(temporal --env "$ENV_NAME" operator namespace list 2>&1 | \
   grep -c "NamespaceInfo.Name.*${NAMESPACE_PREFIX}")
 echo "Remaining namespaces with prefix '$NAMESPACE_PREFIX': $remaining"
 

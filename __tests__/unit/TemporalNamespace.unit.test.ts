@@ -33,11 +33,11 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
     // Establish real temporal connection
     const address = process.env.TEMPORAL_ADDRESS!
-    const isSecure = address.includes(':443') || address.startsWith('https://')
+    const useTls = process.env.TEMPORAL_TLS === 'true'
 
     connection = await Connection.connect({
       address,
-      tls: isSecure ? {} : false,
+      tls: useTls ? {} : false,
       connectTimeout: '10s',
     })
   }, 30000)

@@ -6,14 +6,14 @@ import { execSync } from 'child_process'
  */
 export async function deleteTemporalNamespace(namespace: string): Promise<boolean> {
   const temporalAddress = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
-  const isSecure = temporalAddress.includes(':443') || temporalAddress.startsWith('https://')
+  const useTls = process.env.TEMPORAL_TLS === 'true'
   
   try {
     // Build command based on what works in the script
     let cmd = `temporal operator namespace delete --namespace="${namespace}" --address="${temporalAddress}" --yes`
     
-    // Add TLS flag if secure (as shown in the script)
-    if (isSecure) {
+    // Add TLS flag if configured
+    if (useTls) {
       cmd += ' --tls'
     }
     
@@ -55,12 +55,12 @@ export async function deleteTemporalNamespace(namespace: string): Promise<boolea
  */
 export async function listTemporalNamespaces(prefix: string): Promise<string[]> {
   const temporalAddress = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
-  const isSecure = temporalAddress.includes(':443') || temporalAddress.startsWith('https://')
+  const useTls = process.env.TEMPORAL_TLS === 'true'
   
   try {
     let cmd = `temporal operator namespace list --address="${temporalAddress}"`
     
-    if (isSecure) {
+    if (useTls) {
       cmd += ' --tls'
     }
     
