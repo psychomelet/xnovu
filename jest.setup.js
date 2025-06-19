@@ -68,4 +68,4 @@ if (typeof global.Request === 'undefined') {
 }
 
 // Jest configuration and timeout for async operations
-jest.setTimeout(30000)
+jest.setTimeout(20000)
