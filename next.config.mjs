@@ -1,5 +1,3 @@
-import { cpus } from 'os';
-
 /** @type {import('next').NextConfig} */
 import { cpus } from 'os';
 
