@@ -10,11 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  # First job: Setup, lint, and connection tests
-  setup-and-validate:
+  # Setup job: Install dependencies and prepare caches
+  setup:
     runs-on: self-hosted
     environment: Test
-
+    outputs:
+      deps-cache-key: ${{ steps.deps-cache-key.outputs.key }}
+      jest-cache-key: ${{ steps.jest-cache-key.outputs.key }}
     steps:
     - uses: actions/checkout@v4
 
@@ -30,12 +32,66 @@ jobs:
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
 
+    - name: Configure pnpm registry
+      run: pnpm config set registry http://172.20.60.129:4873
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+
+    - name: Generate cache keys
+      id: deps-cache-key
+      run: echo "key=deps-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+
+    - name: Generate Jest cache key
+      id: jest-cache-key
+      run: echo "key=jest-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+
+    # Cache dependencies for other jobs
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.pnpm-store
+          .next
+        key: ${{ steps.deps-cache-key.outputs.key }}
+
+  # Lint, build, and connection tests
+  lint-build-connection:
+    needs: setup
+    runs-on: self-hosted
+    environment: Test
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+        registry-url: 'http://172.20.60.129:4873'
+
+    - name: Restore cached dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.pnpm-store
+          .next
+        key: ${{ needs.setup.outputs.deps-cache-key }}
+
     - name: Cache Jest
       uses: actions/cache@v4
       with:
         path: .jest-cache
-        key: jest-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
+        key: ${{ needs.setup.outputs.jest-cache-key }}-connection
         restore-keys: |
+          ${{ needs.setup.outputs.jest-cache-key }}-
           jest-${{ runner.os }}-
 
     - name: Install Temporal CLI
@@ -47,7 +103,7 @@ jobs:
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
 
-    - name: Install dependencies
+    - name: Install dependencies (if cache miss)
       run: pnpm install --frozen-lockfile
 
     - name: Run linter
@@ -80,22 +136,11 @@ jobs:
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
-    # Cache the node_modules for other jobs
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          node_modules
-          ~/.pnpm-store
-          .next
-        key: deps-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-
-  # Second job: Unit tests (runs after setup-and-validate)
-  unit-tests:
-    needs: setup-and-validate
+  # Unit tests
+  test-unit:
+    needs: setup
     runs-on: self-hosted
     environment: Test
-
     steps:
     - uses: actions/checkout@v4
 
@@ -118,7 +163,16 @@ jobs:
           node_modules
           ~/.pnpm-store
           .next
-        key: deps-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+        key: ${{ needs.setup.outputs.deps-cache-key }}
+
+    - name: Cache Jest
+      uses: actions/cache@v4
+      with:
+        path: .jest-cache
+        key: ${{ needs.setup.outputs.jest-cache-key }}-unit
+        restore-keys: |
+          ${{ needs.setup.outputs.jest-cache-key }}-
+          jest-${{ runner.os }}-
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
@@ -151,12 +205,11 @@ jobs:
           junit-unit.xml
         retention-days: 7
 
-  # Third job: Integration tests (runs after setup-and-validate, parallel to unit-tests)
-  integration-tests:
-    needs: setup-and-validate
+  # Integration tests
+  test-integration:
+    needs: setup
     runs-on: self-hosted
     environment: Test
-
     steps:
     - uses: actions/checkout@v4
 
@@ -172,9 +225,6 @@ jobs:
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
 
-    - name: Install Temporal CLI
-      uses: temporalio/setup-temporal@v0
-
     - name: Restore cached dependencies
       uses: actions/cache@v4
       with:
@@ -182,7 +232,16 @@ jobs:
           node_modules
           ~/.pnpm-store
           .next
-        key: deps-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+        key: ${{ needs.setup.outputs.deps-cache-key }}
+
+    - name: Cache Jest
+      uses: actions/cache@v4
+      with:
+        path: .jest-cache
+        key: ${{ needs.setup.outputs.jest-cache-key }}-integration
+        restore-keys: |
+          ${{ needs.setup.outputs.jest-cache-key }}-
+          jest-${{ runner.os }}-
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
@@ -215,12 +274,11 @@ jobs:
           junit-integration.xml
         retention-days: 7
 
-  # Optional: Combine test results
+  # Combine test results
   combine-results:
-    needs: [unit-tests, integration-tests]
+    needs: [lint-build-connection, test-unit, test-integration]
     runs-on: self-hosted
     if: always()
-
     steps:
     - name: Download all test results
       uses: actions/download-artifact@v4
