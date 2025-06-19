@@ -25,6 +25,7 @@ const customJestConfig = {
   verbose: true, // Show individual test results
   silent: false, // Allow console output
   forceExit: true, // Force Jest to exit after all tests have completed
+  testTimeout: 15000, // 15 second timeout for all tests
   collectCoverageFrom: [
     'app/**/*.{ts,tsx}',
     'lib/**/*.{ts,tsx}',

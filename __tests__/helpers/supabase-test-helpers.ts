@@ -128,8 +128,8 @@ export async function setupTestWorkflowWithRule(
 // Wait helpers for eventual consistency
 export async function waitForCondition(
   condition: () => Promise<boolean>,
-  timeout = 5000,
-  interval = 100
+  timeout = 1000,
+  interval = 20
 ): Promise<void> {
   const startTime = Date.now()
   
