@@ -4,6 +4,7 @@
 
 import { Connection } from '@temporalio/client'
 import { ensureNamespaceExists } from '@/lib/temporal/namespace'
+import { deleteTemporalNamespace } from '../utils/temporal-namespace-cleanup'
 
 /**
  * Temporal Namespace Tests with Real Service
@@ -15,7 +16,6 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
   let connection: Connection
   let testNamespace: string
   const requiredEnvVars = ['TEMPORAL_ADDRESS', 'TEMPORAL_NAMESPACE']
-  const cleanupNamespaces: string[] = []
 
   beforeAll(async () => {
     // Check for required environment variables
@@ -27,9 +27,8 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       )
     }
 
-    // Generate a unique namespace for test isolation and register for cleanup
-    testNamespace = `test-ns-unit-test-${Date.now()}`
-    cleanupNamespaces.push(testNamespace)
+    // Use the shared test namespace from global setup
+    testNamespace = process.env.TEMPORAL_NAMESPACE!
 
     // Establish real temporal connection
     const address = process.env.TEMPORAL_ADDRESS!
@@ -44,19 +43,6 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
   afterAll(async () => {
     if (connection) {
-      // Attempt to delete any namespaces created during the suite; ignore failures
-      const { execSync } = require('child_process')
-      for (const ns of cleanupNamespaces) {
-        try {
-          execSync(`temporal operator namespace delete --namespace=${ns} --address=${process.env.TEMPORAL_ADDRESS} --yes`, {
-            stdio: 'ignore',
-            timeout: 10000,
-          })
-        } catch (_) {
-          // Ignore cleanup failures (namespace may already be gone or deletion forbidden)
-        }
-      }
-
       await connection.close()
     }
   }, 30000)
@@ -114,16 +100,18 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       const describeSpy = jest.spyOn(connection.workflowService, 'describeNamespace')
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
 
+      // Use a unique test namespace for this specific test
+      const uniqueTestNamespace = `test-ns-create-${Date.now()}`
 
-      await ensureNamespaceExists(connection, testNamespace)
+      await ensureNamespaceExists(connection, uniqueTestNamespace)
 
       expect(describeSpy).toHaveBeenCalledWith({
-        namespace: testNamespace
+        namespace: uniqueTestNamespace
       })
 
-      // The namespace should have been (re-)created, so registerNamespace must have been invoked.
+      // The namespace should have been created, so registerNamespace must have been invoked.
       expect(registerSpy).toHaveBeenCalledWith({
-        namespace: testNamespace,
+        namespace: uniqueTestNamespace,
         workflowExecutionRetentionPeriod: {
           seconds: 7 * 24 * 60 * 60, // 7 days in seconds
         },
@@ -133,6 +121,9 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       describeSpy.mockRestore()
       registerSpy.mockRestore()
+
+      // Clean up the created namespace
+      await deleteTemporalNamespace(uniqueTestNamespace)
     }, 20000)
 
     it('should handle race condition when namespace is created by another process', async () => {
@@ -204,9 +195,8 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
     it('should create namespace with correct retention period', async () => {
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
 
-      // Use a second unique namespace so we can assert creation parameters
-      const retentionNamespace = `${testNamespace}-retention`
-      cleanupNamespaces.push(retentionNamespace)
+      // Use a unique namespace for retention test
+      const retentionNamespace = `test-ns-retention-${Date.now()}`
 
       await ensureNamespaceExists(connection, retentionNamespace)
 
@@ -219,6 +209,9 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       expect(registerCall.isGlobalNamespace).toBe(false)
 
       registerSpy.mockRestore()
+
+      // Clean up the created namespace
+      await deleteTemporalNamespace(retentionNamespace)
     }, 15000)
   })
 

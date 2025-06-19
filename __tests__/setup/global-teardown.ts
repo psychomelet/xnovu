@@ -1,10 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import { Client as TemporalClient, Connection } from '@temporalio/client';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { deleteTemporalNamespace } from '../utils/temporal-namespace-cleanup';
 
 export default async function globalTeardown() {
   console.log('\n🧹 Global test teardown starting...');
@@ -274,44 +271,6 @@ async function verifyCleanup(enterpriseId: string) {
 async function cleanupTestNamespace(enterpriseId: string) {
   const testNamespace = `test-ns-${enterpriseId}`;
   
-  const temporalAddress = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
-  const isSecure = temporalAddress.includes(':443');
-  
-  try {
-    // Build temporal command with explicit namespace flag
-    let cmd = `temporal operator namespace delete -n "${testNamespace}"`;
-    
-    // Add TLS flag if secure
-    if (isSecure) {
-      cmd += ' --tls';
-    }
-    
-    // Add address
-    cmd += ` --address "${temporalAddress}"`;
-    
-    // Execute command with cleared TEMPORAL_NAMESPACE env to avoid conflicts
-    const env = { ...process.env };
-    delete env.TEMPORAL_NAMESPACE;
-    
-    // Set a timeout for namespace deletion
-    const { stdout, stderr } = await execAsync(cmd, { env, timeout: 10000 });
-    
-    if (stderr && !stderr.includes('Namespace deletion') && !stderr.includes('already deleted')) {
-      console.error(`  ❌ Error deleting test namespace: ${stderr}`);
-    }
-  } catch (error: any) {
-    // Check if it's a timeout
-    if (error.killed || error.code === 'ETIMEDOUT') {
-      console.warn(`  ⚠️  Timeout during test namespace cleanup - may continue in background`);
-    } else if (error.message?.includes('Namespace not found') || 
-        error.message?.includes('namespace not found') ||
-        error.stderr?.includes('Namespace not found') ||
-        error.stderr?.includes('namespace not found')) {
-      // Namespace already gone, this is fine
-    } else if (error.message?.includes('deadline exceeded')) {
-      console.warn(`  ⚠️  Deadline exceeded during test namespace cleanup`);
-    } else {
-      console.error(`  ❌ Failed to clean up test namespace:`, error.message || error);
-    }
-  }
+  console.log(`🗑️  Deleting test namespace: ${testNamespace}`);
+  await deleteTemporalNamespace(testNamespace);
 }
