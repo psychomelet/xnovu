@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
+import { cpus } from 'os';
+
 const nextConfig = {
   output: 'standalone',
   experimental: {
-    cpus: require('os').cpus().length,
+    cpus: cpus().length,
     workerThreads: false,
   },
 };
