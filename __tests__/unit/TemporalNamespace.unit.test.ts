@@ -16,6 +16,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
   let connection: Connection
   let testNamespace: string
   const requiredEnvVars = ['TEMPORAL_ADDRESS', 'TEMPORAL_NAMESPACE']
+  const createdNamespaces: string[] = []
 
   beforeAll(async () => {
     // Check for required environment variables
@@ -42,6 +43,11 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
   }, 30000)
 
   afterAll(async () => {
+    // Clean up all namespaces created during this test
+    for (const namespace of createdNamespaces) {
+      await deleteTemporalNamespace(namespace)
+    }
+    
     if (connection) {
       await connection.close()
     }
@@ -102,6 +108,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       // Use a unique test namespace for this specific test
       const uniqueTestNamespace = `test-ns-create-${Date.now()}`
+      createdNamespaces.push(uniqueTestNamespace)
 
       await ensureNamespaceExists(connection, uniqueTestNamespace)
 
@@ -110,20 +117,18 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       })
 
       // The namespace should have been created, so registerNamespace must have been invoked.
+      // Since uniqueTestNamespace starts with 'test-ns-', it gets test namespace behavior
       expect(registerSpy).toHaveBeenCalledWith({
         namespace: uniqueTestNamespace,
         workflowExecutionRetentionPeriod: {
-          seconds: 7 * 24 * 60 * 60, // 7 days in seconds
+          seconds: 24 * 60 * 60, // 1 day (test namespace minimum)
         },
-        description: 'XNovu notification processing namespace',
+        description: 'XNovu test namespace (temporary)',
         isGlobalNamespace: false,
       })
 
       describeSpy.mockRestore()
       registerSpy.mockRestore()
-
-      // Clean up the created namespace
-      await deleteTemporalNamespace(uniqueTestNamespace)
     }, 20000)
 
     it('should handle race condition when namespace is created by another process', async () => {
@@ -192,16 +197,35 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       registerSpy.mockRestore()
     }, 15000)
 
-    it('should create namespace with correct retention period', async () => {
+    it('should create test namespace with minimal retention period', async () => {
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
 
-      // Use a unique namespace for retention test
-      const retentionNamespace = `test-ns-retention-${Date.now()}`
+      // Use a unique test namespace
+      const testNamespace = `test-ns-retention-${Date.now()}`
+      createdNamespaces.push(testNamespace)
 
-      await ensureNamespaceExists(connection, retentionNamespace)
+      await ensureNamespaceExists(connection, testNamespace)
 
-      // Assert that the namespace creation request contains the correct
-      // retention period and metadata.
+      // Assert that test namespace has minimal retention period and correct description
+      expect(registerSpy).toHaveBeenCalled()
+      const registerCall = registerSpy.mock.calls[0][0] as any
+      expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(24 * 60 * 60) // 1 day (minimum)
+      expect(registerCall.description).toBe('XNovu test namespace (temporary)')
+      expect(registerCall.isGlobalNamespace).toBe(false)
+
+      registerSpy.mockRestore()
+    }, 15000)
+
+    it('should create production namespace with retention period', async () => {
+      const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
+
+      // Use a production-style namespace name
+      const productionNamespace = `prod-namespace-${Date.now()}`
+      createdNamespaces.push(productionNamespace)
+
+      await ensureNamespaceExists(connection, productionNamespace)
+
+      // Assert that production namespace has retention period and correct description
       expect(registerSpy).toHaveBeenCalled()
       const registerCall = registerSpy.mock.calls[0][0] as any
       expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(7 * 24 * 60 * 60)
@@ -209,9 +233,6 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       expect(registerCall.isGlobalNamespace).toBe(false)
 
       registerSpy.mockRestore()
-
-      // Clean up the created namespace
-      await deleteTemporalNamespace(retentionNamespace)
     }, 15000)
   })
 

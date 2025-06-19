@@ -91,13 +91,26 @@ export async function listTemporalNamespaces(prefix: string): Promise<string[]> 
 }
 
 /**
- * Cleans up all test namespaces with a given prefix
+ * Cleans up test namespaces with a given prefix or exact namespace name
  */
-export async function cleanupTestNamespaces(prefix: string): Promise<void> {
-  const namespaces = await listTemporalNamespaces(prefix)
+export async function cleanupTestNamespaces(prefixOrNamespace: string): Promise<void> {
+  // If it looks like a complete namespace name (contains enterprise ID pattern),
+  // clean up just that specific namespace
+  if (prefixOrNamespace.includes('-') && prefixOrNamespace.length > 10) {
+    console.log(`Cleaning up specific namespace: ${prefixOrNamespace}`)
+    if (await deleteTemporalNamespace(prefixOrNamespace)) {
+      console.log(`✅ Successfully cleaned up namespace: ${prefixOrNamespace}`)
+    } else {
+      console.log(`⚠️  Could not clean up namespace: ${prefixOrNamespace}`)
+    }
+    return
+  }
+  
+  // Otherwise, treat as prefix and clean up all matching namespaces
+  const namespaces = await listTemporalNamespaces(prefixOrNamespace)
   
   if (namespaces.length === 0) {
-    console.log(`No namespaces found with prefix '${prefix}'`)
+    console.log(`No namespaces found with prefix '${prefixOrNamespace}'`)
     return
   }
   

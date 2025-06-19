@@ -49,6 +49,11 @@ const customJestConfig = {
   transformIgnorePatterns: [
     'node_modules/(?!(@supabase|@novu)/.*)'
   ],
+  // Custom reporters
+  reporters: [
+    'default',
+    '<rootDir>/jest-error-reporter.js'
+  ],
   // Module mapping
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

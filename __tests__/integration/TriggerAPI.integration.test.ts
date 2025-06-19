@@ -64,9 +64,10 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
   // Cleanup handled by global teardown - no need for individual cleanup
 
   async function createTestWorkflow(overrides: Partial<WorkflowInsert> = {}): Promise<WorkflowRow> {
+    const uniqueId = randomUUID();
     const defaultWorkflow: WorkflowInsert = {
-      name: `Test API Workflow ${Date.now()}-${Math.random().toString(36).substring(7)}`,
-      workflow_key: `test-api-workflow-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      name: `Test API Workflow ${uniqueId}`,
+      workflow_key: `test-api-workflow-${uniqueId}`,
       workflow_type: 'DYNAMIC',
       default_channels: ['EMAIL'],
       enterprise_id: testEnterpriseId,
@@ -93,8 +94,9 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
       workflowId = workflow.id;
     }
 
+    const uniqueId = randomUUID();
     const defaultNotification: NotificationInsert = {
-      name: `Test API Notification ${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      name: `Test API Notification ${uniqueId}`,
       payload: { message: 'Test API message' },
       recipients: [testUserId],
       notification_workflow_id: workflowId,
@@ -295,9 +297,10 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
   describe('Database Integration with API Simulation', () => {
     it('should create workflow and notification in database and simulate API response', async () => {
       // Create a published dynamic workflow in database
+      const uniqueWorkflowKey = `db-api-integration-workflow-${randomUUID()}`;
       const testWorkflow = await createTestWorkflow({
         name: 'Database API Integration Workflow',
-        workflow_key: 'db-api-integration-workflow',
+        workflow_key: uniqueWorkflowKey,
         workflow_type: 'DYNAMIC',
         default_channels: ['EMAIL'],
         template_overrides: { emailTemplateId: 123 },
@@ -314,7 +317,7 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
       // Simulate API call
       const mockAPI = createMockTriggerAPI();
       const requestBody = {
-        workflowId: 'db-api-integration-workflow',
+        workflowId: uniqueWorkflowKey,
         enterpriseId: testEnterpriseId,
         notificationId: testNotification.id,
         payload: {
@@ -339,18 +342,18 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
       // Verify API response
       expect(response.status).toBe(200);
       expect(responseData.message).toBe('Notification triggered successfully');
-      expect(responseData.workflowId).toBe('db-api-integration-workflow');
+      expect(responseData.workflowId).toBe(uniqueWorkflowKey);
       expect(responseData.enterpriseId).toBe(testEnterpriseId);
       expect(responseData.notificationId).toBe(testNotification.id);
       expect(responseData.transactionId).toMatch(/^mock-txn-/);
 
       // Verify real database objects were created and updated
       const fetchedWorkflow = await workflowService.getWorkflowByKey(
-        'db-api-integration-workflow',
+        uniqueWorkflowKey,
         testEnterpriseId
       );
       expect(fetchedWorkflow).toBeDefined();
-      expect(fetchedWorkflow!.workflow_key).toBe('db-api-integration-workflow');
+      expect(fetchedWorkflow!.workflow_key).toBe(uniqueWorkflowKey);
 
       const updatedNotification = await notificationService.getNotification(
         testNotification.id,
@@ -365,9 +368,10 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
   describe('Real Database Services Integration', () => {
     it('should create and retrieve workflows using real database services', async () => {
       // Test WorkflowService with real database
+      const uniqueWorkflowKey = `real-db-test-workflow-${randomUUID()}`;
       const testWorkflow = await createTestWorkflow({
         name: 'Real Database Test Workflow',
-        workflow_key: 'real-db-test-workflow',
+        workflow_key: uniqueWorkflowKey,
         workflow_type: 'DYNAMIC',
         default_channels: ['EMAIL', 'IN_APP'],
         template_overrides: { emailTemplateId: 123, inAppTemplateId: 124 },
@@ -376,7 +380,7 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
 
       // Verify workflow was created
       const fetchedWorkflow = await workflowService.getWorkflowByKey(
-        'real-db-test-workflow',
+        uniqueWorkflowKey,
         testEnterpriseId
       );
       expect(fetchedWorkflow).toBeDefined();
@@ -387,9 +391,10 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
 
     it('should create and retrieve notifications using real database services', async () => {
       // Create workflow first
+      const uniqueWorkflowKey = `notification-test-workflow-${randomUUID()}`;
       const testWorkflow = await createTestWorkflow({
         name: 'Notification Test Workflow',
-        workflow_key: 'notification-test-workflow'
+        workflow_key: uniqueWorkflowKey
       });
 
       // Test NotificationService with real database
@@ -431,30 +436,33 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
       const otherEnterpriseId = randomUUID();
       
       // Create workflows for different enterprises
+      const uniqueWorkflowKey1 = `enterprise-1-workflow-${randomUUID()}`;
+      const uniqueWorkflowKey2 = `enterprise-2-workflow-${randomUUID()}`;
+      
       const workflow1 = await createTestWorkflow({
         name: 'Enterprise 1 Workflow',
-        workflow_key: 'enterprise-1-workflow',
+        workflow_key: uniqueWorkflowKey1,
         enterprise_id: testEnterpriseId,
         publish_status: 'PUBLISH'
       });
 
       const workflow2 = await createTestWorkflow({
         name: 'Enterprise 2 Workflow',  
-        workflow_key: 'enterprise-2-workflow',
+        workflow_key: uniqueWorkflowKey2,
         enterprise_id: otherEnterpriseId,
         publish_status: 'PUBLISH'
       });
 
       // Test enterprise isolation
       const fetchedWorkflow1 = await workflowService.getWorkflowByKey(
-        'enterprise-1-workflow',
+        uniqueWorkflowKey1,
         testEnterpriseId
       );
       expect(fetchedWorkflow1).toBeDefined();
       expect(fetchedWorkflow1!.enterprise_id).toBe(testEnterpriseId);
 
       const fetchedWorkflow2 = await workflowService.getWorkflowByKey(
-        'enterprise-2-workflow',
+        uniqueWorkflowKey2,
         otherEnterpriseId
       );
       expect(fetchedWorkflow2).toBeDefined();
@@ -462,7 +470,7 @@ describe('Trigger API Integration Tests with Real Database Services', () => {
 
       // Cross-enterprise access should not work
       const crossAccessAttempt = await workflowService.getWorkflowByKey(
-        'enterprise-2-workflow',
+        uniqueWorkflowKey2,
         testEnterpriseId
       );
       expect(crossAccessAttempt).toBeNull();

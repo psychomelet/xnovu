@@ -9,6 +9,7 @@ const originalConsole = {
 // Buffer to store console output during test execution
 let consoleBuffer = [];
 let currentTestPassed = true;
+let allErrorLogs = [];
 
 // Override console methods to buffer output
 console.log = (...args) => {
@@ -16,7 +17,9 @@ console.log = (...args) => {
 };
 
 console.error = (...args) => {
-  consoleBuffer.push({ type: 'error', args });
+  const errorEntry = { type: 'error', args, timestamp: new Date().toISOString() };
+  consoleBuffer.push(errorEntry);
+  allErrorLogs.push(errorEntry);
 };
 
 console.warn = (...args) => {
@@ -74,3 +77,6 @@ global.test = (name, fn, timeout) => {
     }
   }, timeout);
 };
+
+// Export error logs for the reporter to access
+global.getAllErrorLogs = () => allErrorLogs;

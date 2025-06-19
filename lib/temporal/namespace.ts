@@ -17,14 +17,29 @@ export async function ensureNamespaceExists(connection: Connection, namespace: s
       
       try {
         // Create the namespace
-        await connection.workflowService.registerNamespace({
+        const isTestNamespace = namespace.startsWith('test-ns-')
+        const namespaceConfig: any = {
           namespace,
-          workflowExecutionRetentionPeriod: {
-            seconds: 7 * 24 * 60 * 60 as any // 7 days retention
-          },
-          description: 'XNovu notification processing namespace',
+          description: isTestNamespace ? 
+            'XNovu test namespace (temporary)' : 
+            'XNovu notification processing namespace',
           isGlobalNamespace: false
-        })
+        }
+        
+        // Set shorter retention period for test namespaces, normal for production
+        if (isTestNamespace) {
+          // Test namespaces get minimal retention (1 day) - Temporal minimum requirement
+          namespaceConfig.workflowExecutionRetentionPeriod = {
+            seconds: 24 * 60 * 60 as any // 1 day retention (minimum allowed)
+          }
+        } else {
+          // Production namespaces get standard retention
+          namespaceConfig.workflowExecutionRetentionPeriod = {
+            seconds: 7 * 24 * 60 * 60 as any // 7 days retention
+          }
+        }
+        
+        await connection.workflowService.registerNamespace(namespaceConfig)
         
         logger.temporal(`Successfully created namespace '${namespace}'`)
       } catch (createError: any) {
