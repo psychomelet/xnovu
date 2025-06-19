@@ -7,7 +7,7 @@ const createJestConfig = nextJest({
 
 // Add any custom config to be passed to Jest
 const customJestConfig = {
-  cacheDirectory: '.jest-cache',
+  cacheDirectory: '<rootDir>/.jest-cache',
   globalSetup: '<rootDir>/__tests__/setup/global-setup.ts',
   globalTeardown: '<rootDir>/__tests__/setup/global-teardown.ts',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js', '<rootDir>/jest.console.setup.js'],
@@ -26,6 +26,7 @@ const customJestConfig = {
   verbose: true, // Show individual test results
   silent: false, // Allow console output
   forceExit: true, // Force Jest to exit after all tests have completed
+  testTimeout: 15000, // 15 second timeout for all tests
   collectCoverageFrom: [
     'app/**/*.{ts,tsx}',
     'lib/**/*.{ts,tsx}',

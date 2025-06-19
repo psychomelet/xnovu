@@ -10,11 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  # First job: Setup, lint, and type check
   setup:
     runs-on: self-hosted
     environment: Test
     outputs:
-      cache-key: ${{ steps.cache-key.outputs.key }}
+      deps-cache-key: ${{ steps.deps-cache-key.outputs.key }}
+      jest-cache-key: ${{ steps.jest-cache-key.outputs.key }}
     steps:
     - uses: actions/checkout@v4
 
@@ -52,10 +54,25 @@ jobs:
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
-    - name: Generate cache key
-      id: cache-key
-      run: echo "key=jest-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+    - name: Generate cache keys
+      id: deps-cache-key
+      run: echo "key=deps-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
 
+    - name: Generate Jest cache key
+      id: jest-cache-key
+      run: echo "key=jest-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
+
+    # Cache dependencies for other jobs
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.pnpm-store
+          .next
+        key: ${{ steps.deps-cache-key.outputs.key }}
+
+  # Connection tests - needs Temporal CLI
   test-connection:
     needs: setup
     runs-on: self-hosted
@@ -75,13 +92,22 @@ jobs:
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
 
+    - name: Restore cached dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.pnpm-store
+          .next
+        key: ${{ needs.setup.outputs.deps-cache-key }}
+
     - name: Cache Jest
       uses: actions/cache@v4
       with:
         path: .jest-cache
-        key: ${{ needs.setup.outputs.cache-key }}-connection
+        key: ${{ needs.setup.outputs.jest-cache-key }}-connection
         restore-keys: |
-          ${{ needs.setup.outputs.cache-key }}-
+          ${{ needs.setup.outputs.jest-cache-key }}-
           jest-${{ runner.os }}-
 
     - name: Install Temporal CLI
@@ -93,7 +119,7 @@ jobs:
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
 
-    - name: Install dependencies
+    - name: Install dependencies (if cache miss)
       run: pnpm install --frozen-lockfile
 
     - name: Run connection tests
@@ -110,6 +136,7 @@ jobs:
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
+  # Unit tests - no Temporal CLI needed
   test-unit:
     needs: setup
     runs-on: self-hosted
@@ -129,19 +156,28 @@ jobs:
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
 
+    - name: Restore cached dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.pnpm-store
+          .next
+        key: ${{ needs.setup.outputs.deps-cache-key }}
+
     - name: Cache Jest
       uses: actions/cache@v4
       with:
         path: .jest-cache
-        key: ${{ needs.setup.outputs.cache-key }}-unit
+        key: ${{ needs.setup.outputs.jest-cache-key }}-unit
         restore-keys: |
-          ${{ needs.setup.outputs.cache-key }}-
+          ${{ needs.setup.outputs.jest-cache-key }}-
           jest-${{ runner.os }}-
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
 
-    - name: Install dependencies
+    - name: Install dependencies (if cache miss)
       run: pnpm install --frozen-lockfile
 
     - name: Run unit tests
@@ -159,6 +195,17 @@ jobs:
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
+    - name: Upload unit test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: unit-test-results
+        path: |
+          coverage/unit/
+          junit-unit.xml
+        retention-days: 7
+
+  # Integration tests - no Temporal CLI needed
   test-integration:
     needs: setup
     runs-on: self-hosted
@@ -178,19 +225,28 @@ jobs:
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
 
+    - name: Restore cached dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.pnpm-store
+          .next
+        key: ${{ needs.setup.outputs.deps-cache-key }}
+
     - name: Cache Jest
       uses: actions/cache@v4
       with:
         path: .jest-cache
-        key: ${{ needs.setup.outputs.cache-key }}-integration
+        key: ${{ needs.setup.outputs.jest-cache-key }}-integration
         restore-keys: |
-          ${{ needs.setup.outputs.cache-key }}-
+          ${{ needs.setup.outputs.jest-cache-key }}-
           jest-${{ runner.os }}-
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
 
-    - name: Install dependencies
+    - name: Install dependencies (if cache miss)
       run: pnpm install --frozen-lockfile
 
     - name: Run integration tests
@@ -208,18 +264,30 @@ jobs:
         TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
-  upload-results:
+    - name: Upload integration test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          coverage/integration/
+          junit-integration.xml
+        retention-days: 7
+
+  # Combine test results
+  combine-results:
     needs: [test-connection, test-unit, test-integration]
     runs-on: self-hosted
     if: always()
     steps:
-    - uses: actions/checkout@v4
+    - name: Download all test results
+      uses: actions/download-artifact@v4
+      with:
+        path: test-results/
 
-    - name: Upload test results
+    - name: Upload combined test results
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
-        path: |
-          coverage/
-          junit.xml
+        name: all-test-results
+        path: test-results/
         retention-days: 7

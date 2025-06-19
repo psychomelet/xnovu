@@ -7,6 +7,7 @@ export interface RulePollingLoopConfig {
   pollIntervalMs: number
   batchSize: number
   enterpriseId?: string // Optional enterprise ID filter for test isolation
+  initialDelayMs?: number // Optional initial delay before first poll (default 5000ms)
 }
 
 export class RulePollingLoop {
@@ -114,8 +115,14 @@ export class RulePollingLoop {
       }
     }
 
-    // Initial poll after a short delay
-    setTimeout(poll, 5000)
+    // Initial poll after a configurable delay (default 5s, but tests can use 0)
+    const initialDelay = this.config.initialDelayMs ?? 5000
+    if (initialDelay > 0) {
+      setTimeout(poll, initialDelay)
+    } else {
+      // For tests, poll immediately
+      poll()
+    }
 
     // Schedule regular polls
     this.pollInterval = setInterval(poll, this.config.pollIntervalMs)
