@@ -39,6 +39,41 @@ describe('NotificationPollingLoop', () => {
   const testSubscriberId = uuidv4() // Recipients field expects a UUID
   let testWorkflowId: number
 
+  // Helper function to retry checking notification status
+  const waitForNotificationStatus = async (
+    notificationId: number,
+    expectedStatus: string,
+    maxRetries: number = 5,
+    retryIntervalMs: number = 500
+  ): Promise<void> => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const { data: notification } = await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .select('notification_status')
+        .eq('id', notificationId)
+        .single()
+
+      if (notification?.notification_status === expectedStatus) {
+        return // Success
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryIntervalMs))
+      }
+    }
+
+    // Final check for better error message
+    const { data: finalNotification } = await supabase
+      .schema('notify')
+      .from('ent_notification')
+      .select('notification_status')
+      .eq('id', notificationId)
+      .single()
+
+    throw new Error(`Expected notification ${notificationId} to have status '${expectedStatus}' but got '${finalNotification?.notification_status}' after ${maxRetries} attempts`)
+  }
+
   beforeAll(async () => {
     // Setup real database connection
     supabase = createSupabaseAdmin()
@@ -139,8 +174,8 @@ describe('NotificationPollingLoop', () => {
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait for polling to process the notification
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Wait for polling to process the notification with retry logic
+      await waitForNotificationStatus(notification!.id, 'PROCESSING')
       
       // Verify workflow was triggered
       expect(mockWorkflowClient.start).toHaveBeenCalledWith(
@@ -151,16 +186,6 @@ describe('NotificationPollingLoop', () => {
           args: [{ notificationId: notification!.id }]
         }
       )
-      
-      // Verify notification status was updated
-      const { data: updatedNotification } = await supabase
-        .schema('notify')
-        .from('ent_notification')
-        .select('notification_status')
-        .eq('id', notification!.id)
-        .single()
-      
-      expect(updatedNotification?.notification_status).toBe('PROCESSING')
     })
 
     it('should process multiple notifications in parallel', async () => {
@@ -194,8 +219,10 @@ describe('NotificationPollingLoop', () => {
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait longer for polling to process all notifications
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Wait for all notifications to be processed with retry logic
+      for (const notification of notifications) {
+        await waitForNotificationStatus(notification.id, 'PROCESSING')
+      }
       
       // Verify workflows were triggered for our notifications (at least 3 calls)
       expect(mockWorkflowClient.start.mock.calls.length).toBeGreaterThanOrEqual(3)
@@ -205,18 +232,6 @@ describe('NotificationPollingLoop', () => {
       notifications.forEach(notification => {
         expect(calledWorkflowIds).toContain(`notification-${notification.id}`)
       })
-      
-      // Verify all notifications were updated to PROCESSING
-      for (const notification of notifications) {
-        const { data: updated } = await supabase
-          .schema('notify')
-          .from('ent_notification')
-          .select('notification_status')
-          .eq('id', notification.id)
-          .single()
-        
-        expect(updated?.notification_status).toBe('PROCESSING')
-      }
     })
 
     it('should not reprocess notifications already in PROCESSING state', async () => {
