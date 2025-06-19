@@ -272,46 +272,75 @@ async function verifyCleanup(enterpriseId: string) {
 }
 
 async function cleanupTestNamespace(enterpriseId: string) {
-  const testNamespace = `test-ns-${enterpriseId}`;
-  
   const temporalAddress = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
   const isSecure = temporalAddress.includes(':443');
   
+  // First, list all namespaces with test-ns- prefix
   try {
-    // Build temporal command with explicit namespace flag
-    let cmd = `temporal operator namespace delete -n "${testNamespace}"`;
+    let listCmd = `temporal operator namespace list`;
     
     // Add TLS flag if secure
     if (isSecure) {
-      cmd += ' --tls';
+      listCmd += ' --tls';
     }
     
     // Add address
-    cmd += ` --address "${temporalAddress}"`;
+    listCmd += ` --address "${temporalAddress}"`;
     
-    // Execute command with cleared TEMPORAL_NAMESPACE env to avoid conflicts
     const env = { ...process.env };
     delete env.TEMPORAL_NAMESPACE;
     
-    // Set a timeout for namespace deletion
-    const { stdout, stderr } = await execAsync(cmd, { env, timeout: 10000 });
+    const { stdout } = await execAsync(listCmd, { env, timeout: 10000 });
     
-    if (stderr && !stderr.includes('Namespace deletion') && !stderr.includes('already deleted')) {
-      console.error(`  ❌ Error deleting test namespace: ${stderr}`);
+    // Extract namespace names with test-ns- prefix
+    const namespaceMatches = stdout.match(/test-ns-[\w-]+/g) || [];
+    const uniqueNamespaces = [...new Set(namespaceMatches)];
+    
+    if (uniqueNamespaces.length === 0) {
+      console.log('  ✓ No test namespaces found to clean up');
+      return;
+    }
+    
+    console.log(`  🧹 Found ${uniqueNamespaces.length} test namespace(s) to clean up`);
+    
+    // Delete each test namespace
+    for (const namespace of uniqueNamespaces) {
+      try {
+        console.log(`     Deleting namespace: ${namespace}`);
+        
+        let deleteCmd = `temporal operator namespace delete -n "${namespace}" --yes`;
+        
+        // Add TLS flag if secure
+        if (isSecure) {
+          deleteCmd += ' --tls';
+        }
+        
+        // Add address
+        deleteCmd += ` --address "${temporalAddress}"`;
+        
+        const { stderr } = await execAsync(deleteCmd, { env, timeout: 10000 });
+        
+        if (stderr && !stderr.includes('Namespace deletion') && !stderr.includes('already deleted')) {
+          console.error(`     ❌ Error deleting ${namespace}: ${stderr}`);
+        } else {
+          console.log(`     ✓ Deleted ${namespace}`);
+        }
+      } catch (error: any) {
+        if (error.killed || error.code === 'ETIMEDOUT') {
+          console.warn(`     ⚠️  Timeout deleting ${namespace} - may continue in background`);
+        } else if (error.message?.includes('Namespace not found') || 
+            error.message?.includes('namespace not found') ||
+            error.stderr?.includes('Namespace not found') ||
+            error.stderr?.includes('namespace not found')) {
+          // Namespace already gone, this is fine
+        } else if (error.message?.includes('deadline exceeded')) {
+          console.warn(`     ⚠️  Deadline exceeded deleting ${namespace}`);
+        } else {
+          console.error(`     ❌ Failed to delete ${namespace}:`, error.message || error);
+        }
+      }
     }
   } catch (error: any) {
-    // Check if it's a timeout
-    if (error.killed || error.code === 'ETIMEDOUT') {
-      console.warn(`  ⚠️  Timeout during test namespace cleanup - may continue in background`);
-    } else if (error.message?.includes('Namespace not found') || 
-        error.message?.includes('namespace not found') ||
-        error.stderr?.includes('Namespace not found') ||
-        error.stderr?.includes('namespace not found')) {
-      // Namespace already gone, this is fine
-    } else if (error.message?.includes('deadline exceeded')) {
-      console.warn(`  ⚠️  Deadline exceeded during test namespace cleanup`);
-    } else {
-      console.error(`  ❌ Failed to clean up test namespace:`, error.message || error);
-    }
+    console.error(`  ❌ Failed to list/clean test namespaces:`, error.message || error);
   }
 }
