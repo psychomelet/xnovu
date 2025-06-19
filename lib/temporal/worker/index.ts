@@ -15,12 +15,12 @@ let rulePollingLoop: RulePollingLoop | null = null
 export async function createWorker(): Promise<Worker> {
   if (!workerConnection) {
     const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
-    const isSecure = address.includes(':443') || address.startsWith('https://')
+    const useTls = process.env.TEMPORAL_TLS === 'true'
     
     // First ensure namespace exists using a client connection
     const clientConnection = await Connection.connect({
       address,
-      tls: isSecure ? {} : false,
+      tls: useTls ? {} : false,
     })
     
     try {
@@ -32,7 +32,7 @@ export async function createWorker(): Promise<Worker> {
     // Now create the worker connection
     workerConnection = await NativeConnection.connect({
       address,
-      tls: isSecure ? {} : false,
+      tls: useTls ? {} : false,
     })
   }
 

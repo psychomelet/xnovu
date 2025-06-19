@@ -33,15 +33,15 @@ describe('Temporal Connection', () => {
       console.log(`   Environment: ${process.env.NODE_ENV}`)
       console.log(`   Namespace: ${namespace}`)
 
-      // Determine if TLS is needed based on address
-      const isSecure = address.includes(':443') || address.startsWith('https://')
+      // Determine if TLS is needed based on environment variable
+      const useTls = process.env.TEMPORAL_TLS === 'true'
 
       let connection: Connection
 
       // Multiple connection attempts with different configurations
       const connectionConfigs = [
-        { tls: isSecure ? {} : false },
-        { tls: isSecure ? { serverNameOverride: address.split(':')[0] } : false },
+        { tls: useTls ? {} : false },
+        { tls: useTls ? { serverNameOverride: address.split(':')[0] } : false },
       ]
 
       let lastError: any
@@ -109,13 +109,13 @@ describe('Temporal Connection', () => {
   describe('Namespace Access', () => {
     it('should list available namespaces', async () => {
       const address = process.env.TEMPORAL_ADDRESS!
-      const isSecure = address.includes(':443') || address.startsWith('https://')
+      const useTls = process.env.TEMPORAL_TLS === 'true'
 
       console.log('\n🔍 Testing namespace access...')
 
       const connection = await Connection.connect({
         address,
-        tls: isSecure ? {} : false,
+        tls: useTls ? {} : false,
         connectTimeout: '10s',
       })
 

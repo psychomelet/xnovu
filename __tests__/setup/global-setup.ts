@@ -18,11 +18,11 @@ export default async function globalSetup() {
   let connection: Connection | null = null;
   try {
     const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
-    const isSecure = address.includes(':443') || address.startsWith('https://');
+    const useTls = process.env.TEMPORAL_TLS === 'true';
     
     connection = await Connection.connect({
       address,
-      tls: isSecure ? {} : false,
+      tls: useTls ? {} : false,
     });
     
     await ensureNamespaceExists(connection, testNamespace);

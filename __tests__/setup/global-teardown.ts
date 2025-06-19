@@ -117,13 +117,13 @@ async function cleanupTemporal(enterpriseId: string) {
   let connection: Connection | null = null;
   
   try {
-    // Determine if TLS is needed based on address
-    const isSecure = temporalAddress.includes(':443') || temporalAddress.startsWith('https://');
+    // Determine if TLS is needed based on environment variable
+    const useTls = process.env.TEMPORAL_TLS === 'true';
     
     // Try multiple connection configurations with shorter timeout for cleanup
     const connectionConfigs = [
-      { tls: isSecure ? {} : false, connectTimeout: '5s' },
-      { tls: isSecure ? { serverNameOverride: temporalAddress.split(':')[0] } : false, connectTimeout: '5s' },
+      { tls: useTls ? {} : false, connectTimeout: '5s' },
+      { tls: useTls ? { serverNameOverride: temporalAddress.split(':')[0] } : false, connectTimeout: '5s' },
     ];
     
     let lastError: any;
