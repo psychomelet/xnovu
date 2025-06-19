@@ -117,12 +117,13 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       })
 
       // The namespace should have been created, so registerNamespace must have been invoked.
+      // Since uniqueTestNamespace starts with 'test-ns-', it gets test namespace behavior
       expect(registerSpy).toHaveBeenCalledWith({
         namespace: uniqueTestNamespace,
         workflowExecutionRetentionPeriod: {
-          seconds: 7 * 24 * 60 * 60, // 7 days in seconds
+          seconds: 24 * 60 * 60, // 1 day (test namespace minimum)
         },
-        description: 'XNovu notification processing namespace',
+        description: 'XNovu test namespace (temporary)',
         isGlobalNamespace: false,
       })
 
