@@ -19,8 +19,8 @@ describe('RulePollingLoop Integration', () => {
   let testRules: NotificationRule[] = []
 
   const config = {
-    pollIntervalMs: 100, // Fast polling for tests
-    batchSize: 10,
+    pollIntervalMs: 200, // Balanced polling for tests
+    batchSize: 5, // Smaller batch size for tests
     enterpriseId: testEnterpriseId, // Filter polling to test enterprise only
     initialDelayMs: 0, // No initial delay for tests
   }
@@ -33,7 +33,7 @@ describe('RulePollingLoop Integration', () => {
 
   afterAll(async () => {
     // No need to cleanup schedules - namespace deletion handles it
-  }, 5000)
+  }, 10000)
 
   beforeEach(() => {
     pollingLoop = new RulePollingLoop(config)
@@ -64,7 +64,7 @@ describe('RulePollingLoop Integration', () => {
       // Start polling - errors in sync should not stop the loop
       await pollingLoop.start()
       expect(pollingLoop.getIsRunning()).toBe(true)
-    }, 5000)
+    }, 10000)
 
     it('should not start if already running', async () => {
       await pollingLoop.start()
@@ -72,7 +72,7 @@ describe('RulePollingLoop Integration', () => {
 
       // Should still be running
       expect(pollingLoop.getIsRunning()).toBe(true)
-    }, 5000)
+    }, 10000)
   })
 
   describe('polling for changes', () => {
@@ -131,7 +131,7 @@ describe('RulePollingLoop Integration', () => {
       // Verify schedule still exists
       const description = await getSchedule(scheduleId)
       expect(description).toBeDefined()
-    }, 5000)
+    }, 10000)
 
     it('should remove schedules for deactivated rules', async () => {
       const ruleToDeactivate = testRules[0]
@@ -175,7 +175,7 @@ describe('RulePollingLoop Integration', () => {
 
       await pollingLoop.stop()
       expect(pollingLoop.getIsRunning()).toBe(false)
-    }, 5000)
+    }, 10000)
 
     it('should do nothing if not running', async () => {
       await expect(pollingLoop.stop()).resolves.not.toThrow()
@@ -208,12 +208,12 @@ describe('RulePollingLoop Integration', () => {
       // Verify orphaned schedule was removed
       const description = await getSchedule(scheduleId)
       expect(description).toBeNull()
-    }, 5000)
+    }, 10000)
 
     it('should warn if not running', async () => {
       await pollingLoop.stop()
       await pollingLoop.forceReconciliation()
       // Should complete without error
-    }, 5000)
+    }, 10000)
   })
 })

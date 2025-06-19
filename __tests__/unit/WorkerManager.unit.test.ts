@@ -122,6 +122,9 @@ describe('WorkerManager', () => {
     })
 
     it('should report correct uptime', async () => {
+      // Add small delay to ensure uptime is measurable in fast CI environments
+      await new Promise(resolve => setTimeout(resolve, 10))
+      
       const healthStatus = await workerManager.getHealthStatus()
 
       // Uptime should be greater than 0 since worker started in beforeAll

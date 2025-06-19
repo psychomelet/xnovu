@@ -163,22 +163,37 @@ export async function deleteSchedule(rule: NotificationRule): Promise<void> {
   }
 }
 
-export async function listSchedules(): Promise<Array<{ id: string; description: ScheduleDescription }>> {
+export async function listSchedules(options?: { 
+  prefix?: string;
+  includeDescription?: boolean;
+}): Promise<Array<{ id: string; description?: ScheduleDescription }>> {
   const client = await getScheduleClient()
-  const schedules: Array<{ id: string; description: ScheduleDescription }> = []
+  const schedules: Array<{ id: string; description?: ScheduleDescription }> = []
   
   for await (const scheduleSummary of client.list()) {
-    try {
-      const handle = client.getHandle(scheduleSummary.scheduleId)
-      const description = await handle.describe()
+    // Filter by prefix if provided
+    if (options?.prefix && !scheduleSummary.scheduleId.startsWith(options.prefix)) {
+      continue
+    }
+    
+    if (options?.includeDescription) {
+      try {
+        const handle = client.getHandle(scheduleSummary.scheduleId)
+        const description = await handle.describe()
+        schedules.push({
+          id: scheduleSummary.scheduleId,
+          description,
+        })
+      } catch (error) {
+        logger.warn('Failed to describe schedule', {
+          scheduleId: scheduleSummary.scheduleId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    } else {
+      // Just return the ID without description for performance
       schedules.push({
         id: scheduleSummary.scheduleId,
-        description,
-      })
-    } catch (error) {
-      logger.warn('Failed to describe schedule', {
-        scheduleId: scheduleSummary.scheduleId,
-        error: error instanceof Error ? error.message : 'Unknown error'
       })
     }
   }
@@ -202,4 +217,26 @@ export async function getSchedule(scheduleId: string): Promise<ScheduleDescripti
     }
     throw error
   }
+}
+
+/**
+ * Batch check if schedules exist without fetching full descriptions
+ * More efficient than calling getSchedule multiple times
+ */
+export async function checkSchedulesExist(scheduleIds: string[]): Promise<Map<string, boolean>> {
+  const existsMap = new Map<string, boolean>()
+  
+  // List all schedules with the prefix (without descriptions for performance)
+  const existingSchedules = await listSchedules({ 
+    prefix: 'rule-',
+    includeDescription: false 
+  })
+  
+  const existingIds = new Set(existingSchedules.map(s => s.id))
+  
+  for (const id of scheduleIds) {
+    existsMap.set(id, existingIds.has(id))
+  }
+  
+  return existsMap
 }

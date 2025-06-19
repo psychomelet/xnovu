@@ -31,8 +31,11 @@ export class RuleSyncService {
         enterpriseId: enterpriseId || 'all'
       })
       
-      // Get all existing schedules from Temporal
-      const existingSchedules = await listSchedules()
+      // Get all existing schedules from Temporal (only IDs for performance)
+      const existingSchedules = await listSchedules({ 
+        prefix: 'rule-',
+        includeDescription: false 
+      })
       const scheduleMap = new Map<string, boolean>()
       
       for (const schedule of existingSchedules) {
@@ -199,8 +202,11 @@ export class RuleSyncService {
         ruleMap.set(scheduleId, rule)
       }
       
-      // Get all schedules
-      const schedules = await listSchedules()
+      // Get all schedules (only IDs for performance)
+      const schedules = await listSchedules({ 
+        prefix: 'rule-',
+        includeDescription: false 
+      })
       
       // Update or create schedules for active rules
       for (const [scheduleId, rule] of ruleMap) {
