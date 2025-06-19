@@ -292,7 +292,7 @@ describe('Schedule Client Integration', () => {
         return testSchedules.length === 3
       }, 15000)
 
-      const schedules = await listSchedules()
+      const schedules = await listSchedules({ includeDescription: true })
       
       expect(schedules.length).toBeGreaterThanOrEqual(3)
       
