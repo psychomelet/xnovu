@@ -1,6 +1,6 @@
-/** @type {import('next').NextConfig} */
 import { cpus } from 'os';
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
   experimental: {
