@@ -196,17 +196,35 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       registerSpy.mockRestore()
     }, 15000)
 
-    it('should create namespace with correct retention period', async () => {
+    it('should create test namespace without retention period', async () => {
       const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
 
-      // Use a unique namespace for retention test
-      const retentionNamespace = `test-ns-retention-${Date.now()}`
-      createdNamespaces.push(retentionNamespace)
+      // Use a unique test namespace
+      const testNamespace = `test-ns-retention-${Date.now()}`
+      createdNamespaces.push(testNamespace)
 
-      await ensureNamespaceExists(connection, retentionNamespace)
+      await ensureNamespaceExists(connection, testNamespace)
 
-      // Assert that the namespace creation request contains the correct
-      // retention period and metadata.
+      // Assert that test namespace has no retention period and correct description
+      expect(registerSpy).toHaveBeenCalled()
+      const registerCall = registerSpy.mock.calls[0][0] as any
+      expect(registerCall.workflowExecutionRetentionPeriod).toBeUndefined()
+      expect(registerCall.description).toBe('XNovu test namespace (temporary)')
+      expect(registerCall.isGlobalNamespace).toBe(false)
+
+      registerSpy.mockRestore()
+    }, 15000)
+
+    it('should create production namespace with retention period', async () => {
+      const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
+
+      // Use a production-style namespace name
+      const productionNamespace = `prod-namespace-${Date.now()}`
+      createdNamespaces.push(productionNamespace)
+
+      await ensureNamespaceExists(connection, productionNamespace)
+
+      // Assert that production namespace has retention period and correct description
       expect(registerSpy).toHaveBeenCalled()
       const registerCall = registerSpy.mock.calls[0][0] as any
       expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(7 * 24 * 60 * 60)
