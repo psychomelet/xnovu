@@ -41,7 +41,7 @@ jobs:
       uses: temporalio/setup-temporal@v0
 
     - name: Verify Temporal CLI
-      run: temporal operator namespace list --address ${{ secrets.TEMPORAL_ADDRESS }}
+      run: temporal operator cluster health --address ${{ secrets.TEMPORAL_ADDRESS }}
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
