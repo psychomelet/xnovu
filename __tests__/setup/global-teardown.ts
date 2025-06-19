@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import { Client as TemporalClient, Connection } from '@temporalio/client';
-import { deleteTemporalNamespace } from '../utils/temporal-namespace-cleanup';
+import { cleanupTestNamespaces } from '../utils/temporal-namespace-cleanup';
 
 export default async function globalTeardown() {
   console.log('\n🧹 Global test teardown starting...');
@@ -269,8 +269,6 @@ async function verifyCleanup(enterpriseId: string) {
 }
 
 async function cleanupTestNamespace(enterpriseId: string) {
-  const testNamespace = `test-ns-${enterpriseId}`;
-  
-  console.log(`🗑️  Deleting test namespace: ${testNamespace}`);
-  await deleteTemporalNamespace(testNamespace);
+  // Clean up ALL test namespaces with test-ns- prefix, not just the enterprise-specific one
+  await cleanupTestNamespaces('test-ns-');
 }
