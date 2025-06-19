@@ -1,10 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
 import { Client as TemporalClient, Connection } from '@temporalio/client';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { cleanupTestNamespaces } from '../utils/temporal-namespace-cleanup';
 
 export default async function globalTeardown() {
   console.log('\n🧹 Global test teardown starting...');
@@ -272,75 +269,6 @@ async function verifyCleanup(enterpriseId: string) {
 }
 
 async function cleanupTestNamespace(enterpriseId: string) {
-  const temporalAddress = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
-  const isSecure = temporalAddress.includes(':443');
-  
-  // First, list all namespaces with test-ns- prefix
-  try {
-    let listCmd = `temporal operator namespace list`;
-    
-    // Add TLS flag if secure
-    if (isSecure) {
-      listCmd += ' --tls';
-    }
-    
-    // Add address
-    listCmd += ` --address "${temporalAddress}"`;
-    
-    const env = { ...process.env };
-    delete env.TEMPORAL_NAMESPACE;
-    
-    const { stdout } = await execAsync(listCmd, { env, timeout: 10000 });
-    
-    // Extract namespace names with test-ns- prefix
-    const namespaceMatches = stdout.match(/test-ns-[\w-]+/g) || [];
-    const uniqueNamespaces = [...new Set(namespaceMatches)];
-    
-    if (uniqueNamespaces.length === 0) {
-      console.log('  ✓ No test namespaces found to clean up');
-      return;
-    }
-    
-    console.log(`  🧹 Found ${uniqueNamespaces.length} test namespace(s) to clean up`);
-    
-    // Delete each test namespace
-    for (const namespace of uniqueNamespaces) {
-      try {
-        console.log(`     Deleting namespace: ${namespace}`);
-        
-        let deleteCmd = `temporal operator namespace delete -n "${namespace}" --yes`;
-        
-        // Add TLS flag if secure
-        if (isSecure) {
-          deleteCmd += ' --tls';
-        }
-        
-        // Add address
-        deleteCmd += ` --address "${temporalAddress}"`;
-        
-        const { stderr } = await execAsync(deleteCmd, { env, timeout: 10000 });
-        
-        if (stderr && !stderr.includes('Namespace deletion') && !stderr.includes('already deleted')) {
-          console.error(`     ❌ Error deleting ${namespace}: ${stderr}`);
-        } else {
-          console.log(`     ✓ Deleted ${namespace}`);
-        }
-      } catch (error: any) {
-        if (error.killed || error.code === 'ETIMEDOUT') {
-          console.warn(`     ⚠️  Timeout deleting ${namespace} - may continue in background`);
-        } else if (error.message?.includes('Namespace not found') || 
-            error.message?.includes('namespace not found') ||
-            error.stderr?.includes('Namespace not found') ||
-            error.stderr?.includes('namespace not found')) {
-          // Namespace already gone, this is fine
-        } else if (error.message?.includes('deadline exceeded')) {
-          console.warn(`     ⚠️  Deadline exceeded deleting ${namespace}`);
-        } else {
-          console.error(`     ❌ Failed to delete ${namespace}:`, error.message || error);
-        }
-      }
-    }
-  } catch (error: any) {
-    console.error(`  ❌ Failed to list/clean test namespaces:`, error.message || error);
-  }
+  // Clean up ALL test namespaces with test-ns- prefix, not just the enterprise-specific one
+  await cleanupTestNamespaces('test-ns-');
 }
