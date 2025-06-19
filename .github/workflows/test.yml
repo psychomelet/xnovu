@@ -17,9 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Temporal CLI
-      uses: temporalio/setup-temporal@v0
-
     - name: Install pnpm
       uses: pnpm/action-setup@v4
       with:
@@ -39,6 +36,12 @@ jobs:
         key: jest-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml') }}
         restore-keys: |
           jest-${{ runner.os }}-
+
+    - name: Install Temporal CLI
+      uses: temporalio/setup-temporal@v0
+
+    - name: Verify Temporal CLI
+      run: temporal operator namespace list --address ${{ secrets.TEMPORAL_ADDRESS }}
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
