@@ -269,6 +269,7 @@ async function verifyCleanup(enterpriseId: string) {
 }
 
 async function cleanupTestNamespace(enterpriseId: string) {
-  // Clean up ALL test namespaces with test-ns- prefix, not just the enterprise-specific one
-  await cleanupTestNamespaces('test-ns-');
+  // Clean up only the specific test namespace created by this test run
+  const testNamespace = `test-ns-${enterpriseId}`;
+  await cleanupTestNamespaces(testNamespace);
 }

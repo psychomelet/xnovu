@@ -16,6 +16,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
   let connection: Connection
   let testNamespace: string
   const requiredEnvVars = ['TEMPORAL_ADDRESS', 'TEMPORAL_NAMESPACE']
+  const createdNamespaces: string[] = []
 
   beforeAll(async () => {
     // Check for required environment variables
@@ -42,6 +43,11 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
   }, 30000)
 
   afterAll(async () => {
+    // Clean up all namespaces created during this test
+    for (const namespace of createdNamespaces) {
+      await deleteTemporalNamespace(namespace)
+    }
+    
     if (connection) {
       await connection.close()
     }
@@ -102,6 +108,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       // Use a unique test namespace for this specific test
       const uniqueTestNamespace = `test-ns-create-${Date.now()}`
+      createdNamespaces.push(uniqueTestNamespace)
 
       await ensureNamespaceExists(connection, uniqueTestNamespace)
 
@@ -121,9 +128,6 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       describeSpy.mockRestore()
       registerSpy.mockRestore()
-
-      // Clean up the created namespace
-      await deleteTemporalNamespace(uniqueTestNamespace)
     }, 20000)
 
     it('should handle race condition when namespace is created by another process', async () => {
@@ -197,6 +201,7 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
 
       // Use a unique namespace for retention test
       const retentionNamespace = `test-ns-retention-${Date.now()}`
+      createdNamespaces.push(retentionNamespace)
 
       await ensureNamespaceExists(connection, retentionNamespace)
 
@@ -209,9 +214,6 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       expect(registerCall.isGlobalNamespace).toBe(false)
 
       registerSpy.mockRestore()
-
-      // Clean up the created namespace
-      await deleteTemporalNamespace(retentionNamespace)
     }, 15000)
   })
 
