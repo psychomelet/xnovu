@@ -2,12 +2,12 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { createWorkflowMetadata } from '@/app/novu/types/metadata';
 import { payloadSchema, controlSchema } from './schemas';
 
-export const defaultchatMetadata = createWorkflowMetadata({
-  workflow_key: 'default-chat',
-  name: 'Default Chat',
-  description: 'Default chat template supporting Slack, Teams, Discord, and generic webhooks',
-  workflow_type: 'DYNAMIC',
-  default_channels: ['CHAT'],
+export const defaultpushMetadata = createWorkflowMetadata({
+  workflow_key: 'default-push',
+  name: 'Default Push',
+  description: 'Default push notification template with platform-specific options',
+  workflow_type: 'STATIC',
+  default_channels: ['PUSH'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,
   control_schema: zodToJsonSchema(controlSchema) as Record<string, any>,
   // Optional fields:
