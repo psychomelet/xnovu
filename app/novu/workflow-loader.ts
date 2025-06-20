@@ -4,6 +4,7 @@
  */
 
 // Import all workflows
+import { defaultDynamicMultiWorkflow } from "./workflows/dynamic/default-dynamic-multi/workflow";
 import { defaultChatWorkflow } from "./workflows/static/default-chat/workflow";
 import { defaultEmailWorkflow } from "./workflows/static/default-email/workflow";
 import { defaultInAppWorkflow } from "./workflows/static/default-in-app/workflow";
@@ -13,6 +14,7 @@ import { defaultSmsWorkflow } from "./workflows/static/default-sms/workflow";
 
 // Workflow keys for easy reference
 export const WORKFLOW_KEYS = {
+  dynamicMulti: 'default-dynamic-multi',
   chat: 'default-chat',
   email: 'default-email',
   inApp: 'default-in-app',
@@ -23,6 +25,7 @@ export const WORKFLOW_KEYS = {
 
 // Array of all workflow instances
 export const workflows = [
+  defaultDynamicMultiWorkflow,
   defaultChatWorkflow,
   defaultEmailWorkflow,
   defaultInAppWorkflow,
