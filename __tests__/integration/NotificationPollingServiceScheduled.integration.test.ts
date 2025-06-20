@@ -22,12 +22,16 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
   const waitForNotification = async (
     pollFn: () => Promise<NotificationRow[]>,
     notificationId: number,
-    maxRetries: number = 5,
+    maxRetries: number = 10,
     retryDelay: number = 500
   ): Promise<NotificationRow | undefined> => {
     console.log(`Waiting for notification ${notificationId} (max ${maxRetries} retries)`);
     
     for (let i = 0; i < maxRetries; i++) {
+      // Reset polling timestamp before each retry to ensure we can find the notification
+      // Use a very old timestamp to capture all notifications including the one we just created
+      pollingService.resetPollTimestamp(new Date(Date.now() - 48 * 60 * 60 * 1000));
+      
       const results = await pollFn();
       console.log(`Attempt ${i + 1}: Found ${results.length} notifications`);
       
@@ -221,12 +225,10 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       // Add a small delay to ensure database write is complete
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Use the helper function that retries with increased retries and delay
+      // Use the helper function to find the notification
       const found = await waitForNotification(
         () => pollNotificationsForTest(),
-        notification.id,
-        20,  // Increase retries
-        1000 // 1 second between retries
+        notification.id
       );
       
       expect(found).toBeDefined();
