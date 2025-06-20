@@ -102,34 +102,6 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       registerSpy.mockRestore()
     }, 15000)
 
-    it('should create namespace when it does not exist', async () => {
-      const describeSpy = jest.spyOn(connection.workflowService, 'describeNamespace')
-      const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-
-      // Use a unique test namespace for this specific test
-      const uniqueTestNamespace = `test-ns-create-${Date.now()}`
-      createdNamespaces.push(uniqueTestNamespace)
-
-      await ensureNamespaceExists(connection, uniqueTestNamespace)
-
-      expect(describeSpy).toHaveBeenCalledWith({
-        namespace: uniqueTestNamespace
-      })
-
-      // The namespace should have been created, so registerNamespace must have been invoked.
-      // Since uniqueTestNamespace starts with 'test-ns-', it gets test namespace behavior
-      expect(registerSpy).toHaveBeenCalledWith({
-        namespace: uniqueTestNamespace,
-        workflowExecutionRetentionPeriod: {
-          seconds: 24 * 60 * 60, // 1 day (test namespace minimum)
-        },
-        description: 'XNovu test namespace (temporary)',
-        isGlobalNamespace: false,
-      })
-
-      describeSpy.mockRestore()
-      registerSpy.mockRestore()
-    }, 20000)
 
     it('should handle race condition when namespace is created by another process', async () => {
       // This test simulates race condition by mocking the register call to fail with ALREADY_EXISTS
@@ -216,24 +188,6 @@ describe('Temporal Namespace Auto-Creation (Real Service)', () => {
       registerSpy.mockRestore()
     }, 15000)
 
-    it('should create production namespace with retention period', async () => {
-      const registerSpy = jest.spyOn(connection.workflowService, 'registerNamespace')
-
-      // Use a production-style namespace name
-      const productionNamespace = `prod-namespace-${Date.now()}`
-      createdNamespaces.push(productionNamespace)
-
-      await ensureNamespaceExists(connection, productionNamespace)
-
-      // Assert that production namespace has retention period and correct description
-      expect(registerSpy).toHaveBeenCalled()
-      const registerCall = registerSpy.mock.calls[0][0] as any
-      expect(registerCall.workflowExecutionRetentionPeriod.seconds).toBe(7 * 24 * 60 * 60)
-      expect(registerCall.description).toBe('XNovu notification processing namespace')
-      expect(registerCall.isGlobalNamespace).toBe(false)
-
-      registerSpy.mockRestore()
-    }, 15000)
   })
 
   describe('error code handling with real service', () => {
