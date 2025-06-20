@@ -25,7 +25,11 @@ RUN corepack prepare pnpm@latest --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build the application
+# Build the application with minimal env vars to avoid runtime checks
+ENV NEXT_PUBLIC_SUPABASE_URL=https://dummy.supabase.co
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1bW15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDEyNzQwNjAsImV4cCI6MTk1NjgzODA2MH0.dummy
+ENV NOVU_SECRET_KEY=dummy_secret_key
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
 # Production image, copy all the files and run next
