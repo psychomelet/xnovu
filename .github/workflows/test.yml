@@ -195,20 +195,3 @@ jobs:
           junit-integration.xml
         retention-days: 7
 
-  # Combine test results
-  combine-results:
-    needs: [lint-build-connection, test-unit, test-integration]
-    runs-on: self-hosted
-    if: always()
-    steps:
-    - name: Download all test results
-      uses: actions/download-artifact@v4
-      with:
-        path: test-results/
-
-    - name: Upload combined test results
-      uses: actions/upload-artifact@v4
-      with:
-        name: all-test-results
-        path: test-results/
-        retention-days: 7
