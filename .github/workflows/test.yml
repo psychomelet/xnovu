@@ -97,8 +97,19 @@ jobs:
     - name: Install Temporal CLI
       uses: temporalio/setup-temporal@v0
 
-    - name: Verify Temporal CLI
-      run: temporal operator cluster health --address ${{ secrets.TEMPORAL_ADDRESS }}
+    - name: Start local Temporal server
+      shell: bash
+      run: |
+        temporal server start-dev --headless &
+        echo "Waiting for Temporal server to start..."
+        for i in {1..30}; do
+          if temporal operator namespace list 2>/dev/null | grep -q default; then
+            echo "Temporal server is ready"
+            break
+          fi
+          echo "Waiting for Temporal server... ($i/30)"
+          sleep 1
+        done
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
@@ -118,8 +129,8 @@ jobs:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        TEMPORAL_ADDRESS: ${{ secrets.TEMPORAL_ADDRESS }}
-        TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
+        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
     - name: Run connection tests
@@ -132,8 +143,8 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
-        TEMPORAL_ADDRESS: ${{ secrets.TEMPORAL_ADDRESS }}
-        TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
+        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
   # Unit tests
@@ -177,6 +188,20 @@ jobs:
     - name: Install Temporal CLI
       uses: temporalio/setup-temporal@v0
 
+    - name: Start local Temporal server
+      shell: bash
+      run: |
+        temporal server start-dev --headless &
+        echo "Waiting for Temporal server to start..."
+        for i in {1..30}; do
+          if temporal operator namespace list 2>/dev/null | grep -q default; then
+            echo "Temporal server is ready"
+            break
+          fi
+          echo "Waiting for Temporal server... ($i/30)"
+          sleep 1
+        done
+
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
 
@@ -194,8 +219,8 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
-        TEMPORAL_ADDRESS: ${{ secrets.TEMPORAL_ADDRESS }}
-        TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
+        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
     - name: Upload unit test results
@@ -249,6 +274,20 @@ jobs:
     - name: Install Temporal CLI
       uses: temporalio/setup-temporal@v0
 
+    - name: Start local Temporal server
+      shell: bash
+      run: |
+        temporal server start-dev --headless &
+        echo "Waiting for Temporal server to start..."
+        for i in {1..30}; do
+          if temporal operator namespace list 2>/dev/null | grep -q default; then
+            echo "Temporal server is ready"
+            break
+          fi
+          echo "Waiting for Temporal server... ($i/30)"
+          sleep 1
+        done
+
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
 
@@ -266,8 +305,8 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
-        TEMPORAL_ADDRESS: ${{ secrets.TEMPORAL_ADDRESS }}
-        TEMPORAL_NAMESPACE: ${{ secrets.TEMPORAL_NAMESPACE }}
+        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
     - name: Upload integration test results

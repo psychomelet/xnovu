@@ -59,6 +59,11 @@ pnpm start
 # Lint code
 pnpm lint
 
+# Testing with local Temporal server
+pnpm test              # Runs all tests (auto-starts Temporal locally)
+pnpm temporal:start    # Manually start local Temporal dev server
+pnpm temporal:stop     # Stop local Temporal server
+
 # Docker deployment
 # See docs/deployment.md for Docker commands and deployment strategies
 ```
@@ -78,19 +83,19 @@ pnpm test:integration
 pnpm test:coverage
 ```
 
-### Temporal Namespace Management in Tests
+### Hybrid Testing Approach
 
-All tests run in an isolated Temporal namespace created specifically for the test run:
-- Namespace pattern: `test-ns-{enterprise-id}`
-- Created automatically in global setup using the test enterprise ID
-- Deleted automatically in global teardown
-- All Temporal operations (workflows, schedules) are isolated to this namespace
+XNovu uses a hybrid testing approach for Temporal:
 
-This ensures:
-- Complete isolation between test runs
-- No interference with production or development namespaces  
-- Clean test environment for each test run
-- Automatic cleanup of all test resources
+1. **TestWorkflowEnvironment** - For workflow logic tests with time-skipping capabilities
+2. **Local Temporal Server** - For tests requiring real Temporal APIs (schedules, connections, workers)
+
+In CI/CD:
+- GitHub Actions installs Temporal CLI and starts a local dev server
+- All tests run against localhost:7233 with the default namespace
+- No persistence or UI needed for tests
+
+For detailed testing documentation, see `__tests__/CLAUDE.md`
 
 ## Project Structure
 
