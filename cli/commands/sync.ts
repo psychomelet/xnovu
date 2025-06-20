@@ -123,6 +123,7 @@ class SyncManager {
 
   async syncToNovuCloud(bridgeUrl: string): Promise<void> {
     const SECRET_KEY = process.env.NOVU_SECRET_KEY;
+    const API_URL = process.env.NOVU_API_URL;
 
     if (!SECRET_KEY) {
       throw new Error('Missing required environment variable: NOVU_SECRET_KEY');
@@ -130,6 +131,9 @@ class SyncManager {
 
     console.log('\n🚀 Syncing workflows to Novu Cloud...');
     console.log(`   Bridge URL: ${bridgeUrl}`);
+    if (API_URL) {
+      console.log(`   API URL: ${API_URL}`);
+    }
 
     try {
       // Test bridge URL returns expected response before syncing
@@ -146,12 +150,19 @@ class SyncManager {
       console.log(`   ✅ Bridge URL verified - Workflows: ${data.discovered?.workflows || 0}, Steps: ${data.discovered?.steps || 0}`);
 
       // Execute the Novu sync command
+      const syncArgs = ['novu@latest', 'sync', `--bridge-url=${bridgeUrl}`, `--secret-key=${SECRET_KEY}`];
+      
+      // Add API URL if provided for self-hosted instances
+      if (API_URL) {
+        syncArgs.push(`--api-url=${API_URL}`);
+      }
+
       console.log('   Running sync command...');
-      console.log(`   Command: npx novu@latest sync --bridge-url=${bridgeUrl} --secret-key=***`);
+      console.log('   Command: npx novu@latest sync [REDACTED]');
 
       try {
         // Use execa instead of execSync for better error handling
-        const { stdout, stderr } = await execa('npx', ['novu@latest', 'sync', `--bridge-url=${bridgeUrl}`, `--secret-key=${SECRET_KEY}`], {
+        const { stdout, stderr } = await execa('npx', syncArgs, {
           timeout: 60000,
           env: { ...process.env }
         });
