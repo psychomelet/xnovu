@@ -10,13 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  # Setup job: Install dependencies and prepare caches
-  setup:
+  # Lint, build, and connection tests
+  lint-build-connection:
     runs-on: self-hosted
     environment: Test
-    outputs:
-      deps-cache-key: ${{ steps.deps-cache-key.outputs.key }}
-      jest-cache-key: ${{ steps.jest-cache-key.outputs.key }}
     steps:
     - uses: actions/checkout@v4
 
@@ -38,89 +35,20 @@ jobs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
 
-    - name: Generate cache keys
-      id: deps-cache-key
-      run: echo "key=deps-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
-
-    - name: Generate Jest cache key
-      id: jest-cache-key
-      run: echo "key=jest-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}" >> $GITHUB_OUTPUT
-
-    # Cache dependencies for other jobs
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          node_modules
-          ~/.pnpm-store
-          .next
-        key: ${{ steps.deps-cache-key.outputs.key }}
-
-  # Lint, build, and connection tests
-  lint-build-connection:
-    needs: setup
-    runs-on: self-hosted
-    environment: Test
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: 10
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'pnpm'
-        registry-url: 'http://172.20.60.129:4873'
-
-    - name: Restore cached dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          node_modules
-          ~/.pnpm-store
-          .next
-        key: ${{ needs.setup.outputs.deps-cache-key }}
-
-    - name: Cache Jest
-      uses: actions/cache@v4
-      with:
-        path: .jest-cache
-        key: ${{ needs.setup.outputs.jest-cache-key }}-connection
-        restore-keys: |
-          ${{ needs.setup.outputs.jest-cache-key }}-
-          jest-${{ runner.os }}-
-
     - name: Install Temporal CLI
       uses: temporalio/setup-temporal@v0
 
     - name: Start local Temporal server
       shell: bash
       run: |
-        temporal server start-dev --headless &
-        echo "Waiting for Temporal server to start..."
-        for i in {1..30}; do
-          if temporal operator namespace list 2>/dev/null | grep -q default; then
-            echo "Temporal server is ready"
-            break
-          fi
-          echo "Waiting for Temporal server... ($i/30)"
-          sleep 1
-        done
-
-    - name: Configure pnpm registry
-      run: pnpm config set registry http://172.20.60.129:4873
-
-    - name: Install dependencies (if cache miss)
-      run: pnpm install --frozen-lockfile
+        PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
+        temporal server start-dev --headless --port $PORT &
+        echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
 
     - name: Run linter
       run: pnpm lint
 
-    - name: Run type check
+    - name: Run type check and build
       run: pnpm build
       env:
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
@@ -129,7 +57,7 @@ jobs:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_ADDRESS: ${{ env.TEMPORAL_ADDRESS }}
         TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
@@ -143,13 +71,12 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
-        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_ADDRESS: ${{ env.TEMPORAL_ADDRESS }}
         TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
   # Unit tests
   test-unit:
-    needs: setup
     runs-on: self-hosted
     environment: Test
     steps:
@@ -167,23 +94,11 @@ jobs:
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
 
-    - name: Restore cached dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          node_modules
-          ~/.pnpm-store
-          .next
-        key: ${{ needs.setup.outputs.deps-cache-key }}
+    - name: Configure pnpm registry
+      run: pnpm config set registry http://172.20.60.129:4873
 
-    - name: Cache Jest
-      uses: actions/cache@v4
-      with:
-        path: .jest-cache
-        key: ${{ needs.setup.outputs.jest-cache-key }}-unit
-        restore-keys: |
-          ${{ needs.setup.outputs.jest-cache-key }}-
-          jest-${{ runner.os }}-
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
 
     - name: Install Temporal CLI
       uses: temporalio/setup-temporal@v0
@@ -191,22 +106,9 @@ jobs:
     - name: Start local Temporal server
       shell: bash
       run: |
-        temporal server start-dev --headless &
-        echo "Waiting for Temporal server to start..."
-        for i in {1..30}; do
-          if temporal operator namespace list 2>/dev/null | grep -q default; then
-            echo "Temporal server is ready"
-            break
-          fi
-          echo "Waiting for Temporal server... ($i/30)"
-          sleep 1
-        done
-
-    - name: Configure pnpm registry
-      run: pnpm config set registry http://172.20.60.129:4873
-
-    - name: Install dependencies (if cache miss)
-      run: pnpm install --frozen-lockfile
+        PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
+        temporal server start-dev --headless --port $PORT &
+        echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
 
     - name: Run unit tests
       run: pnpm test:unit
@@ -219,7 +121,7 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
-        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_ADDRESS: ${{ env.TEMPORAL_ADDRESS }}
         TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
@@ -235,7 +137,6 @@ jobs:
 
   # Integration tests
   test-integration:
-    needs: setup
     runs-on: self-hosted
     environment: Test
     steps:
@@ -253,23 +154,11 @@ jobs:
         cache: 'pnpm'
         registry-url: 'http://172.20.60.129:4873'
 
-    - name: Restore cached dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          node_modules
-          ~/.pnpm-store
-          .next
-        key: ${{ needs.setup.outputs.deps-cache-key }}
+    - name: Configure pnpm registry
+      run: pnpm config set registry http://172.20.60.129:4873
 
-    - name: Cache Jest
-      uses: actions/cache@v4
-      with:
-        path: .jest-cache
-        key: ${{ needs.setup.outputs.jest-cache-key }}-integration
-        restore-keys: |
-          ${{ needs.setup.outputs.jest-cache-key }}-
-          jest-${{ runner.os }}-
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
 
     - name: Install Temporal CLI
       uses: temporalio/setup-temporal@v0
@@ -277,22 +166,9 @@ jobs:
     - name: Start local Temporal server
       shell: bash
       run: |
-        temporal server start-dev --headless &
-        echo "Waiting for Temporal server to start..."
-        for i in {1..30}; do
-          if temporal operator namespace list 2>/dev/null | grep -q default; then
-            echo "Temporal server is ready"
-            break
-          fi
-          echo "Waiting for Temporal server... ($i/30)"
-          sleep 1
-        done
-
-    - name: Configure pnpm registry
-      run: pnpm config set registry http://172.20.60.129:4873
-
-    - name: Install dependencies (if cache miss)
-      run: pnpm install --frozen-lockfile
+        PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
+        temporal server start-dev --headless --port $PORT &
+        echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
 
     - name: Run integration tests
       run: pnpm test:integration
@@ -305,7 +181,7 @@ jobs:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
         NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER }}
-        TEMPORAL_ADDRESS: localhost:7233
+        TEMPORAL_ADDRESS: ${{ env.TEMPORAL_ADDRESS }}
         TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
@@ -319,20 +195,3 @@ jobs:
           junit-integration.xml
         retention-days: 7
 
-  # Combine test results
-  combine-results:
-    needs: [lint-build-connection, test-unit, test-integration]
-    runs-on: self-hosted
-    if: always()
-    steps:
-    - name: Download all test results
-      uses: actions/download-artifact@v4
-      with:
-        path: test-results/
-
-    - name: Upload combined test results
-      uses: actions/upload-artifact@v4
-      with:
-        name: all-test-results
-        path: test-results/
-        retention-days: 7
