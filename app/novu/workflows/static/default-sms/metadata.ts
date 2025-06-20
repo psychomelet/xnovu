@@ -6,7 +6,7 @@ export const defaultsmsMetadata = createWorkflowMetadata({
   workflow_key: 'default-sms',
   name: 'Default Sms',
   description: 'Default SMS template with character limit awareness and urgency support',
-  workflow_type: 'DYNAMIC',
+  workflow_type: 'STATIC',
   default_channels: ['SMS'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,
   control_schema: zodToJsonSchema(controlSchema) as Record<string, any>,

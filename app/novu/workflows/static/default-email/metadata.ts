@@ -6,7 +6,7 @@ export const defaultemailMetadata = createWorkflowMetadata({
   workflow_key: 'default-email',
   name: 'Default Email',
   description: 'Default email template with customizable styling and content',
-  workflow_type: 'DYNAMIC',
+  workflow_type: 'STATIC',
   default_channels: ['EMAIL'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,
   control_schema: zodToJsonSchema(controlSchema) as Record<string, any>,

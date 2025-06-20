@@ -6,7 +6,7 @@ export const defaultchatMetadata = createWorkflowMetadata({
   workflow_key: 'default-chat',
   name: 'Default Chat',
   description: 'Default chat template supporting Slack, Teams, Discord, and generic webhooks',
-  workflow_type: 'DYNAMIC',
+  workflow_type: 'STATIC',
   default_channels: ['CHAT'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,
   control_schema: zodToJsonSchema(controlSchema) as Record<string, any>,
