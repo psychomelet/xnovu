@@ -100,7 +100,7 @@ jobs:
     - name: Start local Temporal server
       shell: bash
       run: |
-        temporal server start-dev --headless --namespace default --ip 127.0.0.1 --log-level warn &
+        temporal server start-dev --headless &
         echo "Waiting for Temporal server to start..."
         for i in {1..30}; do
           if temporal operator namespace list 2>/dev/null | grep -q default; then
@@ -191,7 +191,7 @@ jobs:
     - name: Start local Temporal server
       shell: bash
       run: |
-        temporal server start-dev --headless --namespace default --ip 127.0.0.1 --log-level warn &
+        temporal server start-dev --headless &
         echo "Waiting for Temporal server to start..."
         for i in {1..30}; do
           if temporal operator namespace list 2>/dev/null | grep -q default; then
@@ -277,7 +277,7 @@ jobs:
     - name: Start local Temporal server
       shell: bash
       run: |
-        temporal server start-dev --headless --namespace default --ip 127.0.0.1 --log-level warn &
+        temporal server start-dev --headless &
         echo "Waiting for Temporal server to start..."
         for i in {1..30}; do
           if temporal operator namespace list 2>/dev/null | grep -q default; then

@@ -33,9 +33,6 @@ class LocalTemporalServer implements TemporalServerManager {
       'server',
       'start-dev',
       '--headless',
-      '--namespace', 'default',
-      '--ip', '127.0.0.1',
-      '--log-level', 'warn',
     ], {
       stdio: 'pipe',
       detached: false,
