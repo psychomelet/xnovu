@@ -4,7 +4,7 @@
  * Setup script for running tests with local Temporal server
  */
 
-import { temporalServer } from './temporal-dev-server'
+import { temporalServer } from '../../../scripts/temporal-dev-server'
 
 async function setup() {
   console.log('Setting up test environment...')
