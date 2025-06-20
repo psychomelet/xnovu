@@ -4,7 +4,7 @@
  * Teardown script for cleaning up after tests
  */
 
-import { temporalServer } from './temporal-dev-server'
+import { temporalServer } from '../../../scripts/temporal-dev-server'
 
 async function teardown() {
   console.log('Cleaning up test environment...')
