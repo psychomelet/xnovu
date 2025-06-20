@@ -3,6 +3,7 @@ import { payloadSchema, controlSchema } from './schemas'
 import type { DynamicMultiPayload, DynamicMultiControls, ChannelConfig, TemplateRenderContext, RenderedContent } from './types'
 import { getTemplateRenderer } from '../../../../services/template/TemplateRenderer'
 import { notificationService } from '../../../../services/database/NotificationService'
+import { renderDynamicEmail } from '../../../emails/dynamic-email-template'
 
 export const defaultDynamicMultiWorkflow = workflow(
   'default-dynamic-multi',
@@ -100,217 +101,170 @@ export const defaultDynamicMultiWorkflow = workflow(
     }
 
     // Email Channel
-    if (payload.channels.email?.enabled) {
-      await step.email(
-        'dynamic-email',
-        async (stepControls) => {
-          const channelConfig = payload.channels.email!
-          const content = await renderContent(channelConfig, 'email')
-          const emailControls = (stepControls as DynamicMultiControls).emailSettings || {
-            templateStyle: 'default' as const,
-            showHeader: true,
-            showFooter: true,
-            headerLogoUrl: undefined,
-            unsubscribeUrl: undefined
-          }
-          
-          const templateStyles = {
-            default: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                  ${emailControls.showHeader ? `<h1 style="color: ${(stepControls as DynamicMultiControls).primaryColor}; text-align: center;">${(stepControls as DynamicMultiControls).companyName}</h1>` : ''}
-                  ${content.body}
-                  ${emailControls.showFooter ? `
-                    <hr style="margin: 40px 0; border: none; border-top: 1px solid #eee;">
-                    <p style="text-align: center; font-size: 12px; color: #666;">
-                      &copy; ${new Date().getFullYear()} ${(stepControls as DynamicMultiControls).companyName}. All rights reserved.
-                    </p>
-                  ` : ''}
-                </div>
-              </div>
-            `,
-            minimal: `
-              <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
-                ${content.body}
-              </div>
-            `,
-            branded: `
-              <div style="background: #f5f5f5; padding: 40px 20px;">
-                <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                  <div style="background: ${(stepControls as DynamicMultiControls).primaryColor}; color: white; padding: 30px; text-align: center;">
-                    <h1 style="margin: 0;">${(stepControls as DynamicMultiControls).companyName}</h1>
-                  </div>
-                  <div style="padding: 40px;">
-                    ${content.body}
-                  </div>
-                  <div style="background: #f9f9f9; padding: 20px; text-align: center; font-size: 12px; color: #666;">
-                    &copy; ${new Date().getFullYear()} ${(stepControls as DynamicMultiControls).companyName}
-                  </div>
-                </div>
-              </div>
-            `
-          }
-
-          const templateStyle = emailControls.templateStyle || 'default'
-          
-          return {
-            subject: content.subject || 'Notification',
-            body: `
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              </head>
-              <body style="margin: 0; padding: 0;">
-                ${templateStyles[templateStyle] || templateStyles.default}
-              </body>
-              </html>
-            `,
-            ...channelConfig.overrides
-          }
-        },
-        {
-          controlSchema
+    await step.email(
+      'dynamic-email',
+      async (stepControls) => {
+        const channelConfig = payload.channels.email!
+        const content = await renderContent(channelConfig, 'email')
+        const emailControls = (stepControls as DynamicMultiControls).emailSettings || {
+          templateStyle: 'default' as const,
+          showHeader: true,
+          showFooter: true,
+          headerLogoUrl: undefined,
+          unsubscribeUrl: undefined
         }
-      )
-    }
+        
+        // Use React Email to render the email
+        const emailHtml = await renderDynamicEmail({
+          subject: content.subject,
+          body: content.body,
+          companyName: (stepControls as DynamicMultiControls).companyName || 'XNovu',
+          primaryColor: (stepControls as DynamicMultiControls).primaryColor || '#0066cc',
+          variables: content.variables,
+          emailSettings: emailControls
+        })
+        
+        return {
+          subject: content.subject || 'Notification',
+          body: emailHtml,
+          ...channelConfig.overrides
+        }
+      },
+      {
+        skip: () => !payload.channels.email?.enabled,
+        controlSchema
+      }
+    )
 
     // In-App Channel
-    if (payload.channels.inApp?.enabled) {
-      await step.inApp(
-        'dynamic-in-app',
-        async (stepControls) => {
-          const channelConfig = payload.channels.inApp!
-          const content = await renderContent(channelConfig, 'inApp')
-          const inAppControls = (stepControls as DynamicMultiControls).inAppSettings || {
-            showAvatar: true,
-            avatarUrl: undefined,
-            enableRedirect: true
-          }
-          
-          return {
-            subject: content.subject || 'Notification',
-            body: content.body,
-            avatar: inAppControls.showAvatar ? inAppControls.avatarUrl : undefined,
-            redirect: inAppControls.enableRedirect && payload.recipientConfig?.customData?.actionUrl
-              ? { url: payload.recipientConfig.customData.actionUrl, target: '_blank' as const }
-              : undefined,
-            data: {
-              variables: content.variables,
-              enterpriseId,
-              channel: 'inApp',
-              ...channelConfig.overrides
-            },
-            ...channelConfig.overrides
-          }
-        },
-        {
-          controlSchema
+    await step.inApp(
+      'dynamic-in-app',
+      async (stepControls) => {
+        const channelConfig = payload.channels.inApp!
+        const content = await renderContent(channelConfig, 'inApp')
+        const inAppControls = (stepControls as DynamicMultiControls).inAppSettings || {
+          showAvatar: true,
+          avatarUrl: undefined,
+          enableRedirect: true
         }
-      )
-    }
+        
+        return {
+          subject: content.subject || 'Notification',
+          body: content.body,
+          avatar: inAppControls.showAvatar ? inAppControls.avatarUrl : undefined,
+          redirect: inAppControls.enableRedirect && payload.recipientConfig?.customData?.actionUrl
+            ? { url: payload.recipientConfig.customData.actionUrl, target: '_blank' as const }
+            : undefined,
+          data: {
+            variables: content.variables,
+            enterpriseId,
+            channel: 'inApp',
+            ...channelConfig.overrides
+          },
+          ...channelConfig.overrides
+        }
+      },
+      {
+        skip: () => !payload.channels.inApp?.enabled,
+        controlSchema
+      }
+    )
 
     // SMS Channel
-    if (payload.channels.sms?.enabled) {
-      await step.sms(
-        'dynamic-sms',
-        async (stepControls) => {
-          const channelConfig = payload.channels.sms!
-          const content = await renderContent(channelConfig, 'sms')
-          const smsControls = (stepControls as DynamicMultiControls).smsSettings || {
-            maxLength: 160,
-            includeCompanyName: true
-          }
-          
-          let smsBody = content.body
-          if (smsControls.includeCompanyName) {
-            smsBody = `${(stepControls as DynamicMultiControls).companyName}: ${smsBody}`
-          }
-          
-          // Truncate to SMS limit
-          const maxLength = smsControls.maxLength || 160
-          if (smsBody.length > maxLength) {
-            smsBody = smsBody.substring(0, maxLength - 3) + '...'
-          }
-          
-          return {
-            body: smsBody,
-            to: payload.recipientConfig?.recipientPhone,
-            ...channelConfig.overrides
-          }
-        },
-        {
-          skip: () => !payload.recipientConfig?.recipientPhone,
-          controlSchema
+    await step.sms(
+      'dynamic-sms',
+      async (stepControls) => {
+        const channelConfig = payload.channels.sms!
+        const content = await renderContent(channelConfig, 'sms')
+        const smsControls = (stepControls as DynamicMultiControls).smsSettings || {
+          maxLength: 160,
+          includeCompanyName: true
         }
-      )
-    }
+        
+        let smsBody = content.body
+        if (smsControls.includeCompanyName) {
+          smsBody = `${(stepControls as DynamicMultiControls).companyName}: ${smsBody}`
+        }
+        
+        // Truncate to SMS limit
+        const maxLength = smsControls.maxLength || 160
+        if (smsBody.length > maxLength) {
+          smsBody = smsBody.substring(0, maxLength - 3) + '...'
+        }
+        
+        return {
+          body: smsBody,
+          to: payload.recipientConfig?.recipientPhone,
+          ...channelConfig.overrides
+        }
+      },
+      {
+        skip: () => !payload.channels.sms?.enabled || !payload.recipientConfig?.recipientPhone,
+        controlSchema
+      }
+    )
 
     // Push Channel
-    if (payload.channels.push?.enabled) {
-      await step.push(
-        'dynamic-push',
-        async (stepControls) => {
-          const channelConfig = payload.channels.push!
-          const content = await renderContent(channelConfig, 'push')
-          const pushControls = (stepControls as DynamicMultiControls).pushSettings || {
-            ttl: 3600,
-            priority: 'normal' as const
-          }
-          
-          return {
-            subject: content.subject || 'Notification',
-            body: content.body,
-            data: {
-              variables: content.variables,
-              enterpriseId,
-              channel: 'push',
-              ...channelConfig.overrides
-            },
-            android: {
-              ttl: (pushControls.ttl || 3600) * 1000,
-              priority: pushControls.priority || 'normal'
-            },
-            ...channelConfig.overrides
-          }
-        },
-        {
-          controlSchema
+    await step.push(
+      'dynamic-push',
+      async (stepControls) => {
+        const channelConfig = payload.channels.push!
+        const content = await renderContent(channelConfig, 'push')
+        const pushControls = (stepControls as DynamicMultiControls).pushSettings || {
+          ttl: 3600,
+          priority: 'normal' as const
         }
-      )
-    }
+        
+        return {
+          subject: content.subject || 'Notification',
+          body: content.body,
+          data: {
+            variables: content.variables,
+            enterpriseId,
+            channel: 'push',
+            ...channelConfig.overrides
+          },
+          android: {
+            ttl: (pushControls.ttl || 3600) * 1000,
+            priority: pushControls.priority || 'normal'
+          },
+          ...channelConfig.overrides
+        }
+      },
+      {
+        skip: () => !payload.channels.push?.enabled,
+        controlSchema
+      }
+    )
 
     // Chat Channel
-    if (payload.channels.chat?.enabled) {
-      await step.chat(
-        'dynamic-chat',
-        async (stepControls) => {
-          const channelConfig = payload.channels.chat!
-          const content = await renderContent(channelConfig, 'chat')
-          const chatControls = (stepControls as DynamicMultiControls).chatSettings || {
-            platform: 'slack' as const,
-            webhookUrl: undefined,
-            enableMarkdown: true
-          }
-          
-          let chatBody = content.body
-          if (chatControls.enableMarkdown && chatControls.platform !== 'webhook') {
-            chatBody = content.subject ? `**${content.subject}**\n\n${chatBody}` : chatBody
-          }
-          
-          return {
-            body: chatBody,
-            webhookUrl: chatControls.webhookUrl,
-            ...channelConfig.overrides
-          }
-        },
-        {
-          skip: (stepControls) => !(stepControls as DynamicMultiControls).chatSettings?.webhookUrl,
-          controlSchema
+    await step.chat(
+      'dynamic-chat',
+      async (stepControls) => {
+        const channelConfig = payload.channels.chat!
+        const content = await renderContent(channelConfig, 'chat')
+        const chatControls = (stepControls as DynamicMultiControls).chatSettings || {
+          platform: 'slack' as const,
+          webhookUrl: undefined,
+          enableMarkdown: true
         }
-      )
-    }
+        
+        let chatBody = content.body
+        if (chatControls.enableMarkdown && chatControls.platform !== 'webhook') {
+          chatBody = content.subject ? `**${content.subject}**\n\n${chatBody}` : chatBody
+        }
+        
+        return {
+          body: chatBody,
+          webhookUrl: chatControls.webhookUrl,
+          ...channelConfig.overrides
+        }
+      },
+      {
+        skip: () => !payload.channels.chat?.enabled || !(payload.channels.chat as any)?.webhookUrl,
+        controlSchema
+      }
+    )
 
     // Update notification status to SENT if successful
     if (payload.notificationId) {
