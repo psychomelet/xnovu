@@ -104,16 +104,22 @@ jobs:
         PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
         echo "Starting Temporal server on port $PORT"
         temporal server start-dev --headless --port $PORT &
+        TEMPORAL_PID=$!
         echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
         echo "Waiting for Temporal server to start..."
         for i in {1..30}; do
-          if temporal operator namespace list --address localhost:$PORT 2>/dev/null | grep -q default; then
+          if curl -s http://localhost:$PORT/health > /dev/null 2>&1; then
             echo "Temporal server is ready on port $PORT"
             break
           fi
           echo "Waiting for Temporal server... ($i/30)"
-          sleep 1
+          sleep 2
         done
+        # Verify server is actually running
+        if ! curl -s http://localhost:$PORT/health > /dev/null 2>&1; then
+          echo "ERROR: Temporal server failed to start"
+          exit 1
+        fi
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
@@ -199,16 +205,22 @@ jobs:
         PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
         echo "Starting Temporal server on port $PORT"
         temporal server start-dev --headless --port $PORT &
+        TEMPORAL_PID=$!
         echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
         echo "Waiting for Temporal server to start..."
         for i in {1..30}; do
-          if temporal operator namespace list --address localhost:$PORT 2>/dev/null | grep -q default; then
+          if curl -s http://localhost:$PORT/health > /dev/null 2>&1; then
             echo "Temporal server is ready on port $PORT"
             break
           fi
           echo "Waiting for Temporal server... ($i/30)"
-          sleep 1
+          sleep 2
         done
+        # Verify server is actually running
+        if ! curl -s http://localhost:$PORT/health > /dev/null 2>&1; then
+          echo "ERROR: Temporal server failed to start"
+          exit 1
+        fi
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
@@ -289,16 +301,22 @@ jobs:
         PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
         echo "Starting Temporal server on port $PORT"
         temporal server start-dev --headless --port $PORT &
+        TEMPORAL_PID=$!
         echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
         echo "Waiting for Temporal server to start..."
         for i in {1..30}; do
-          if temporal operator namespace list --address localhost:$PORT 2>/dev/null | grep -q default; then
+          if curl -s http://localhost:$PORT/health > /dev/null 2>&1; then
             echo "Temporal server is ready on port $PORT"
             break
           fi
           echo "Waiting for Temporal server... ($i/30)"
-          sleep 1
+          sleep 2
         done
+        # Verify server is actually running
+        if ! curl -s http://localhost:$PORT/health > /dev/null 2>&1; then
+          echo "ERROR: Temporal server failed to start"
+          exit 1
+        fi
 
     - name: Configure pnpm registry
       run: pnpm config set registry http://172.20.60.129:4873
