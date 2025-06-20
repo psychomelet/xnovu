@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
-import { Client as TemporalClient, Connection } from '@temporalio/client';
-import { cleanupTestNamespaces } from '../utils/temporal-namespace-cleanup';
 
 export default async function globalTeardown() {
   console.log('\n🧹 Global test teardown starting...');
@@ -16,12 +14,6 @@ export default async function globalTeardown() {
   
   // Clean up Supabase data
   await cleanupSupabase(enterpriseId);
-  
-  // Clean up Temporal workflows
-  await cleanupTemporal(enterpriseId);
-  
-  // Clean up test namespace
-  await cleanupTestNamespace(enterpriseId);
   
   // Verify cleanup is complete
   await verifyCleanup(enterpriseId);
@@ -105,118 +97,6 @@ async function cleanupSupabase(enterpriseId: string) {
   }
 }
 
-async function cleanupTemporal(enterpriseId: string) {
-  const temporalAddress = process.env.TEMPORAL_ADDRESS;
-  const temporalNamespace = process.env.TEMPORAL_NAMESPACE;
-  
-  if (!temporalAddress || !temporalNamespace) {
-    console.log('⚠️  Temporal configuration not found, skipping Temporal cleanup');
-    return;
-  }
-  
-  let connection: Connection | null = null;
-  
-  try {
-    // Determine if TLS is needed based on environment variable
-    const useTls = process.env.TEMPORAL_TLS === 'true';
-    
-    // Try multiple connection configurations with shorter timeout for cleanup
-    const connectionConfigs = [
-      { tls: useTls ? {} : false, connectTimeout: '5s' },
-      { tls: useTls ? { serverNameOverride: temporalAddress.split(':')[0] } : false, connectTimeout: '5s' },
-    ];
-    
-    let lastError: any;
-    for (const config of connectionConfigs) {
-      try {
-        connection = await Connection.connect({
-          address: temporalAddress,
-          ...config,
-        });
-        break;
-      } catch (error: any) {
-        lastError = error;
-        continue;
-      }
-    }
-    
-    if (!connection) {
-      // Check if it's a connection error that's expected in test environment
-      if (lastError?.code === 'ECONNREFUSED' || 
-          lastError?.message?.includes('ECONNREFUSED') ||
-          lastError?.message?.includes('Failed to connect before the deadline') ||
-          lastError?.message?.includes('14 UNAVAILABLE')) {
-        console.log('⚠️  Temporal service not available for cleanup (this is normal in test environment)');
-        return;
-      }
-      throw lastError;
-    }
-    
-    const client = new TemporalClient({
-      connection,
-      namespace: temporalNamespace,
-    });
-    
-    // List workflows containing the enterprise ID
-    let cancelledCount = 0;
-    try {
-      // First try to list all workflows and filter client-side
-      // Note: LIKE operator may not be supported in all Temporal deployments
-      const handle = client.workflow.list({
-        // List all workflows, we'll filter client-side
-        pageSize: 100,
-      });
-      
-      for await (const workflow of handle) {
-        // Filter workflows that contain the enterprise ID
-        if (workflow.workflowId.includes(enterpriseId)) {
-          try {
-            const wfHandle = client.workflow.getHandle(workflow.workflowId);
-            await wfHandle.cancel();
-            cancelledCount++;
-          } catch (error) {
-            // Workflow might already be completed - this is expected
-          }
-        }
-      }
-    } catch (listError: any) {
-      // If we can't list workflows, that's okay in test environment
-      if (listError.code === 12 || 
-          listError.message?.includes('404') || 
-          listError.message?.includes('PermissionDenied') ||
-          listError.message?.includes('Unauthorized')) {
-        console.log('⚠️  Temporal workflow listing not available (insufficient permissions or mock service)');
-      } else {
-        console.log('⚠️  Could not list Temporal workflows:', listError.message);
-      }
-    }
-    
-    if (cancelledCount > 0) {
-      console.log(`🗑️  Cancelled ${cancelledCount} test workflows`);
-    }
-    
-  } catch (error: any) {
-    // Only log as error if it's not an expected connection issue
-    if (error.code === 'ECONNREFUSED' || 
-        error.message?.includes('ECONNREFUSED') ||
-        error.message?.includes('Failed to connect before the deadline') ||
-        error.message?.includes('14 UNAVAILABLE')) {
-      console.log('⚠️  Temporal service not available for cleanup (this is normal in test environment)');
-    } else {
-      console.error('❌ Temporal cleanup error:', error.message || error);
-    }
-  } finally {
-    // Always close the connection if it was established
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (closeError) {
-        // Ignore close errors
-      }
-    }
-  }
-}
-
 async function verifyCleanup(enterpriseId: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -266,10 +146,4 @@ async function verifyCleanup(enterpriseId: string) {
   } catch (error) {
     console.error('❌ Verification error:', error);
   }
-}
-
-async function cleanupTestNamespace(enterpriseId: string) {
-  // Clean up only the specific test namespace created by this test run
-  const testNamespace = `test-ns-${enterpriseId}`;
-  await cleanupTestNamespaces(testNamespace);
 }
