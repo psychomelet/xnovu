@@ -33,6 +33,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -59,6 +60,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -82,6 +84,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -108,6 +111,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -133,6 +137,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -159,6 +164,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -188,6 +194,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -218,6 +225,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 
@@ -244,6 +252,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
       const endTime = Date.now();
@@ -267,6 +276,7 @@ describe('Security Fixes for GitHub Actions Bot Recommendations', () => {
         variables: {},
         format: 'html'
       }, {
+        channelType: 'EMAIL',
         includeTextVersion: true
       });
 

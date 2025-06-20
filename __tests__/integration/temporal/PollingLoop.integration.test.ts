@@ -1,14 +1,14 @@
 /**
- * Integration tests for notification polling loop using real Temporal server
+ * Integration tests for notification polling loop using TestWorkflowEnvironment
  */
 
 import { NotificationPollingLoop } from '@/lib/polling/polling-loop'
 import { createSupabaseAdmin } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/database.types'
 import { v4 as uuidv4 } from 'uuid'
-import { Connection, WorkflowClient } from '@temporalio/client'
 import { getTestEnterpriseId } from '../../setup/test-data'
 import type { TriggerResult } from '@/lib/notifications/trigger'
+import { createTestEnvironment, cleanupTestEnvironment, type TestEnvironmentSetup } from '../../helpers/temporal-test-helpers'
 
 // Mock logger to reduce noise but capture polling info
 jest.mock('@/app/services/logger', () => ({
@@ -35,7 +35,7 @@ const mockActivities = {
 
 // Extended class for testing that allows injecting the WorkflowClient
 class TestableNotificationPollingLoop extends NotificationPollingLoop {
-  setTemporalClient(client: WorkflowClient) {
+  setTemporalClient(client: any) {
     (this as any).temporalClient = client
   }
   
@@ -56,8 +56,7 @@ class TestableNotificationPollingLoop extends NotificationPollingLoop {
 describe('NotificationPollingLoop', () => {
   let pollingLoop: TestableNotificationPollingLoop
   let supabase: ReturnType<typeof createSupabaseAdmin>
-  let workflowClient: WorkflowClient
-  let connection: Connection
+  let testEnvironment: TestEnvironmentSetup
   
   // Test data - use shared enterprise ID from global setup
   const testEnterpriseId = getTestEnterpriseId()
@@ -137,12 +136,8 @@ describe('NotificationPollingLoop', () => {
     
     testWorkflowId = workflow.id
     
-    // Create real Temporal connection
-    const address = process.env.TEMPORAL_ADDRESS || 'localhost:7233'
-    const namespace = process.env.TEMPORAL_NAMESPACE || 'default'
-    
-    connection = await Connection.connect({ address })
-    workflowClient = new WorkflowClient({ connection, namespace })
+    // Create test environment with worker
+    testEnvironment = await createTestEnvironment('test-queue', mockActivities)
   })
 
   beforeEach(async () => {
@@ -165,14 +160,14 @@ describe('NotificationPollingLoop', () => {
       batchSize: 10,
       enterpriseId: testEnterpriseId, // Filter by test enterprise ID
       temporal: {
-        address: process.env.TEMPORAL_ADDRESS || 'localhost:7233',
-        namespace: process.env.TEMPORAL_NAMESPACE || 'default',
+        address: 'localhost:7233', // Not used in TestWorkflowEnvironment
+        namespace: 'default',
         taskQueue: 'test-queue'
       }
     })
     
     // Inject the test workflow client
-    pollingLoop.setTemporalClient(workflowClient)
+    pollingLoop.setTemporalClient(testEnvironment.client)
   })
 
   afterEach(async () => {
@@ -188,8 +183,10 @@ describe('NotificationPollingLoop', () => {
   })
 
   afterAll(async () => {
-    // Close Temporal connection
-    await connection?.close()
+    // Clean up test environment
+    if (testEnvironment) {
+      await cleanupTestEnvironment(testEnvironment)
+    }
   })
 
   describe('polling functionality', () => {
@@ -198,7 +195,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: 0, // Will be set dynamically
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-transaction-123'
       })
       
@@ -230,7 +227,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: notification!.id,
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-transaction-123'
       })
       
@@ -241,7 +238,7 @@ describe('NotificationPollingLoop', () => {
       await new Promise(resolve => setTimeout(resolve, 200))
       
       // Check if polling found anything
-      const pollingCalls = mockLogger.info.mock.calls.filter(call => 
+      const pollingCalls = mockLogger.info.mock.calls.filter((call: any) => 
         call[0].includes('Found new notifications') || 
         call[0].includes('Starting notification polling')
       )
@@ -265,10 +262,10 @@ describe('NotificationPollingLoop', () => {
 
     it('should process multiple notifications in parallel', async () => {
       // Setup mock activity to return success for all calls
-      mockTriggerNotificationByIdActivity.mockImplementation(async (params) => ({
+      mockTriggerNotificationByIdActivity.mockImplementation(async (params: any) => ({
         success: true,
         notificationId: params.notificationId,
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: `test-transaction-${params.notificationId}`
       }))
       
@@ -436,7 +433,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: 0, // Will be set dynamically
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-scheduled-123'
       })
       
@@ -477,7 +474,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: notification.id,
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-scheduled-123'
       })
       

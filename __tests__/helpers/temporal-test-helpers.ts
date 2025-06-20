@@ -14,7 +14,7 @@ import * as activities from '@/lib/temporal/activities'
 export interface TestEnvironmentSetup {
   testEnv: TestWorkflowEnvironment
   worker: Worker
-  client: WorkflowClient
+  client: any // Can be either WorkflowClient or TestWorkflowEnvironment client
 }
 
 /**
@@ -86,12 +86,12 @@ export async function skipTime(
 export async function waitForWorkflowWithTimeSkip(
   setup: TestEnvironmentSetup,
   workflowId: string,
-  maxDuration: Duration = Duration.from({ minutes: 5 })
+  maxDuration: Duration | string | number = '5m'
 ): Promise<void> {
   const { testEnv, client } = setup
   
   // Get workflow handle
-  const handle = client.workflow.getHandle(workflowId)
+  const handle = client.getHandle ? client.getHandle(workflowId) : client.workflow.getHandle(workflowId)
   
   // Skip time to allow workflow to complete
   await skipTime(testEnv, maxDuration)
@@ -108,11 +108,11 @@ export async function testScheduledWorkflow(
   scheduleId: string,
   expectedTriggerTimes: Date[]
 ): Promise<void> {
-  const { testEnv, client } = setup
+  const { testEnv } = setup
   
   for (const triggerTime of expectedTriggerTimes) {
     // Calculate how much time to skip
-    const now = await testEnv.currentTime()
+    const now = new Date(await testEnv.currentTimeMs())
     const timeToSkip = triggerTime.getTime() - now.getTime()
     
     if (timeToSkip > 0) {
@@ -131,18 +131,19 @@ export async function testWorkflowRetries(
   setup: TestEnvironmentSetup,
   workflowId: string,
   expectedRetries: number,
-  initialInterval: Duration = Duration.from({ seconds: 1 })
+  initialInterval: Duration | string | number = '1s'
 ): Promise<void> {
   const { testEnv } = setup
   
   // Skip through each retry interval
-  let currentInterval = initialInterval
+  let currentIntervalMs = typeof initialInterval === 'string' ? 1000 : 
+                          typeof initialInterval === 'number' ? initialInterval : 
+                          1000 // Default to 1 second
+  
   for (let i = 0; i < expectedRetries; i++) {
-    await skipTime(testEnv, currentInterval)
+    await skipTime(testEnv, currentIntervalMs)
     // Double the interval for exponential backoff
-    currentInterval = Duration.from({ 
-      milliseconds: currentInterval.milliseconds() * 2 
-    })
+    currentIntervalMs *= 2
   }
 }
 
@@ -155,7 +156,7 @@ export function createMockActivity<T extends (...args: any[]) => any>(
 ): jest.MockedFunction<T> {
   const mock = jest.fn(defaultImplementation || (() => Promise.resolve()))
   mock.mockName(name)
-  return mock as jest.MockedFunction<T>
+  return mock as any // Simplified type to avoid complex Jest type issues
 }
 
 /**
@@ -163,7 +164,7 @@ export function createMockActivity<T extends (...args: any[]) => any>(
  */
 export async function testPollingLoop(
   setup: TestEnvironmentSetup,
-  pollInterval: Duration,
+  pollInterval: Duration | string | number,
   expectedPolls: number
 ): Promise<void> {
   const { testEnv } = setup

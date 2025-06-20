@@ -35,7 +35,6 @@ class LocalTemporalServer implements TemporalServerManager {
       '--headless',
     ], {
       stdio: 'pipe',
-      detached: false,
     })
 
     this.process.stdout?.on('data', (data) => {

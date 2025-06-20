@@ -217,7 +217,7 @@ describe('EmailTemplateRenderer - Sanitization', () => {
         enterpriseId: '00000000-0000-0000-0000-000000000001'
       };
 
-      const result = await renderer.render(template, context, { includeTextVersion: true });
+      const result = await renderer.render(template, context, { channelType: 'EMAIL', includeTextVersion: true });
 
       expect(result.textBody).not.toContain('<script>');
       expect(result.textBody).not.toContain('alert');
@@ -272,7 +272,7 @@ describe('EmailTemplateRenderer - Sanitization', () => {
         enterpriseId: '00000000-0000-0000-0000-000000000001'
       };
 
-      const result = await renderer.render(template, context, { sanitize: false });
+      const result = await renderer.render(template, context, { channelType: 'EMAIL', sanitize: false });
 
       // When sanitization is disabled, script tags should remain
       expect(result.body).toContain('<script>');
@@ -286,7 +286,7 @@ describe('EmailTemplateRenderer - Sanitization', () => {
         enterpriseId: '00000000-0000-0000-0000-000000000001'
       };
 
-      const result = await renderer.render(template, context, { validateSafety: false });
+      const result = await renderer.render(template, context, { channelType: 'EMAIL', validateSafety: false });
 
       expect(result.safetyValidation).toBeUndefined();
     });

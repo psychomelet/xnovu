@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { workflowLoader } from "../../services/workflow";
-import { notificationService } from "../../services/database";
+import { WORKFLOW_KEYS, workflows } from "../../novu/workflow-loader";
 
 export async function POST(request: NextRequest) {
   const secretKey = process.env.NOVU_SECRET_KEY;
@@ -32,9 +31,7 @@ export async function POST(request: NextRequest) {
     const { 
       workflowId, 
       payload = {}, 
-      enterpriseId,
       subscriberId: customSubscriberId,
-      notificationId 
     } = body;
 
     if (!workflowId) {
@@ -46,103 +43,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Load enterprise workflows if enterpriseId is provided
-    if (enterpriseId) {
-      await workflowLoader.loadEnterpriseWorkflows(enterpriseId);
-    }
-
-    // Get workflow from registry
-    const workflow = workflowLoader.getWorkflow(workflowId, enterpriseId);
-    if (!workflow) {
-      const stats = workflowLoader.getStats();
+    // Check if workflow exists in our static workflows
+    const workflowExists = Object.values(WORKFLOW_KEYS).includes(workflowId) || 
+                          workflows.some(w => w.id === workflowId);
+    
+    if (!workflowExists) {
       return NextResponse.json(
         {
-          message: `Workflow '${workflowId}' not found${enterpriseId ? ` for enterprise '${enterpriseId}'` : ''}`,
-          available: {
-            total: stats.total,
-            static: stats.static,
-            dynamic: stats.dynamic
-          }
+          message: `Workflow '${workflowId}' not found`,
+          availableWorkflows: Object.values(WORKFLOW_KEYS)
         },
         { status: 404 }
       );
     }
 
+    // For dynamic workflows, use the default-dynamic-multi workflow
+    // and pass the configuration in the payload
+    let actualWorkflowId = workflowId;
+    let actualPayload = payload;
+    
+    // If this is a request for dynamic behavior, suggest using default-dynamic-multi
+    if (payload.channels && typeof payload.channels === 'object') {
+      console.log('📝 Detected dynamic workflow request, using default-dynamic-multi');
+      actualWorkflowId = WORKFLOW_KEYS.dynamicMulti;
+      actualPayload = payload; // Payload already contains the channel configuration
+    }
+
     // Determine subscriber ID
     const targetSubscriberId = customSubscriberId || subscriberId;
 
-    // Prepare enhanced payload
-    const enhancedPayload = {
-      ...payload,
-      notificationId,
-      enterprise_id: enterpriseId,
-      subscriberId: targetSubscriberId,
-      timestamp: new Date().toISOString()
-    };
+    // Import Novu dynamically to avoid edge runtime issues
+    const { Novu } = await import("@novu/api");
+    const novu = new Novu({ secretKey });
 
-    // Update notification status to PENDING if notificationId is provided
-    if (notificationId && enterpriseId) {
-      const parsedNotificationId = typeof notificationId === 'string' ? parseInt(notificationId) : notificationId;
-      await notificationService.updateNotificationStatus(
-        parsedNotificationId,
-        'PENDING',
-        enterpriseId
-      );
-    }
+    console.log('📤 Triggering workflow:', {
+      workflowId: actualWorkflowId,
+      subscriberId: targetSubscriberId,
+      payloadKeys: Object.keys(actualPayload)
+    });
 
     // Trigger the workflow
-    const result = await workflow.trigger({
+    const result = await novu.trigger(actualWorkflowId, {
       to: targetSubscriberId,
-      payload: enhancedPayload,
-    });
+      payload: actualPayload,
+    } as any);
 
-    // Store transaction ID if available
-    if (result?.transactionId && notificationId && enterpriseId) {
-      const parsedNotificationId = typeof notificationId === 'string' ? parseInt(notificationId) : notificationId;
-      await notificationService.updateNotificationStatus(
-        parsedNotificationId,
-        'PROCESSING',
-        enterpriseId,
-        undefined,
-        result.transactionId
-      );
-    }
-
-    return NextResponse.json({
-      message: "Notification triggered successfully",
-      workflowId,
-      enterpriseId,
-      notificationId,
-      transactionId: result?.transactionId,
-      result: result,
-    });
-  } catch (error: unknown) {
-    console.error('❌ Error triggering notification:');
-    console.error('Error type:', typeof error);
-    console.error('Error constructor:', error?.constructor?.name);
-
-    let errorDetails: any = {
-      message: 'Unknown error occurred',
-      type: typeof error,
-      constructor: error?.constructor?.name
-    };
-
-    if (error instanceof Error) {
-      errorDetails.message = error.message;
-      errorDetails.stack = error.stack;
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    } else {
-      console.error('Raw error:', error);
-      errorDetails.raw = error;
-    }
+    console.log('✅ Workflow triggered successfully:', result);
 
     return NextResponse.json(
       {
-        message: "Error triggering notification",
-        error: errorDetails,
+        success: true,
+        data: result,
+        workflow: actualWorkflowId,
+        subscriberId: targetSubscriberId
       },
-      { status: 500 },
+      { status: 200 }
+    );
+  } catch (error: any) {
+    console.error('❌ Error triggering workflow:', error);
+    
+    // Enhanced error handling
+    const errorMessage = error?.response?.data?.message || error.message || 'Unknown error';
+    const statusCode = error?.response?.status || 500;
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: errorMessage,
+        details: error?.response?.data || undefined
+      },
+      { status: statusCode }
     );
   }
 }
