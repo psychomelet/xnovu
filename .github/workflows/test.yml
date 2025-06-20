@@ -10,10 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  # Lint, build, and connection tests
-  lint-build-connection:
+  test:
     runs-on: self-hosted
     environment: Test
+    strategy:
+      matrix:
+        test-type: [lint-build-connection, unit, integration]
+    name: ${{ matrix.test-type }}
     steps:
     - uses: actions/checkout@v4
 
@@ -45,10 +48,12 @@ jobs:
         temporal server start-dev --headless --port $PORT &
         echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
 
-    - name: Run linter
+    - name: Run lint and build
+      if: matrix.test-type == 'lint-build-connection'
       run: pnpm lint
-
+      
     - name: Run type check and build
+      if: matrix.test-type == 'lint-build-connection'
       run: pnpm build
       env:
         NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
@@ -62,6 +67,7 @@ jobs:
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
     - name: Run connection tests
+      if: matrix.test-type == 'lint-build-connection'
       run: pnpm test:connection
       env:
         CI: true
@@ -75,42 +81,8 @@ jobs:
         TEMPORAL_NAMESPACE: default
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
-  # Unit tests
-  test-unit:
-    runs-on: self-hosted
-    environment: Test
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: 10
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'pnpm'
-        registry-url: 'http://172.20.60.129:4873'
-
-    - name: Configure pnpm registry
-      run: pnpm config set registry http://172.20.60.129:4873
-
-    - name: Install dependencies
-      run: pnpm install --frozen-lockfile
-
-    - name: Install Temporal CLI
-      uses: temporalio/setup-temporal@v0
-
-    - name: Start local Temporal server
-      shell: bash
-      run: |
-        PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
-        temporal server start-dev --headless --port $PORT &
-        echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
-
     - name: Run unit tests
+      if: matrix.test-type == 'unit'
       run: pnpm test:unit
       env:
         CI: true
@@ -126,8 +98,8 @@ jobs:
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
     - name: Upload unit test results
+      if: matrix.test-type == 'unit' && always()
       uses: actions/upload-artifact@v4
-      if: always()
       with:
         name: unit-test-results
         path: |
@@ -135,42 +107,8 @@ jobs:
           junit-unit.xml
         retention-days: 7
 
-  # Integration tests
-  test-integration:
-    runs-on: self-hosted
-    environment: Test
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: 10
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'pnpm'
-        registry-url: 'http://172.20.60.129:4873'
-
-    - name: Configure pnpm registry
-      run: pnpm config set registry http://172.20.60.129:4873
-
-    - name: Install dependencies
-      run: pnpm install --frozen-lockfile
-
-    - name: Install Temporal CLI
-      uses: temporalio/setup-temporal@v0
-
-    - name: Start local Temporal server
-      shell: bash
-      run: |
-        PORT=$(python3 -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
-        temporal server start-dev --headless --port $PORT &
-        echo "TEMPORAL_ADDRESS=localhost:$PORT" >> $GITHUB_ENV
-
     - name: Run integration tests
+      if: matrix.test-type == 'integration'
       run: pnpm test:integration
       env:
         CI: true
@@ -186,12 +124,11 @@ jobs:
         TEMPORAL_TASK_QUEUE: ${{ secrets.TEMPORAL_TASK_QUEUE }}
 
     - name: Upload integration test results
+      if: matrix.test-type == 'integration' && always()
       uses: actions/upload-artifact@v4
-      if: always()
       with:
         name: integration-test-results
         path: |
           coverage/integration/
           junit-integration.xml
         retention-days: 7
-
