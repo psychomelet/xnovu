@@ -70,14 +70,6 @@ export const defaultMultiChannelWorkflow = workflow(
       }
     )
 
-    // Delay after in-app
-    await step.delay('delay-after-inapp', async (controls) => ({
-      amount: controls.delayBetweenChannels,
-      unit: 'seconds' as const
-    }), {
-      skip: (controls) => !controls.enableInApp || controls.delayBetweenChannels === 0,
-      controlSchema: controlSchema.pick({ enableInApp: true, delayBetweenChannels: true })
-    })
 
     // Push Notification
     await step.push(
@@ -119,14 +111,6 @@ export const defaultMultiChannelWorkflow = workflow(
       }
     )
 
-    // Delay after push
-    await step.delay('delay-after-push', async (controls) => ({
-      amount: controls.delayBetweenChannels,
-      unit: 'seconds' as const
-    }), {
-      skip: (controls) => !controls.enablePush || controls.delayBetweenChannels === 0,
-      controlSchema: controlSchema.pick({ enablePush: true, delayBetweenChannels: true })
-    })
 
     // Email
     await step.email(
@@ -226,14 +210,6 @@ export const defaultMultiChannelWorkflow = workflow(
       }
     )
 
-    // Delay after email
-    await step.delay('delay-after-email', async (controls) => ({
-      amount: controls.delayBetweenChannels,
-      unit: 'seconds' as const
-    }), {
-      skip: (controls) => !controls.enableEmail || controls.delayBetweenChannels === 0,
-      controlSchema: controlSchema.pick({ enableEmail: true, delayBetweenChannels: true })
-    })
 
     // SMS
     await step.sms(
@@ -262,14 +238,6 @@ export const defaultMultiChannelWorkflow = workflow(
       }
     )
 
-    // Delay after SMS
-    await step.delay('delay-after-sms', async (controls) => ({
-      amount: controls.delayBetweenChannels,
-      unit: 'seconds' as const
-    }), {
-      skip: (controls) => !controls.enableSms || !payload.recipientPhone || controls.delayBetweenChannels === 0,
-      controlSchema: controlSchema.pick({ enableSms: true, delayBetweenChannels: true })
-    })
 
     // Chat
     await step.chat(
