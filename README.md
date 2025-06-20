@@ -71,6 +71,32 @@ pnpm temporal:ui
 
 All three services must be running for full functionality.
 
+## 🐳 Docker Deployment
+
+XNovu includes comprehensive Docker support with auto-tagging and registry integration:
+
+```bash
+# Build Docker image with auto-tagging
+pnpm xnovu docker:build
+
+# Run in container with environment variables
+pnpm xnovu docker:run
+
+# Push to Aliyun Container Registry
+pnpm xnovu docker:push
+
+# Stop running container
+pnpm xnovu docker:stop
+```
+
+**Docker Features:**
+- **Auto-tagging**: Git SHA + version tags + latest
+- **Multi-platform**: Supports linux/amd64, linux/arm64
+- **Registry integration**: Default Aliyun Container Registry
+- **Production-ready**: Multi-stage builds with health checks
+
+See [docs/deployment.md](docs/deployment.md) for complete Docker documentation.
+
 ## 🚀 Simplified Workflow Sync
 
 Deploy your workflows with a single command:
