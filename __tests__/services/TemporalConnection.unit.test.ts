@@ -8,7 +8,7 @@ import { NativeConnection, Worker } from '@temporalio/worker'
  * Note: These tests require a running Temporal server. If the tests fail with
  * "Failed to connect before the deadline" errors, it may be due to Jest's
  * limitations with gRPC connections. You can verify Temporal connectivity
- * by running: pnpm tsx scripts/verify-temporal.ts
+ * by running: pnpm temporal:check
  */
 describe('Temporal Connection', () => {
   const requiredEnvVars = ['TEMPORAL_ADDRESS']
