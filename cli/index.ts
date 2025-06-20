@@ -9,6 +9,7 @@ import { createStatusCommands } from './commands/status.js';
 import { createWorkerCommands } from './commands/worker.js';
 import { createSyncCommands } from './commands/sync.js';
 import { createWorkflowCommands } from './commands/workflow.js';
+import { createTriggerCommands } from './commands/trigger.js';
 
 config();
 
@@ -27,6 +28,7 @@ createStatusCommands(program);
 createWorkerCommands(program);
 createSyncCommands(program);
 createWorkflowCommands(program);
+createTriggerCommands(program);
 
 // Parse command line arguments
 program.parse();
