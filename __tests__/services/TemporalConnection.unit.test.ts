@@ -11,7 +11,7 @@ import { NativeConnection, Worker } from '@temporalio/worker'
  * by running: pnpm tsx scripts/verify-temporal.ts
  */
 describe('Temporal Connection', () => {
-  const requiredEnvVars = ['TEMPORAL_ADDRESS', 'TEMPORAL_NAMESPACE']
+  const requiredEnvVars = ['TEMPORAL_ADDRESS']
 
   beforeEach(() => {
     // Check for required environment variables
@@ -27,7 +27,7 @@ describe('Temporal Connection', () => {
   describe('Client SDK Connection', () => {
     it('should connect to Temporal server with valid configuration', async () => {
       const address = process.env.TEMPORAL_ADDRESS!
-      const namespace = process.env.TEMPORAL_NAMESPACE!
+      const namespace = process.env.TEMPORAL_NAMESPACE || 'default'
 
       console.log(`\n📡 Testing Temporal connection to ${address}...`)
       console.log(`   Environment: ${process.env.NODE_ENV}`)
@@ -134,17 +134,17 @@ describe('Temporal Connection', () => {
           console.log(`   - ${name} (${state})`)
         })
 
-        // Check if our configured namespace exists
-        const configuredNamespace = process.env.TEMPORAL_NAMESPACE!
+        // Check if default namespace exists
+        const namespace = process.env.TEMPORAL_NAMESPACE || 'default'
         const namespaceExists = response.namespaces.some(
-          ns => ns.namespaceInfo?.name === configuredNamespace
+          ns => ns.namespaceInfo?.name === namespace
         )
 
         if (!namespaceExists) {
-          console.log(`⚠️  Configured namespace '${configuredNamespace}' not found`)
-          console.log('   You may need to create it with: temporal operator namespace create --namespace ' + configuredNamespace)
+          console.log(`⚠️  Namespace '${namespace}' not found`)
+          console.log('   You may need to create it with: temporal operator namespace create --namespace ' + namespace)
         } else {
-          console.log(`✅ Configured namespace '${configuredNamespace}' exists`)
+          console.log(`✅ Namespace '${namespace}' exists`)
         }
       } catch (error: any) {
         // Some deployments may not allow listing namespaces
@@ -188,7 +188,7 @@ describe('Temporal Connection', () => {
 
       const config = {
         address: process.env.TEMPORAL_ADDRESS,
-        namespace: process.env.TEMPORAL_NAMESPACE,
+        namespace: process.env.TEMPORAL_NAMESPACE || 'default',
         taskQueue: process.env.TEMPORAL_TASK_QUEUE,
         maxConcurrentActivities: process.env.TEMPORAL_MAX_CONCURRENT_ACTIVITIES,
         maxConcurrentWorkflows: process.env.TEMPORAL_MAX_CONCURRENT_WORKFLOWS,

@@ -81,6 +81,9 @@ importers:
       '@eslint/eslintrc':
         specifier: ^3.3.1
         version: 3.3.1
+      '@temporalio/testing':
+        specifier: ^1.11.8
+        version: 1.11.8
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.6.3
@@ -1294,6 +1297,9 @@ packages:
 
   '@temporalio/proto@1.11.8':
     resolution: {integrity: sha512-L6QsIAq3PrnQpARAcqLCe4xMpbkpBEvA/9FQGddpzCESvViUOUAIHPwckL1DokYPedEAt19C+uuBGVBMCNx7vw==}
+
+  '@temporalio/testing@1.11.8':
+    resolution: {integrity: sha512-FC6A2YFDH6CDp7eeZ9aW9RDSzGxQqH6Old5UxBvIk5ZFgsCMOltpWqYMTIrv9EQbe6xMOTgPjP/6XgAqvIPj/g==}
 
   '@temporalio/worker@1.11.8':
     resolution: {integrity: sha512-KNUEw8khhFoVLhOy93j9EkA6KfKtOVn7N7+c4kn9AM7QXkcxe73+1AUwNKgFYKZph4i6I26NBxs7MPrgh3GKxQ==}
@@ -5649,6 +5655,22 @@ snapshots:
     dependencies:
       long: 5.3.2
       protobufjs: 7.5.3
+
+  '@temporalio/testing@1.11.8':
+    dependencies:
+      '@temporalio/activity': 1.11.8
+      '@temporalio/client': 1.11.8
+      '@temporalio/common': 1.11.8
+      '@temporalio/core-bridge': 1.11.8
+      '@temporalio/proto': 1.11.8
+      '@temporalio/worker': 1.11.8
+      '@temporalio/workflow': 1.11.8
+      abort-controller: 3.0.0
+    transitivePeerDependencies:
+      - '@swc/helpers'
+      - esbuild
+      - uglify-js
+      - webpack-cli
 
   '@temporalio/worker@1.11.8':
     dependencies:

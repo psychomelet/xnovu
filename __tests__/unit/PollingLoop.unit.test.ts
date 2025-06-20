@@ -1,5 +1,5 @@
 /**
- * Unit tests for notification polling loop
+ * Unit tests for notification polling loop using TestWorkflowEnvironment
  */
 
 import { NotificationPollingLoop } from '@/lib/polling/polling-loop'
@@ -7,32 +7,59 @@ import { createSupabaseAdmin } from '@/lib/supabase/client'
 import { Database } from '@/lib/supabase/database.types'
 import { v4 as uuidv4 } from 'uuid'
 import { Connection, WorkflowClient } from '@temporalio/client'
+import { TestWorkflowEnvironment } from '@temporalio/testing'
+import { Worker } from '@temporalio/worker'
 import { getTestEnterpriseId } from '../setup/test-data'
+import * as workflows from '@/lib/temporal/workflows'
+import type { TriggerResult } from '@/lib/notifications/trigger'
 
-// Mock Temporal client
-jest.mock('@temporalio/client', () => ({
-  Connection: {
-    connect: jest.fn()
-  },
-  WorkflowClient: jest.fn().mockImplementation(() => ({
-    start: jest.fn()
-  }))
-}))
+// Mock logger to reduce noise but capture polling info
+const mockLogger = {
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn()
+}
 
-// Mock logger to reduce noise
 jest.mock('@/app/services/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  }
+  logger: mockLogger
 }))
+
+// Mock the actual trigger activity to avoid calling real Novu
+const mockTriggerNotificationByIdActivity = jest.fn<Promise<TriggerResult>, [any]>()
+const mockTriggerMultipleNotificationsByIdActivity = jest.fn<Promise<TriggerResult[]>, [any]>()
+
+const mockActivities = {
+  triggerNotificationByIdActivity: mockTriggerNotificationByIdActivity,
+  triggerMultipleNotificationsByIdActivity: mockTriggerMultipleNotificationsByIdActivity,
+  // Add the rule-scheduled activity as a no-op for now
+  createNotificationFromRule: jest.fn().mockResolvedValue(undefined)
+}
+
+// Extended class for testing that allows injecting the WorkflowClient
+class TestableNotificationPollingLoop extends NotificationPollingLoop {
+  setTemporalClient(client: WorkflowClient) {
+    (this as any).temporalClient = client
+  }
+  
+  async start(): Promise<void> {
+    if ((this as any).isRunning) {
+      return
+    }
+    
+    (this as any).isRunning = true
+    
+    // Start polling loops without connecting (we already have a client)
+    ;(this as any).startNewNotificationPolling()
+    ;(this as any).startFailedNotificationPolling()
+    ;(this as any).startScheduledNotificationPolling()
+  }
+}
 
 describe('NotificationPollingLoop', () => {
-  let pollingLoop: NotificationPollingLoop
+  let testEnv: TestWorkflowEnvironment
+  let pollingLoop: TestableNotificationPollingLoop
   let supabase: ReturnType<typeof createSupabaseAdmin>
-  let mockWorkflowClient: any
-  let mockConnection: any
+  let workflowClient: WorkflowClient
   
   // Test data - use shared enterprise ID from global setup
   const testEnterpriseId = getTestEnterpriseId()
@@ -111,31 +138,43 @@ describe('NotificationPollingLoop', () => {
     }
     
     testWorkflowId = workflow.id
+    
+    // Create test workflow environment
+    testEnv = await TestWorkflowEnvironment.createLocal()
+    
+    // Create a worker with our workflows and mocked activities
+    const worker = await Worker.create({
+      connection: testEnv.nativeConnection,
+      taskQueue: 'test-queue',
+      workflowsPath: require.resolve('@/lib/temporal/workflows'),
+      activities: mockActivities,
+    })
+    
+    // Start the test worker
+    const workerRun = worker.run()
+    
+    // Store the worker promise to await it during teardown
+    ;(testEnv as any).workerRun = workerRun
+    ;(testEnv as any).worker = worker
   })
 
   beforeEach(async () => {
     jest.clearAllMocks()
+    
+    // Clear mock activities
+    mockTriggerNotificationByIdActivity.mockClear()
+    mockTriggerMultipleNotificationsByIdActivity.mockClear()
     
     // Stop any running polling loop first
     if (pollingLoop) {
       await pollingLoop.stop()
     }
     
-    // Setup mock workflow client
-    mockWorkflowClient = {
-      start: jest.fn().mockResolvedValue({
-        workflowId: 'test-workflow-id',
-        firstExecutionRunId: 'test-run-id'
-      })
-    }
-    
-    mockConnection = {}
-    
-    ;(Connection.connect as jest.Mock).mockResolvedValue(mockConnection)
-    ;(WorkflowClient as jest.Mock).mockImplementation(() => mockWorkflowClient)
+    // Get the test workflow client
+    workflowClient = testEnv.client
     
     // Create polling loop with short intervals for testing
-    pollingLoop = new NotificationPollingLoop({
+    pollingLoop = new TestableNotificationPollingLoop({
       pollIntervalMs: 100, // 100ms for testing
       failedPollIntervalMs: 200,
       scheduledPollIntervalMs: 200,
@@ -143,10 +182,13 @@ describe('NotificationPollingLoop', () => {
       enterpriseId: testEnterpriseId, // Filter by test enterprise ID
       temporal: {
         address: 'localhost:7233',
-        namespace: 'default',
+        namespace: testEnv.namespace,
         taskQueue: 'test-queue'
       }
     })
+    
+    // Inject the test workflow client
+    pollingLoop.setTemporalClient(workflowClient)
   })
 
   afterEach(async () => {
@@ -162,11 +204,26 @@ describe('NotificationPollingLoop', () => {
   })
 
   afterAll(async () => {
-    // No need to clean up workflows - using existing workflows
+    // Shutdown the worker
+    if ((testEnv as any).worker) {
+      (testEnv as any).worker.shutdown()
+      await (testEnv as any).workerRun
+    }
+    
+    // Clean up test environment
+    await testEnv?.teardown()
   })
 
   describe('polling functionality', () => {
     it('should detect and process new notifications', async () => {
+      // Setup mock activity response
+      mockTriggerNotificationByIdActivity.mockResolvedValue({
+        success: true,
+        notificationId: 0, // Will be set dynamically
+        status: 'completed',
+        novuTransactionId: 'test-transaction-123'
+      })
+      
       // Insert a test notification with unique name
       const uniqueName = `Test Polling Notification ${uuidv4()}`
       const { data: notification, error } = await supabase
@@ -191,24 +248,81 @@ describe('NotificationPollingLoop', () => {
       expect(error).toBeNull()
       expect(notification).toBeDefined()
       
+      // Update mock to return correct notification ID
+      mockTriggerNotificationByIdActivity.mockResolvedValue({
+        success: true,
+        notificationId: notification!.id,
+        status: 'completed',
+        novuTransactionId: 'test-transaction-123'
+      })
+      
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait for polling to process the notification with retry logic
-      await waitForNotificationStatus(notification!.id, 'PROCESSING')
+      // Wait a bit for the polling loop to poll
+      await new Promise(resolve => setTimeout(resolve, 200))
       
-      // Verify workflow was triggered
-      expect(mockWorkflowClient.start).toHaveBeenCalledWith(
-        'notificationTriggerWorkflow',
-        {
-          taskQueue: 'test-queue',
-          workflowId: `notification-${notification!.id}`,
-          args: [{ notificationId: notification!.id }]
-        }
+      // Check if polling found anything
+      const pollingCalls = mockLogger.info.mock.calls.filter(call => 
+        call[0].includes('Found new notifications') || 
+        call[0].includes('Starting notification polling')
       )
+      console.log('Polling log calls:', pollingCalls)
+      
+      // Wait for the workflow to be started
+      let workflowHandle
+      const maxRetries = 10
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          workflowHandle = await testEnv.client.workflow.getHandle(`notification-${notification!.id}`)
+          break
+        } catch (error) {
+          if (i === maxRetries - 1) {
+            throw new Error(`Workflow notification-${notification!.id} was not started after ${maxRetries} attempts`)
+          }
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
+      
+      // Wait for the workflow result
+      let workflowResult
+      try {
+        workflowResult = await workflowHandle!.result()
+        console.log('Workflow result:', workflowResult)
+      } catch (error) {
+        console.log('Workflow error:', error)
+        // Activity might have failed, that's ok for this test
+      }
+      
+      // Check how many times the activity was called
+      console.log('Activity call count:', mockTriggerNotificationByIdActivity.mock.calls.length)
+      console.log('Activity calls:', mockTriggerNotificationByIdActivity.mock.calls)
+      
+      // Verify activity was called with correct notification ID
+      expect(mockTriggerNotificationByIdActivity).toHaveBeenCalledWith({
+        notificationId: notification!.id
+      })
+      
+      // Verify the notification status was updated in the database
+      const { data: updatedNotification } = await supabase
+        .schema('notify')
+        .from('ent_notification')
+        .select('notification_status')
+        .eq('id', notification!.id)
+        .single()
+      
+      expect(updatedNotification?.notification_status).toBe('PROCESSING')
     })
 
     it('should process multiple notifications in parallel', async () => {
+      // Setup mock activity to return success for all calls
+      mockTriggerNotificationByIdActivity.mockImplementation(async (params) => ({
+        success: true,
+        notificationId: params.notificationId,
+        status: 'completed',
+        novuTransactionId: `test-transaction-${params.notificationId}`
+      }))
+      
       // Insert multiple test notifications with unique names
       const notifications = []
       for (let i = 0; i < 3; i++) {
@@ -239,18 +353,21 @@ describe('NotificationPollingLoop', () => {
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait for all notifications to be processed with retry logic
+      // Wait for all workflows to be started
       for (const notification of notifications) {
-        await waitForNotificationStatus(notification.id, 'PROCESSING')
+        await testEnv.client.workflow.getHandle(`notification-${notification.id}`)
       }
       
-      // Verify workflows were triggered for our notifications (at least 3 calls)
-      expect(mockWorkflowClient.start.mock.calls.length).toBeGreaterThanOrEqual(3)
+      // Wait a bit for workflows to execute
+      await new Promise(resolve => setTimeout(resolve, 500))
       
-      // Verify the calls were made with correct notification IDs
-      const calledWorkflowIds = mockWorkflowClient.start.mock.calls.map(call => call[1].workflowId)
+      // Verify activity was called for each notification
+      expect(mockTriggerNotificationByIdActivity).toHaveBeenCalledTimes(3)
+      
+      // Verify each notification was processed
+      const processedIds = mockTriggerNotificationByIdActivity.mock.calls.map(call => call[0].notificationId)
       notifications.forEach(notification => {
-        expect(calledWorkflowIds).toContain(`notification-${notification.id}`)
+        expect(processedIds).toContain(notification.id)
       })
     })
 
@@ -276,20 +393,23 @@ describe('NotificationPollingLoop', () => {
         .select()
         .single()
       
+      // Clear any previous calls
+      mockTriggerNotificationByIdActivity.mockClear()
+      
       // Start polling loop
       await pollingLoop.start()
       
       // Wait for a polling cycle
       await new Promise(resolve => setTimeout(resolve, 300))
       
-      // Verify workflow was NOT triggered for our PROCESSING notification
-      const calledWorkflowIds = mockWorkflowClient.start.mock.calls.map(call => call[1].workflowId)
-      expect(calledWorkflowIds).not.toContain(`notification-${notification!.id}`)
+      // Verify activity was NOT called for our PROCESSING notification
+      const calledNotificationIds = mockTriggerNotificationByIdActivity.mock.calls.map(call => call[0].notificationId)
+      expect(calledNotificationIds).not.toContain(notification!.id)
     })
 
     it('should handle workflow start errors gracefully', async () => {
-      // Mock workflow start failure
-      mockWorkflowClient.start.mockRejectedValue(new Error('Workflow start failed'))
+      // Mock activity failure
+      mockTriggerNotificationByIdActivity.mockRejectedValue(new Error('Activity failed'))
       
       // Insert a test notification
       const uniqueName = `Test Polling Notification ${uuidv4()}`
@@ -315,12 +435,17 @@ describe('NotificationPollingLoop', () => {
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait for polling to attempt processing with retry logic
-      await waitForMockCall(mockWorkflowClient.start)
+      // Wait for workflow to be started
+      await testEnv.client.workflow.getHandle(`notification-${notification!.id}`)
       
-      // Since the workflow start failed, the status update might also fail
-      // Let's just verify the workflow start was attempted
-      // The notification status might remain PENDING due to the error
+      // Wait a bit for the workflow to attempt execution
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // The workflow should have been started even though the activity will fail
+      // The actual error handling happens within the workflow/activity
+      expect(mockTriggerNotificationByIdActivity).toHaveBeenCalledWith({
+        notificationId: notification!.id
+      })
     })
   })
 
@@ -357,6 +482,14 @@ describe('NotificationPollingLoop', () => {
 
   describe('scheduled notifications', () => {
     it('should process scheduled notifications that are due', async () => {
+      // Setup mock activity response
+      mockTriggerNotificationByIdActivity.mockResolvedValue({
+        success: true,
+        notificationId: 0, // Will be set dynamically
+        status: 'completed',
+        novuTransactionId: 'test-scheduled-123'
+      })
+      
       // Insert a scheduled notification due now
       const uniqueName = `Test Polling Notification ${uuidv4()}`
       const { data: notification } = await supabase
@@ -379,22 +512,33 @@ describe('NotificationPollingLoop', () => {
         .select()
         .single()
       
+      expect(notification).toBeDefined()
+      
+      if (!notification) {
+        throw new Error('Failed to create scheduled notification')
+      }
+      
+      // Update mock to return correct notification ID
+      mockTriggerNotificationByIdActivity.mockResolvedValue({
+        success: true,
+        notificationId: notification.id,
+        status: 'completed',
+        novuTransactionId: 'test-scheduled-123'
+      })
+      
       // Start polling loop
       await pollingLoop.start()
       
-      // Wait for scheduled polling to process with retry logic
-      if (notification) {
-        await waitForMockCall(mockWorkflowClient.start)
-        expect(mockWorkflowClient.start).toHaveBeenCalledWith(
-          'notificationTriggerWorkflow',
-          expect.objectContaining({
-            workflowId: `notification-${notification.id}`
-          })
-        )
-      } else {
-        // If scheduled notification wasn't inserted, skip the check
-        expect(notification).toBeDefined()
-      }
+      // Wait for workflow to be started
+      await testEnv.client.workflow.getHandle(`notification-${notification!.id}`)
+      
+      // Wait a bit for workflow to execute
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Verify activity was called with scheduled notification
+      expect(mockTriggerNotificationByIdActivity).toHaveBeenCalledWith({
+        notificationId: notification!.id
+      })
     })
   })
 
