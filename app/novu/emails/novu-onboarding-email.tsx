@@ -17,9 +17,15 @@ import {
   Text,
 } from "@react-email/components";
 
-import { ControlSchema, PayloadSchema } from "../workflows";
+// Note: This template is no longer used with the new static workflow structure
 
-type NovuWelcomeEmailProps = ControlSchema & PayloadSchema;
+type NovuWelcomeEmailProps = {
+  components?: any[];
+  userImage?: string;
+  teamImage?: string;
+  arrowImage?: string;
+  showHeader?: boolean;
+};
 
 export const NovuWelcomeEmail = ({
   components,
@@ -152,6 +158,6 @@ export const NovuWelcomeEmail = ({
 
 export default NovuWelcomeEmail;
 
-export function renderEmail(controls: ControlSchema, payload: PayloadSchema) {
-  return render(<NovuWelcomeEmail {...controls} {...payload} />);
+export function renderEmail(props: NovuWelcomeEmailProps) {
+  return render(<NovuWelcomeEmail {...props} />);
 }

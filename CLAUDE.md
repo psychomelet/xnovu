@@ -105,12 +105,26 @@ For detailed testing documentation, see `__tests__/CLAUDE.md`
 - `/api/dev-studio-status` - Checks Novu connection status
 
 ### Workflow Organization (`app/novu/workflows/`)
-Each workflow module follows this structure:
+Workflows are organized into two main categories:
+
+#### Static Workflows (`app/novu/workflows/static/`)
+Pre-built, production-ready workflows that handle common notification scenarios:
+- `default-email/` - Basic email notifications with customizable templates
+- `default-sms/` - SMS notifications with character limits and fallbacks
+- `default-push/` - Push notifications for mobile and web
+- `default-in-app/` - In-app notifications with rich content
+- `default-chat/` - Chat/webhook notifications (Slack, Teams, etc.)
+- `default-multi-channel/` - Multi-channel workflow with digest support (no delays)
+
+Each static workflow module follows this structure:
 - `index.ts` - Workflow exports
 - `workflow.ts` - Step definitions and logic
 - `schemas.ts` - Zod validation schemas
 - `types.ts` - TypeScript type definitions
 - `metadata.ts` - Database metadata for workflow sync
+
+#### Dynamic Workflows (Future)
+User-configurable workflows where templates and payloads can be customized by the management platform (not yet implemented).
 
 ### Key Components
 - **Temporal Polling Workflows** - Reliable notification processing using outbox pattern
@@ -250,7 +264,7 @@ Note: The workflow index is automatically regenerated during `pnpm build`
 **IMPORTANT**: Always use existing workflows from `app/novu/workflow-loader.ts` instead of creating temporary test workflows or inventing new ones.
 
 #### Available Workflows
-The following workflows are available for use in tests and development:
+The following static workflows are available for use in tests and development:
 
 ```typescript
 // Available workflow keys from app/novu/workflow-loader.ts
@@ -260,10 +274,7 @@ export const WORKFLOW_KEYS = {
   inApp: 'default-in-app',
   multiChannel: 'default-multi-channel',
   push: 'default-push',
-  sms: 'default-sms',
-  templateDemo: 'template-demo-workflow',
-  welcome: 'welcome-onboarding-email',
-  yogo: 'yogo-email'
+  sms: 'default-sms'
 } as const;
 ```
 
@@ -272,6 +283,7 @@ export const WORKFLOW_KEYS = {
 2. **Global uniqueness**: `workflow_key` is globally unique - search without `enterprise_id` filter
 3. **No temporary workflows**: Avoid creating workflows like `minimal-workflow-*`, `test-workflow-*`, `building-alert-*` in tests
 4. **Proper cleanup**: Tests should use existing workflows to ensure proper cleanup in global teardown
+5. **Static only**: All default-* workflows are static type workflows for consistent, reliable behavior
 
 #### Example Usage
 ```typescript
@@ -286,6 +298,7 @@ const { data: workflow } = await supabase
 // ❌ Bad - Don't create temporary workflows
 const workflow = await createTestWorkflow({
   workflow_key: `test-workflow-${uuidv4()}`,
+  workflow_type: 'DYNAMIC',  // Avoid this
   // ...
 });
 ```

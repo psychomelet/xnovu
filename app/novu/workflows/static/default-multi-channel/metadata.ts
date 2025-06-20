@@ -2,12 +2,12 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { createWorkflowMetadata } from '@/app/novu/types/metadata';
 import { payloadSchema, controlSchema } from './schemas';
 
-export const defaultemailMetadata = createWorkflowMetadata({
-  workflow_key: 'default-email',
-  name: 'Default Email',
-  description: 'Default email template with customizable styling and content',
-  workflow_type: 'DYNAMIC',
-  default_channels: ['EMAIL'],
+export const defaultmultichannelMetadata = createWorkflowMetadata({
+  workflow_key: 'default-multi-channel',
+  name: 'Default Multi Channel',
+  description: 'Default multi-channel workflow with digest support and configurable channel selection',
+  workflow_type: 'STATIC',
+  default_channels: ['EMAIL', 'IN_APP', 'SMS', 'PUSH', 'CHAT'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,
   control_schema: zodToJsonSchema(controlSchema) as Record<string, any>,
   // Optional fields:
