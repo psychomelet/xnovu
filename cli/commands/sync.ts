@@ -158,7 +158,7 @@ class SyncManager {
       }
 
       console.log('   Running sync command...');
-      console.log(`   Command: npx ${syncArgs.join(' ').replace(SECRET_KEY, '***')}`);
+      console.log('   Command: npx novu@latest sync [REDACTED]');
 
       try {
         // Use execa instead of execSync for better error handling
