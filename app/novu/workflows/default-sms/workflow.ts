@@ -17,17 +17,17 @@ export const defaultSmsWorkflow = workflow(
         let fullMessage = ''
         
         // Add sender name if urgency is high or critical
-        if (payload.urgency === 'high' || payload.urgency === 'critical') {
-          fullMessage += `[${senderName} URGENT] `
+        if (payload?.urgency === 'high' || payload?.urgency === 'critical') {
+          fullMessage += `[${senderName || 'XNovu'} URGENT] `
         } else if (messagePrefix) {
           fullMessage += `${messagePrefix} `
         }
         
         // Add main message
-        fullMessage += payload.message
+        fullMessage += payload?.message || ''
         
         // Add link if requested
-        if (payload.includeLink && payload.linkUrl) {
+        if (payload?.includeLink && payload?.linkUrl) {
           // In real implementation, URL shortening would happen here
           fullMessage += ` ${payload.linkUrl}`
         }
@@ -43,14 +43,19 @@ export const defaultSmsWorkflow = workflow(
         }
         
         // Truncate if message exceeds SMS limit (160 chars)
-        if (fullMessage.length > 160) {
+        if (fullMessage && fullMessage.length > 160) {
           fullMessage = fullMessage.substring(0, 157) + '...'
         }
 
-        return {
-          body: fullMessage,
-          to: payload.recipientPhone
+        const result: any = {
+          body: fullMessage
         }
+        
+        if (payload.recipientPhone) {
+          result.to = payload.recipientPhone
+        }
+        
+        return result
       },
       {
         controlSchema
