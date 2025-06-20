@@ -13,6 +13,7 @@ jobs:
   # Lint, build, and connection tests
   lint-build-connection:
     runs-on: self-hosted
+    environment: Test
     steps:
     - uses: actions/checkout@v4
 
@@ -77,6 +78,7 @@ jobs:
   # Unit tests
   test-unit:
     runs-on: self-hosted
+    environment: Test
     steps:
     - uses: actions/checkout@v4
 
@@ -136,6 +138,7 @@ jobs:
   # Integration tests
   test-integration:
     runs-on: self-hosted
+    environment: Test
     steps:
     - uses: actions/checkout@v4
 
