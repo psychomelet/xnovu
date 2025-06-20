@@ -6,6 +6,12 @@ export const defaultfiredrillMetadata = createWorkflowMetadata({
   workflow_key: 'default-fire-drill',
   name: 'Fire Drill Notification',
   description: 'Comprehensive fire drill notification workflow handling scheduled drills, reminders, day-of notifications, and results. Supports advance notices, reminders, same-day alerts, result reporting, and cancellations with professional templates and building-specific context.',
+  i18n: {
+    zh: {
+      name: '消防演练通知',
+      description: '全面的消防演练通知工作流，处理计划演练、提醒、当日通知和结果。支持提前通知、提醒、当日警报、结果报告和取消，配备专业模板和建筑特定上下文。'
+    }
+  },
   workflow_type: 'STATIC',
   default_channels: ['EMAIL', 'IN_APP', 'SMS', 'PUSH', 'CHAT'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,

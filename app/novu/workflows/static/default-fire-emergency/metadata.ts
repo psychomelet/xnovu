@@ -6,6 +6,12 @@ export const defaultfireemergencyMetadata = createWorkflowMetadata({
   workflow_key: 'default-fire-emergency',
   name: 'Fire Emergency Alert',
   description: 'Critical fire emergency alert workflow with multi-channel notifications for immediate response. Handles fire alarms, smoke detection, gas leaks, explosions, and evacuation orders with professional templates and building-specific context.',
+  i18n: {
+    zh: {
+      name: '消防紧急警报',
+      description: '危急消防紧急警报工作流，提供多渠道通知以便立即响应。处理火灾警报、烟雾检测、气体泄漏、爆炸和疏散命令，配备专业模板和建筑特定上下文。'
+    }
+  },
   workflow_type: 'STATIC',
   default_channels: ['SMS', 'PUSH', 'EMAIL', 'IN_APP', 'CHAT'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,

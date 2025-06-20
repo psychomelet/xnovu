@@ -132,8 +132,8 @@ export const defaultFireInspectionWorkflow = workflow(
           (payload.notificationType === 'assignment' && controls.assignmentChannels.includes('push')) ||
           (payload.notificationType === 'reminder' && controls.reminderChannels.includes('push')) ||
           (payload.notificationType === 'overdue' && controls.overdueChannels.includes('push')) ||
-          (payload.notificationType === 'completion' && controls.completionChannels.includes('push')) ||
-          (payload.notificationType === 'results' && controls.resultsChannels.includes('push')) ||
+          (payload.notificationType === 'completion' && false) || // Completion typically not via push
+          (payload.notificationType === 'results' && false) || // Results typically not via push
           (payload.notificationType === 'follow_up_required')
         )
         

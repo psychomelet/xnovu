@@ -6,6 +6,12 @@ export const defaultfireinspectionMetadata = createWorkflowMetadata({
   workflow_key: 'default-fire-inspection',
   name: 'Fire Inspection Management',
   description: 'Comprehensive fire inspection workflow handling assignments, reminders, overdue notices, completion notifications, and results. Supports routine, compliance, follow-up, emergency, annual, quarterly, and monthly inspections with professional templates, compliance tracking, and multi-language support.',
+  i18n: {
+    zh: {
+      name: '消防检查管理',
+      description: '全面的消防检查工作流，处理分配、提醒、逾期通知、完成通知和结果。支持例行、合规、跟进、紧急、年度、季度和月度检查，配备专业模板、合规跟踪和多语言支持。'
+    }
+  },
   workflow_type: 'STATIC',
   default_channels: ['EMAIL', 'IN_APP', 'SMS', 'PUSH', 'CHAT'],
   payload_schema: zodToJsonSchema(payloadSchema) as Record<string, any>,

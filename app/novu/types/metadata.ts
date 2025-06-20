@@ -24,6 +24,21 @@ export interface WorkflowMetadata {
   description: string;
   
   /**
+   * Internationalization support for workflow name and description
+   */
+  i18n?: {
+    zh?: {
+      name: string;
+      description: string;
+    };
+    // Extensible for other languages
+    [locale: string]: {
+      name: string;
+      description: string;
+    } | undefined;
+  };
+  
+  /**
    * Type of workflow - STATIC for system workflows, DYNAMIC for user-configurable
    */
   workflow_type: NotificationWorkflowType;
