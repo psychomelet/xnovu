@@ -22,24 +22,49 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
   const waitForNotification = async (
     pollFn: () => Promise<NotificationRow[]>,
     notificationId: number,
-    maxRetries: number = 5
+    maxRetries: number = 5,
+    retryDelay: number = 500
   ): Promise<NotificationRow | undefined> => {
+    console.log(`Waiting for notification ${notificationId} (max ${maxRetries} retries)`);
+    
     for (let i = 0; i < maxRetries; i++) {
       const results = await pollFn();
+      console.log(`Attempt ${i + 1}: Found ${results.length} notifications`);
+      
       const found = results.find(n => n.id === notificationId);
-      if (found) return found;
+      if (found) {
+        console.log(`Found notification ${notificationId} on attempt ${i + 1}`);
+        return found;
+      }
 
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Don't wait after the last attempt
+      if (i < maxRetries - 1) {
+        console.log(`Notification ${notificationId} not found, waiting ${retryDelay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
     }
+    
+    console.log(`Failed to find notification ${notificationId} after ${maxRetries} attempts`);
     return undefined;
   };
 
   // Wrapper to filter polling results by our test enterprise
   const pollNotificationsForTest = async (options: Parameters<typeof pollingService.pollNotifications>[0] = {}) => {
     // Use a large batch size to ensure we get all notifications
+    console.log('Polling notifications with options:', options);
+    const state = pollingService.getPollingState();
+    console.log('Current polling state:', {
+      lastPollTimestamp: state.lastPollTimestamp,
+      isFirstPoll: state.isFirstPoll
+    });
+    
     const results = await pollingService.pollNotifications({ ...options, batchSize: 1000 });
-    return results.filter(n => n.enterprise_id === testEnterpriseId);
+    console.log(`Polled ${results.length} total notifications`);
+    
+    const filtered = results.filter(n => n.enterprise_id === testEnterpriseId);
+    console.log(`Filtered to ${filtered.length} notifications for test enterprise`);
+    
+    return filtered;
   };
 
   const pollScheduledNotificationsForTest = async (options: Parameters<typeof pollingService.pollScheduledNotifications>[0] = {}) => {
@@ -148,11 +173,27 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
       enterprise_id: data.enterprise_id,
       updated_at: data.updated_at,
       scheduled_for: data.scheduled_for,
-      status: data.notification_status
+      status: data.notification_status,
+      workflow_id: data.notification_workflow_id,
+      created_at: data.created_at
     });
 
-    // Small delay to ensure notification is properly persisted
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Verify notification was created by querying it back
+    const { data: verifyData } = await supabase
+      .schema('notify')
+      .from('ent_notification')
+      .select()
+      .eq('id', data.id)
+      .single();
+
+    if (!verifyData) {
+      console.error('Failed to verify notification creation');
+    } else {
+      console.log('Verified notification exists in database');
+    }
+
+    // Small delay to ensure notification is properly persisted and replicated
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     return data;
   }
@@ -177,11 +218,15 @@ describe('NotificationPollingService Scheduled Notification Integration Tests', 
     it('should include notifications without scheduled_for', async () => {
       const notification = await createTestNotification(testWorkflow.id, null);
       
-      // Use the helper function that retries
+      // Add a small delay to ensure database write is complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Use the helper function that retries with increased retries and delay
       const found = await waitForNotification(
         () => pollNotificationsForTest(),
         notification.id,
-        10  // More retries
+        20,  // Increase retries
+        1000 // 1 second between retries
       );
       
       expect(found).toBeDefined();
