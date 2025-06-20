@@ -2,6 +2,7 @@ import { SupabaseTemplateLoader } from '@/app/services/template/loaders/Supabase
 import { TemplateNotFoundError } from '@/app/services/template/loaders/TemplateLoader';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/database.types';
+import { v4 as uuidv4 } from 'uuid';
 
 const TEST_ENTERPRISE_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -357,13 +358,17 @@ describe('SupabaseTemplateLoader Integration', () => {
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       );
 
+      // Generate unique template keys to avoid concurrent test interference
+      const statsKey1 = `stats-1-${uuidv4()}`;
+      const statsKey2 = `stats-2-${uuidv4()}`;
+
       // Insert templates
       await supabase
         .schema('notify')
         .from('ent_notification_template')
         .insert([
           {
-            template_key: 'stats-1',
+            template_key: statsKey1,
             name: 'Stats 1',
             body_template: 'Content 1',
             channel_type: 'EMAIL',
@@ -372,7 +377,7 @@ describe('SupabaseTemplateLoader Integration', () => {
             enterprise_id: TEST_ENTERPRISE_ID
           },
           {
-            template_key: 'stats-2',
+            template_key: statsKey2,
             name: 'Stats 2',
             body_template: 'Content 2',
             channel_type: 'EMAIL',
@@ -383,11 +388,11 @@ describe('SupabaseTemplateLoader Integration', () => {
         ]);
       
       // Load templates
-      await statsLoader.loadTemplate('stats-1', { enterpriseId: TEST_ENTERPRISE_ID });
-      await statsLoader.loadTemplate('stats-2', { enterpriseId: TEST_ENTERPRISE_ID });
+      await statsLoader.loadTemplate(statsKey1, { enterpriseId: TEST_ENTERPRISE_ID });
+      await statsLoader.loadTemplate(statsKey2, { enterpriseId: TEST_ENTERPRISE_ID });
       
       // Load again (should hit cache)
-      await statsLoader.loadTemplate('stats-1', { enterpriseId: TEST_ENTERPRISE_ID });
+      await statsLoader.loadTemplate(statsKey1, { enterpriseId: TEST_ENTERPRISE_ID });
       
       const stats = statsLoader.getStats();
       expect(stats.totalLoaded).toBe(2);
@@ -406,11 +411,14 @@ describe('SupabaseTemplateLoader Integration', () => {
         { cache: true, cacheTTL: 100 } // 100ms TTL
       );
 
+      // Generate unique template key to avoid concurrent test interference
+      const expireKey = `expire-test-${uuidv4()}`;
+
       await supabase
         .schema('notify')
         .from('ent_notification_template')
         .insert({
-          template_key: 'expire-test',
+          template_key: expireKey,
           name: 'Expire Test',
           body_template: 'Content',
           channel_type: 'EMAIL',
@@ -420,7 +428,7 @@ describe('SupabaseTemplateLoader Integration', () => {
         });
 
       // Load template
-      await shortTTLLoader.loadTemplate('expire-test', { enterpriseId: TEST_ENTERPRISE_ID });
+      await shortTTLLoader.loadTemplate(expireKey, { enterpriseId: TEST_ENTERPRISE_ID });
 
       // Wait for cache to expire
       await new Promise(resolve => setTimeout(resolve, 150));
