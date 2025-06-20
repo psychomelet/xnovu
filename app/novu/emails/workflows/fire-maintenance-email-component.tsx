@@ -219,6 +219,6 @@ export const FireMaintenanceEmailComponent = ({
   );
 };
 
-export function renderFireMaintenanceEmail(props: FireMaintenanceEmailProps): string {
-  return render(<FireMaintenanceEmailComponent {...props} />);
+export async function renderFireMaintenanceEmail(props: FireMaintenanceEmailProps): Promise<string> {
+  return await render(<FireMaintenanceEmailComponent {...props} />);
 }

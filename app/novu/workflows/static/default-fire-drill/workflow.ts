@@ -290,7 +290,7 @@ export const defaultFireDrillWorkflow = workflow(
           additionalDetails[content.nextDrill] = new Date(payload.nextDrillDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')
         }
         
-        const body = renderFireDrillEmail({
+        const body = await renderFireDrillEmail({
           subject: subjectLine,
           recipientName: payload.recipientName,
           organizationName: controls.organizationName,
@@ -299,18 +299,18 @@ export const defaultFireDrillWorkflow = workflow(
           drillTitle: `${drillConfig.icon} ${payload.language === 'zh' ? '消防演练通知' : 'Fire Drill Notification'}`,
           drillMessage: message,
           drillDate: formattedDate,
-          drillTime: payload.drillTime,
+          drillTime: payload.scheduledTime,
           estimatedDuration: payload.estimatedDuration,
-          assemblyPoint: payload.assemblyPoint,
-          evacuationRoute: payload.evacuationRoute,
+          assemblyPoint: payload.assemblyPoints.join(', '),
+          evacuationRoute: payload.drillMapUrl,
           beforeDrillInstructions: instructions.length > 0 ? instructions : undefined,
           duringDrillInstructions: safetyGuidelines,
           buildingDetails: { ...eventDetails, ...additionalDetails },
-          evacuationMapUrl: controls.includeEvacuationMap && payload.evacuationMapUrl 
-            ? payload.evacuationMapUrl 
+          evacuationMapUrl: controls.includeEvacuationMap && payload.drillMapUrl 
+            ? payload.drillMapUrl 
             : undefined,
-          acknowledgmentUrl: controls.requireAcknowledgment && payload.acknowledgmentUrl 
-            ? `${payload.acknowledgmentUrl}?drillId=${payload.drillId}` 
+          acknowledgmentUrl: controls.confirmationUrl && payload.drillId 
+            ? `${controls.confirmationUrl}?drillId=${payload.drillId}` 
             : undefined,
           footerNote: `${payload.language === 'zh' ? '演练编号' : 'Drill ID'}: ${payload.drillId}\n${payload.language === 'zh' ? '此为自动生成的消防演练通知' : 'This is an automated fire drill notification'}`
         })

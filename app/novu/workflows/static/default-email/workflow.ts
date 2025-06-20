@@ -18,7 +18,7 @@ export const defaultEmailWorkflow = workflow(
           unsubscribeUrl
         } = controls
 
-        const body = renderDefaultEmail({
+        const body = await renderDefaultEmail({
           subject: payload.subject,
           title: payload.title,
           message: payload.message,

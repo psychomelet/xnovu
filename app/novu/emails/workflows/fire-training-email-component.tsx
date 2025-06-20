@@ -167,6 +167,6 @@ export const FireTrainingEmailComponent = ({
   );
 };
 
-export function renderFireTrainingEmail(props: FireTrainingEmailProps): string {
-  return render(<FireTrainingEmailComponent {...props} />);
+export async function renderFireTrainingEmail(props: FireTrainingEmailProps): Promise<string> {
+  return await render(<FireTrainingEmailComponent {...props} />);
 }

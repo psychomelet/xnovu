@@ -68,7 +68,7 @@ export const defaultFireAssessmentWorkflow = workflow(
           )
         }
 
-        const body = renderFireAssessmentEmail({
+        const body = await renderFireAssessmentEmail({
           subject,
           recipientName: payload.recipientName,
           organizationName: controls.organizationName,
@@ -87,11 +87,11 @@ export const defaultFireAssessmentWorkflow = workflow(
           areasAssessed: payload.areasToAssess,
           complianceStatus: assessmentDetails,
           immediateActions: payload.assessmentCriteria,
-          reportUrl: controls.enableReportAccess && payload.reportUrl 
-            ? `${payload.reportUrl}?assessmentId=${payload.assessmentId}` 
+          reportUrl: payload.assessmentPlanUrl 
+            ? `${payload.assessmentPlanUrl}?assessmentId=${payload.assessmentId}` 
             : undefined,
-          actionPlanUrl: controls.enableActionPlan && payload.actionPlanUrl 
-            ? `${payload.actionPlanUrl}?assessmentId=${payload.assessmentId}` 
+          actionPlanUrl: payload.reportTemplateUrl 
+            ? `${payload.reportTemplateUrl}?assessmentId=${payload.assessmentId}` 
             : undefined,
           footerNote: payload.language === 'zh' 
             ? '此为自动生成的消防安全评估通知' 

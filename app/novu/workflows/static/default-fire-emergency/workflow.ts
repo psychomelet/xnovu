@@ -158,7 +158,7 @@ export const defaultFireEmergencyWorkflow = workflow(
           payload.language === 'zh' ? '关闭身后的门，但不要锁门' : 'Close doors behind you, but do not lock them'
         ]
 
-        const body = renderFireEmergencyEmail({
+        const body = await renderFireEmergencyEmail({
           subject: emailSubject,
           recipientName: payload.recipientName,
           organizationName: controls.organizationName,

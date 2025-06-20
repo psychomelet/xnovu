@@ -181,6 +181,6 @@ export const FireEmergencyEmailComponent = ({
   );
 };
 
-export function renderFireEmergencyEmail(props: FireEmergencyEmailProps): string {
-  return render(<FireEmergencyEmailComponent {...props} />);
+export async function renderFireEmergencyEmail(props: FireEmergencyEmailProps): Promise<string> {
+  return await render(<FireEmergencyEmailComponent {...props} />);
 }

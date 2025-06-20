@@ -58,8 +58,8 @@ export const defaultFireTrainingWorkflow = workflow(
         const eventDetails: Record<string, string> = {
           [content.scheduled]: `${formattedDate} ${payload.scheduledTime}`,
           [content.duration]: payload.duration,
-          [content.location]: `${payload.buildingName} - ${payload.roomLocation}`,
-          [content.maxParticipants]: payload.maxParticipants.toString()
+          [content.location]: `${payload.buildingName}${payload.roomNumber ? ` - ${payload.roomNumber}` : ''}`,
+          [content.maxParticipants]: payload.maxParticipants?.toString() || 'Not specified'
         }
         if (payload.courseCode) {
           eventDetails[content.courseCode] = payload.courseCode
@@ -67,18 +67,18 @@ export const defaultFireTrainingWorkflow = workflow(
         
         // Build objectives and prerequisites
         const instructions: string[] = []
-        if (payload.objectives && payload.objectives.length > 0) {
-          instructions.push(`${content.objectives}:\n${payload.objectives.map(obj => `• ${obj}`).join('\n')}`)
+        if (payload.trainingObjectives && payload.trainingObjectives.length > 0) {
+          instructions.push(`${content.objectives}:\n${payload.trainingObjectives.map(obj => `• ${obj}`).join('\n')}`)
         }
-        if (payload.prerequisites && payload.prerequisites.length > 0) {
-          instructions.push(`${content.prerequisites}:\n${payload.prerequisites.map(pre => `• ${pre}`).join('\n')}`)
+        if (payload.prerequisites) {
+          instructions.push(`${content.prerequisites}:\n${payload.prerequisites}`)
         }
         
         // Build materials list
         const checklist = payload.requiredMaterials?.map(material => ({ task: material, completed: false })) || []
         
         // Add instructor info to event details
-        if (controls.includeInstructorInfo) {
+        if (controls.includeInstructorContact) {
           eventDetails[content.instructor] = payload.instructorName
           eventDetails[payload.language === 'zh' ? '讲师单位' : 'Instructor Organization'] = payload.instructorOrganization
           eventDetails[payload.language === 'zh' ? '讲师电话' : 'Instructor Phone'] = payload.instructorPhone
@@ -124,7 +124,7 @@ export const defaultFireTrainingWorkflow = workflow(
             }
           : undefined
         
-        const body = renderFireTrainingEmail({
+        const body = await renderFireTrainingEmail({
           subject,
           recipientName: payload.recipientName,
           organizationName: controls.organizationName,
@@ -133,11 +133,10 @@ export const defaultFireTrainingWorkflow = workflow(
           trainingTitle: payload.trainingTitle,
           trainingMessage: message,
           trainingDate: formattedDate,
-          trainingTime: payload.scheduledTime,
           trainingDuration: payload.duration,
           instructions: instructions.length > 0 ? instructions.join('\n\n') : undefined,
           requirements: payload.requiredMaterials,
-          trainerInfo: controls.includeInstructorInfo ? {
+          trainerInfo: controls.includeInstructorContact ? {
             'Name': payload.instructorName,
             'Organization': payload.instructorOrganization,
             'Phone': payload.instructorPhone,

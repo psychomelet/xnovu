@@ -154,6 +154,6 @@ export const FireInspectionEmailComponent = ({
   );
 };
 
-export function renderFireInspectionEmail(props: FireInspectionEmailProps): string {
-  return render(<FireInspectionEmailComponent {...props} />);
+export async function renderFireInspectionEmail(props: FireInspectionEmailProps): Promise<string> {
+  return await render(<FireInspectionEmailComponent {...props} />);
 }

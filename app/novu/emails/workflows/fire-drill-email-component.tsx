@@ -173,6 +173,6 @@ export const FireDrillEmailComponent = ({
   );
 };
 
-export function renderFireDrillEmail(props: FireDrillEmailProps): string {
-  return render(<FireDrillEmailComponent {...props} />);
+export async function renderFireDrillEmail(props: FireDrillEmailProps): Promise<string> {
+  return await render(<FireDrillEmailComponent {...props} />);
 }

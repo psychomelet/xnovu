@@ -343,7 +343,7 @@ export const defaultFireInspectionWorkflow = workflow(
         const inspectionAreas = payload.inspectionAreas || []
         const requirements = payload.accessRequirements ? [payload.accessRequirements] : undefined
 
-        const body = renderFireInspectionEmail({
+        const body = await renderFireInspectionEmail({
           subject: getSubjectLine(),
           recipientName: payload.recipientName,
           organizationName: controls.organizationName,
@@ -354,16 +354,12 @@ export const defaultFireInspectionWorkflow = workflow(
           inspectionDate: formattedDate,
           inspectionTime: formattedTime,
           inspectorName: payload.inspectorName,
-          inspectorContact: payload.inspectorContact,
+          inspectorContact: payload.inspectorPhone,
           inspectionAreas,
           requirements,
           locationDetails,
-          scheduleUrl: controls.enableScheduling && payload.schedulingUrl 
-            ? `${payload.schedulingUrl}?inspectionId=${payload.inspectionId}` 
-            : undefined,
-          checklistUrl: controls.enableChecklistAccess && payload.checklistUrl 
-            ? `${payload.checklistUrl}?inspectionId=${payload.inspectionId}` 
-            : undefined,
+          scheduleUrl: undefined,
+          checklistUrl: undefined,
           footerNote: payload.language === 'zh' 
             ? '此为自动生成的消防检查通知' 
             : 'This is an automated fire inspection notification'

@@ -98,6 +98,6 @@ export const MultiChannelEmailComponent = ({
   );
 };
 
-export function renderMultiChannelEmail(props: MultiChannelEmailProps): string {
-  return render(<MultiChannelEmailComponent {...props} />);
+export async function renderMultiChannelEmail(props: MultiChannelEmailProps): Promise<string> {
+  return await render(<MultiChannelEmailComponent {...props} />);
 }

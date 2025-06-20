@@ -88,7 +88,7 @@ export const defaultFireMaintenanceWorkflow = workflow(
           )
         }
 
-        const body = renderFireMaintenanceEmail({
+        const body = await renderFireMaintenanceEmail({
           subject,
           recipientName: payload.recipientName,
           organizationName: controls.organizationName,
@@ -108,12 +108,8 @@ export const defaultFireMaintenanceWorkflow = workflow(
           locationDetails,
           temporaryProcedures: payload.requiredParts,
           backupSystems: Object.keys(backupSystems).length > 0 ? backupSystems : undefined,
-          scheduleUrl: controls.enableScheduling && payload.schedulingUrl 
-            ? `${payload.schedulingUrl}?maintenanceId=${payload.maintenanceId}` 
-            : undefined,
-          workOrderUrl: controls.enableWorkOrder && payload.workOrderUrl 
-            ? `${payload.workOrderUrl}?maintenanceId=${payload.maintenanceId}` 
-            : undefined,
+          scheduleUrl: undefined,
+          workOrderUrl: undefined,
           footerNote: payload.language === 'zh' 
             ? '此为自动生成的消防设备维护通知' 
             : 'This is an automated fire equipment maintenance notification'

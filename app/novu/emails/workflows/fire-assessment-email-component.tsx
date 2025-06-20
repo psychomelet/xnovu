@@ -205,6 +205,6 @@ export const FireAssessmentEmailComponent = ({
   );
 };
 
-export function renderFireAssessmentEmail(props: FireAssessmentEmailProps): string {
-  return render(<FireAssessmentEmailComponent {...props} />);
+export async function renderFireAssessmentEmail(props: FireAssessmentEmailProps): Promise<string> {
+  return await render(<FireAssessmentEmailComponent {...props} />);
 }

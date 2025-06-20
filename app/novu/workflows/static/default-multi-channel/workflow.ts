@@ -140,7 +140,7 @@ export const defaultMultiChannelWorkflow = workflow(
           message = payload.emailMessage || payload.message
         }
 
-        const body = renderMultiChannelEmail({
+        const body = await renderMultiChannelEmail({
           subject,
           title: isDigested ? `${events.length} New Notifications` : payload.title,
           message,

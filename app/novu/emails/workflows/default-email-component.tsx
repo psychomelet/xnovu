@@ -87,6 +87,6 @@ export const DefaultEmailComponent = ({
   );
 };
 
-export function renderDefaultEmail(props: DefaultEmailProps): string {
-  return render(<DefaultEmailComponent {...props} />);
+export async function renderDefaultEmail(props: DefaultEmailProps): Promise<string> {
+  return await render(<DefaultEmailComponent {...props} />);
 }
