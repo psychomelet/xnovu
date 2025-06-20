@@ -2,6 +2,7 @@ import { logger } from '@/app/services/logger'
 import { Connection, WorkflowClient } from '@temporalio/client'
 import { pollNotifications, pollFailedNotifications, pollScheduledNotifications, updatePollingNotificationStatus } from './notification-polling'
 import { Database } from '@/lib/supabase/database.types'
+import { notificationTriggerWorkflow } from '@/lib/temporal/workflows/notification-trigger'
 
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
 
@@ -184,7 +185,13 @@ export class NotificationPollingLoop {
 
     const promises = notifications.map(async (notification) => {
       try {
-        await this.temporalClient!.start('notificationTriggerWorkflow', {
+        // Handle both real WorkflowClient and TestWorkflowEnvironment client
+        const startWorkflow = this.temporalClient!.start || this.temporalClient!.workflow?.start
+        if (!startWorkflow) {
+          throw new Error('No start method available on temporal client')
+        }
+
+        await startWorkflow.call(this.temporalClient!.workflow || this.temporalClient!, notificationTriggerWorkflow, {
           taskQueue: this.config.temporal.taskQueue,
           workflowId: `notification-${notification.id}`,
           args: [{ notificationId: notification.id }],
