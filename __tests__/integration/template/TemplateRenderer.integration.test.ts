@@ -245,6 +245,7 @@ describe('Template Renderer Integration', () => {
       };
 
       const result = await emailRenderer.renderByKey('full-email-dynamic', context, {
+        channelType: 'EMAIL',
         includeTextVersion: true,
         subjectPrefix: '[Important]'
       });

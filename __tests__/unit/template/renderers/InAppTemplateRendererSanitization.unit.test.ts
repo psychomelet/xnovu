@@ -316,7 +316,7 @@ describe('InAppTemplateRenderer - Sanitization', () => {
         enterpriseId: '00000000-0000-0000-0000-000000000001'
       };
 
-      const result = await renderer.render(template, context, { sanitize: false });
+      const result = await renderer.render(template, context, { channelType: 'IN_APP', sanitize: false });
 
       expect(result.content).toContain('<script>');
     });

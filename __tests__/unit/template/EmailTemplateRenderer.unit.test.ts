@@ -106,7 +106,7 @@ describe('EmailTemplateRenderer', () => {
     it('should apply subject prefix', async () => {
       const template = 'Subject: Order Update\n\n<p>Content</p>';
       const context = { variables: {} };
-      const options = { subjectPrefix: '[URGENT]' };
+      const options = { channelType: 'EMAIL', subjectPrefix: '[URGENT]' };
 
       const result = await renderer.render(template, context, options);
 
@@ -116,7 +116,7 @@ describe('EmailTemplateRenderer', () => {
     it('should generate text version when requested', async () => {
       const template = '<h1>Title</h1><p>Hello <strong>World</strong></p>';
       const context = { variables: {} };
-      const options = { includeTextVersion: true };
+      const options = { channelType: 'EMAIL', includeTextVersion: true };
 
       const result = await renderer.render(template, context, options);
 
@@ -209,7 +209,7 @@ describe('EmailTemplateRenderer', () => {
         </div>
       `;
       const context = { variables: {} };
-      const options = { includeTextVersion: true };
+      const options = { channelType: 'EMAIL', includeTextVersion: true };
 
       const result = await renderer.render(template, context, options);
 
@@ -223,7 +223,7 @@ describe('EmailTemplateRenderer', () => {
     it('should handle HTML entities', async () => {
       const template = '<p>&lt;Hello&gt; &amp; &quot;World&quot; &nbsp; &#39;Test&#39;</p>';
       const context = { variables: {} };
-      const options = { includeTextVersion: true };
+      const options = { channelType: 'EMAIL', includeTextVersion: true };
 
       const result = await renderer.render(template, context, options);
 
@@ -240,7 +240,7 @@ describe('EmailTemplateRenderer', () => {
         <script>console.log('test');</script>
       `;
       const context = { variables: {} };
-      const options = { includeTextVersion: true };
+      const options = { channelType: 'EMAIL', includeTextVersion: true };
 
       const result = await renderer.render(template, context, options);
 

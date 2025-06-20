@@ -2,6 +2,7 @@ import { logger } from '@/app/services/logger'
 import { Connection, WorkflowClient } from '@temporalio/client'
 import { pollNotifications, pollFailedNotifications, pollScheduledNotifications, updatePollingNotificationStatus } from './notification-polling'
 import { Database } from '@/lib/supabase/database.types'
+import { notificationTriggerWorkflow } from '@/lib/temporal/workflows/notification-trigger'
 
 type NotificationRow = Database['notify']['Tables']['ent_notification']['Row']
 
@@ -184,11 +185,26 @@ export class NotificationPollingLoop {
 
     const promises = notifications.map(async (notification) => {
       try {
-        await this.temporalClient!.start('notificationTriggerWorkflow', {
-          taskQueue: this.config.temporal.taskQueue,
-          workflowId: `notification-${notification.id}`,
-          args: [{ notificationId: notification.id }],
-        })
+        // Handle both real WorkflowClient and TestWorkflowEnvironment client
+        const client = this.temporalClient as any
+        
+        if (client.start) {
+          // Real WorkflowClient
+          await client.start(notificationTriggerWorkflow, {
+            taskQueue: this.config.temporal.taskQueue,
+            workflowId: `notification-${notification.id}`,
+            args: [{ notificationId: notification.id }],
+          })
+        } else if (client.workflow?.start) {
+          // TestWorkflowEnvironment client
+          await client.workflow.start(notificationTriggerWorkflow, {
+            taskQueue: this.config.temporal.taskQueue,
+            workflowId: `notification-${notification.id}`,
+            args: [{ notificationId: notification.id }],
+          })
+        } else {
+          throw new Error('No start method available on temporal client')
+        }
 
         logger.info('Started workflow for notification', {
           notificationId: notification.id
