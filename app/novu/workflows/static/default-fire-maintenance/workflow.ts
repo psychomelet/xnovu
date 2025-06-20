@@ -1,6 +1,7 @@
 import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 import type { FireMaintenancePayload, FireMaintenanceControls, MaintenanceTypeConfig, EquipmentTypeConfig, LocalizedMaintenanceContent } from './types'
+import { renderFireMaintenanceEmail } from '../../../emails/workflows'
 
 const maintenanceTypeConfig: MaintenanceTypeConfig = {
   preventive: { icon: '🔧', urgency: 'medium', description: 'Scheduled preventive maintenance' },
@@ -69,65 +70,58 @@ export const defaultFireMaintenanceWorkflow = workflow(
           ? `${urgencyPrefix} ${equipmentConfig.icon} 消防设备维护: ${payload.equipmentName} - ${payload.buildingName}`
           : `${urgencyPrefix} ${equipmentConfig.icon} ${payload.equipmentType.replace('_', ' ').toUpperCase()} Maintenance: ${payload.equipmentName} - ${payload.buildingName}`
         
+        // Prepare location details
+        const locationDetails: Record<string, string> = {
+          'Equipment': `${payload.equipmentName} (${payload.equipmentType})`,
+          'Location': `${payload.buildingName} - ${payload.locationDescription}`,
+          'Scheduled': `${formattedDate} ${payload.scheduledTime}`,
+          'Duration': payload.estimatedDuration,
+          'Urgency': payload.urgencyLevel.toUpperCase()
+        }
+
+        // Prepare backup systems info
+        const backupSystems: Record<string, string> = {}
+        if (payload.faultDetails) {
+          backupSystems['System Status'] = payload.faultDetails.systemStatus
+          backupSystems['Detected At'] = new Date(payload.faultDetails.detectedAt).toLocaleString(
+            payload.language === 'zh' ? 'zh-CN' : 'en-US'
+          )
+        }
+
+        const body = renderFireMaintenanceEmail({
+          subject,
+          recipientName: payload.recipientName,
+          organizationName: controls.organizationName,
+          logoUrl: controls.logoUrl,
+          primaryColor: controls.brandColor,
+          maintenanceTitle: payload.language === 'zh' ? '消防设备维护' : 'Fire Equipment Maintenance',
+          maintenanceMessage: payload.maintenanceDescription,
+          maintenanceType: maintenanceConfig.description,
+          scheduledDate: formattedDate,
+          estimatedDuration: payload.estimatedDuration,
+          technician: payload.technicianName,
+          technicianContact: payload.technicianPhone,
+          equipmentList: [payload.equipmentName],
+          affectedAreas: [payload.locationDescription],
+          safetyNotes: payload.safetyPrecautions,
+          accessRequirements: payload.requiredTools,
+          locationDetails,
+          temporaryProcedures: payload.requiredParts,
+          backupSystems: Object.keys(backupSystems).length > 0 ? backupSystems : undefined,
+          scheduleUrl: controls.enableScheduling && payload.schedulingUrl 
+            ? `${payload.schedulingUrl}?maintenanceId=${payload.maintenanceId}` 
+            : undefined,
+          workOrderUrl: controls.enableWorkOrder && payload.workOrderUrl 
+            ? `${payload.workOrderUrl}?maintenanceId=${payload.maintenanceId}` 
+            : undefined,
+          footerNote: payload.language === 'zh' 
+            ? '此为自动生成的消防设备维护通知' 
+            : 'This is an automated fire equipment maintenance notification'
+        })
+
         return {
           subject,
-          body: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: ${controls.brandColor};">${urgencyPrefix} ${payload.language === 'zh' ? '消防设备维护' : 'Fire Equipment Maintenance'}</h2>
-              
-              <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                <h3>${payload.language === 'zh' ? '设备详情' : 'Equipment Details'}</h3>
-                <p><strong>${content.equipment}:</strong> ${payload.equipmentName} (${payload.equipmentType})</p>
-                <p><strong>${content.location}:</strong> ${payload.buildingName} - ${payload.locationDescription}</p>
-                <p><strong>${content.scheduled}:</strong> ${formattedDate} ${payload.scheduledTime}</p>
-                <p><strong>${content.duration}:</strong> ${payload.estimatedDuration}</p>
-                <p><strong>${content.urgency}:</strong> ${payload.urgencyLevel.toUpperCase()}</p>
-              </div>
-              
-              <div style="background: #e3f2fd; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                <h3>${payload.language === 'zh' ? '维护详情' : 'Maintenance Details'}</h3>
-                <p><strong>${payload.language === 'zh' ? '类型' : 'Type'}:</strong> ${maintenanceConfig.icon} ${maintenanceConfig.description}</p>
-                <p><strong>${content.description}:</strong> ${payload.maintenanceDescription}</p>
-                ${payload.requiredParts ? `<p><strong>${content.requiredParts}:</strong> ${payload.requiredParts.join(', ')}</p>` : ''}
-                ${payload.requiredTools ? `<p><strong>${content.requiredTools}:</strong> ${payload.requiredTools.join(', ')}</p>` : ''}
-                ${payload.safetyPrecautions ? `<p><strong>${content.safetyPrecautions}:</strong> ${payload.safetyPrecautions.join(', ')}</p>` : ''}
-              </div>
-              
-              <div style="background: #f3e5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                <h3>${content.technician} ${payload.language === 'zh' ? '联系方式' : 'Contact'}</h3>
-                <p><strong>${payload.language === 'zh' ? '姓名' : 'Name'}:</strong> ${payload.technicianName}</p>
-                <p><strong>${payload.language === 'zh' ? '公司' : 'Company'}:</strong> ${payload.technicianCompany}</p>
-                <p><strong>${payload.language === 'zh' ? '电话' : 'Phone'}:</strong> <a href="tel:${payload.technicianPhone}">${payload.technicianPhone}</a></p>
-                <p><strong>${payload.language === 'zh' ? '邮箱' : 'Email'}:</strong> <a href="mailto:${payload.technicianEmail}">${payload.technicianEmail}</a></p>
-              </div>
-              
-              ${payload.faultDetails ? `
-                <div style="background: #ffebee; border-left: 4px solid #f44336; padding: 15px; margin: 20px 0;">
-                  <h3 style="color: #d32f2f;">${content.faultDetails}</h3>
-                  <p><strong>${content.description}:</strong> ${payload.faultDetails.faultDescription}</p>
-                  <p><strong>${payload.language === 'zh' ? '严重程度' : 'Severity'}:</strong> ${payload.faultDetails.severity.toUpperCase()}</p>
-                  <p><strong>${content.systemStatus}:</strong> ${payload.faultDetails.systemStatus}</p>
-                  <p><strong>${payload.language === 'zh' ? '检测时间' : 'Detected'}:</strong> ${new Date(payload.faultDetails.detectedAt).toLocaleString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>
-                </div>
-              ` : ''}
-              
-              ${payload.completionDetails ? `
-                <div style="background: #e8f5e8; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
-                  <h3 style="color: #388e3c;">${payload.language === 'zh' ? '完成详情' : 'Completion Details'}</h3>
-                  <p><strong>${payload.language === 'zh' ? '完成时间' : 'Completed At'}:</strong> ${new Date(payload.completionDetails.completedAt).toLocaleString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>
-                  <p><strong>${content.workPerformed}:</strong> ${payload.completionDetails.workPerformed}</p>
-                  ${payload.completionDetails.partsUsed ? `<p><strong>${content.partsUsed}:</strong> ${payload.completionDetails.partsUsed.join(', ')}</p>` : ''}
-                  ${payload.completionDetails.testResults ? `<p><strong>${content.testResults}:</strong> ${payload.completionDetails.testResults}</p>` : ''}
-                  ${payload.completionDetails.nextMaintenanceDate ? `<p><strong>${content.nextMaintenance}:</strong> ${new Date(payload.completionDetails.nextMaintenanceDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>` : ''}
-                </div>
-              ` : ''}
-              
-              <p style="margin-top: 30px; font-size: 12px; color: #666;">
-                ${payload.language === 'zh' ? '维护编号' : 'Maintenance ID'}: ${payload.maintenanceId}<br>
-                ${payload.language === 'zh' ? '设备编号' : 'Equipment ID'}: ${payload.equipmentId}
-              </p>
-            </div>
-          `
+          body
         }
       },
       { controlSchema }

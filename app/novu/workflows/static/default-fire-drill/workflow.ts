@@ -1,6 +1,7 @@
 import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 import type { FireDrillPayload, FireDrillControls, DrillNotificationTypeConfig, DrillTypeConfig, LocalizedDrillContent } from './types'
+import { renderFireDrillEmail } from '../../../emails/workflows'
 
 const notificationTypeConfig: DrillNotificationTypeConfig = {
   advance_notice: { icon: '📋', urgency: 'normal', subject_prefix: 'Fire Drill Scheduled', tone: 'informational' },
@@ -181,178 +182,142 @@ export const defaultFireDrillWorkflow = workflow(
       async (controls) => {
         if (!controls.enableEmail) return { subject: '', body: '' }
         
-        // Build evacuation map HTML
-        const evacuationMapHtml = controls.includeEvacuationMap && payload.drillMapUrl
-          ? `<div style="margin: 20px 0; padding: 15px; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px;">
-               <h3 style="margin: 0 0 10px 0; color: #1976d2;">${payload.language === 'zh' ? '疏散路线图' : 'Evacuation Map'}</h3>
-               <a href="${payload.drillMapUrl}" target="_blank" style="color: #1976d2; text-decoration: underline;">
-                 ${payload.language === 'zh' ? '查看疏散路线图' : 'View Evacuation Route Map'}
-               </a>
-             </div>`
-          : ''
+        const subjectLine = getSubjectLine()
         
-        // Build coordinator contact HTML
-        const coordinatorContactHtml = controls.includeCoordinatorContact
-          ? `<div style="margin: 20px 0; padding: 15px; background: #f3e5f5; border: 1px solid #9c27b0; border-radius: 4px;">
-               <h3 style="margin: 0 0 10px 0; color: #7b1fa2;">${content.coordinator}</h3>
-               <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '姓名' : 'Name'}:</strong> ${payload.drillCoordinator}</p>
-               <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '电话' : 'Phone'}:</strong> <a href="tel:${payload.coordinatorPhone}" style="color: #7b1fa2;">${payload.coordinatorPhone}</a></p>
-               <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '邮箱' : 'Email'}:</strong> <a href="mailto:${payload.coordinatorEmail}" style="color: #7b1fa2;">${payload.coordinatorEmail}</a></p>
-               <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">${content.contactForQuestions}</p>
-             </div>`
-          : ''
+        // Build event details
+        const eventDetails: Record<string, string> = {
+          [payload.language === 'zh' ? '演练名称' : 'Drill Name']: payload.drillName,
+          [payload.language === 'zh' ? '建筑' : 'Building']: payload.buildingName,
+          [payload.language === 'zh' ? '日期' : 'Date']: formattedDate,
+          [payload.language === 'zh' ? '时间' : 'Time']: formattedTime,
+          [content.duration]: payload.estimatedDuration,
+          [payload.language === 'zh' ? '涉及楼层' : 'Floors']: payload.floorsCovered.join(', '),
+          [content.assemblyPoint]: payload.assemblyPoints.join(', ')
+        }
         
-        // Build compliance info HTML
-        const complianceInfoHtml = controls.includeComplianceInfo && payload.regulatoryCompliance
-          ? `<div style="margin: 20px 0; padding: 15px; background: #e8f5e8; border: 1px solid #4caf50; border-radius: 4px;">
-               <h3 style="margin: 0 0 10px 0; color: #388e3c;">${payload.language === 'zh' ? '法规合规' : 'Regulatory Compliance'}</h3>
-               <p style="margin: 0; color: #555;">${content.regulatoryCompliance}: ${payload.regulatoryCompliance}</p>
-             </div>`
-          : ''
+        // Build instructions list
+        const instructions: string[] = []
+        if (payload.notificationType !== 'results') {
+          instructions.push(payload.drillInstructions)
+          if (payload.specialInstructions) {
+            instructions.push(`${payload.language === 'zh' ? '特殊说明' : 'Special Instructions'}: ${payload.specialInstructions}`)
+          }
+        }
         
-        // Build results HTML for results notifications
-        const resultsHtml = payload.notificationType === 'results' && payload.drillResults
-          ? `<div style="margin: 20px 0;">
-               <h2 style="color: ${controls.brandColor}; margin-bottom: 15px;">${payload.language === 'zh' ? '演练结果' : 'Drill Results'}</h2>
-               
-               <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 15px 0;">
-                 <h3 style="margin: 0 0 10px 0; color: #333;">${payload.language === 'zh' ? '总体表现' : 'Overall Performance'}</h3>
-                 <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '状态' : 'Status'}:</strong> ${payload.drillResults.completed ? (payload.language === 'zh' ? '已完成' : 'Completed') : (payload.language === 'zh' ? '未完成' : 'Incomplete')}</p>
-                 ${payload.drillResults.completionTime ? `<p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '完成时间' : 'Completion Time'}:</strong> ${payload.drillResults.completionTime}</p>` : ''}
-                 ${payload.drillResults.participantCount ? `<p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '参与人数' : 'Participants'}:</strong> ${payload.drillResults.participantCount}</p>` : ''}
-                 ${payload.drillResults.evacuationTime ? `<p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '疏散时间' : 'Evacuation Time'}:</strong> ${payload.drillResults.evacuationTime}</p>` : ''}
-                 ${payload.drillResults.overallRating ? `<p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '总体评分' : 'Overall Rating'}:</strong> ${payload.drillResults.overallRating.toUpperCase()}</p>` : ''}
-               </div>
-               
-               ${payload.drillResults.issuesIdentified && payload.drillResults.issuesIdentified.length > 0 ? `
-                 <div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 15px 0;">
-                   <h3 style="margin: 0 0 10px 0; color: #f57c00;">${content.improvementAreas}</h3>
-                   <ul style="margin: 0; padding-left: 20px;">
-                     ${payload.drillResults.issuesIdentified.map(issue => `<li style="margin: 5px 0;">${issue}</li>`).join('')}
-                   </ul>
-                 </div>
-               ` : ''}
-               
-               ${payload.drillResults.recommendations ? `
-                 <div style="background: #e8f5e8; border-left: 4px solid #4caf50; padding: 15px; margin: 15px 0;">
-                   <h3 style="margin: 0 0 10px 0; color: #388e3c;">${content.recommendations}</h3>
-                   <p style="margin: 0; color: #555; white-space: pre-wrap;">${payload.drillResults.recommendations}</p>
-                 </div>
-               ` : ''}
-             </div>`
-          : ''
-
-        // Build participant info HTML
-        const participantInfoHtml = payload.totalParticipants
-          ? `<div style="margin: 20px 0; padding: 15px; background: #fff8e1; border: 1px solid #ffb74d; border-radius: 4px;">
-               <h3 style="margin: 0 0 10px 0; color: #f57c00;">${payload.language === 'zh' ? '参与信息' : 'Participation Information'}</h3>
-               <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '预期参与人数' : 'Expected Participants'}:</strong> ${payload.totalParticipants}</p>
-               <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '参与状态' : 'Participation Status'}:</strong> ${getParticipationStatus()}</p>
-               ${controls.requireParticipationConfirmation && controls.confirmationUrl ? `
-                 <div style="margin: 15px 0; text-align: center;">
-                   <a href="${controls.confirmationUrl}?drillId=${payload.drillId}" 
-                      style="display: inline-block; padding: 10px 20px; background-color: ${controls.brandColor}; color: white; text-decoration: none; border-radius: 4px;">
-                     ${payload.language === 'zh' ? '确认参与' : 'Confirm Participation'}
-                   </a>
-                 </div>
-               ` : ''}
-             </div>`
-          : ''
+        // Build safety guidelines
+        const safetyGuidelines: string[] = [
+          content.bringNothing,
+          content.useStairs,
+          content.awaitInstructions,
+          content.returnAfterClearance
+        ]
+        if (payload.accessibilityNotes) {
+          safetyGuidelines.push(`${payload.language === 'zh' ? '无障碍说明' : 'Accessibility'}: ${payload.accessibilityNotes}`)
+        }
+        if (payload.weatherBackupPlan) {
+          safetyGuidelines.push(`${payload.language === 'zh' ? '天气预案' : 'Weather Backup'}: ${payload.weatherBackupPlan}`)
+        }
+        
+        // Build secondary actions
+        const secondaryActions: Array<{ text: string; url: string }> = []
+        if (controls.requireParticipationConfirmation && controls.confirmationUrl && payload.totalParticipants) {
+          secondaryActions.push({
+            text: payload.language === 'zh' ? '确认参与' : 'Confirm Participation',
+            url: `${controls.confirmationUrl}?drillId=${payload.drillId}`
+          })
+        }
+        if (controls.includeEvacuationMap && payload.drillMapUrl) {
+          secondaryActions.push({
+            text: payload.language === 'zh' ? '查看疏散路线图' : 'View Evacuation Route Map',
+            url: payload.drillMapUrl
+          })
+        }
+        
+        // Build message based on notification type
+        let message = ''
+        let additionalDetails: Record<string, string> = {}
+        
+        if (payload.notificationType === 'results' && payload.drillResults) {
+          // Results message
+          message = payload.language === 'zh' 
+            ? '消防演练已完成，以下是演练结果和反馈。' 
+            : 'The fire drill has been completed. Below are the results and feedback.'
+          
+          additionalDetails = {
+            [payload.language === 'zh' ? '状态' : 'Status']: payload.drillResults.completed ? (payload.language === 'zh' ? '已完成' : 'Completed') : (payload.language === 'zh' ? '未完成' : 'Incomplete'),
+            ...(payload.drillResults.completionTime && { [payload.language === 'zh' ? '完成时间' : 'Completion Time']: payload.drillResults.completionTime }),
+            ...(payload.drillResults.participantCount && { [payload.language === 'zh' ? '参与人数' : 'Participants']: payload.drillResults.participantCount.toString() }),
+            ...(payload.drillResults.evacuationTime && { [payload.language === 'zh' ? '疏散时间' : 'Evacuation Time']: payload.drillResults.evacuationTime }),
+            ...(payload.drillResults.overallRating && { [payload.language === 'zh' ? '总体评分' : 'Overall Rating']: payload.drillResults.overallRating.toUpperCase() })
+          }
+          
+          if (payload.drillResults.issuesIdentified && payload.drillResults.issuesIdentified.length > 0) {
+            additionalDetails[content.improvementAreas] = payload.drillResults.issuesIdentified.join('\n')
+          }
+          if (payload.drillResults.recommendations) {
+            additionalDetails[content.recommendations] = payload.drillResults.recommendations
+          }
+        } else {
+          // Regular notification message
+          message = payload.language === 'zh'
+            ? `${drillConfig.mandatory ? '必须参加的' : '可选参加的'}消防演练已安排。请查看以下详情并做好准备。`
+            : `A ${drillConfig.mandatory ? 'mandatory' : 'optional'} fire drill has been scheduled. Please review the details below and prepare accordingly.`
+          
+          if (payload.totalParticipants) {
+            additionalDetails[payload.language === 'zh' ? '预期参与人数' : 'Expected Participants'] = payload.totalParticipants.toString()
+            additionalDetails[payload.language === 'zh' ? '参与状态' : 'Participation Status'] = getParticipationStatus()
+          }
+        }
+        
+        // Add coordinator contact
+        if (controls.includeCoordinatorContact) {
+          additionalDetails[content.coordinator] = `${payload.drillCoordinator} (${payload.coordinatorPhone})`
+          if (payload.coordinatorEmail) {
+            additionalDetails[payload.language === 'zh' ? '协调员邮箱' : 'Coordinator Email'] = payload.coordinatorEmail
+          }
+        }
+        
+        // Add compliance info
+        if (controls.includeComplianceInfo && payload.regulatoryCompliance) {
+          additionalDetails[payload.language === 'zh' ? '法规合规' : 'Regulatory Compliance'] = payload.regulatoryCompliance
+        }
+        
+        // Add drill history
+        if (payload.previousDrillDate) {
+          additionalDetails[content.previousDrill] = new Date(payload.previousDrillDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')
+        }
+        if (payload.nextDrillDate) {
+          additionalDetails[content.nextDrill] = new Date(payload.nextDrillDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')
+        }
+        
+        const body = renderFireDrillEmail({
+          subject: subjectLine,
+          recipientName: payload.recipientName,
+          organizationName: controls.organizationName,
+          logoUrl: controls.logoUrl,
+          primaryColor: controls.brandColor,
+          drillTitle: `${drillConfig.icon} ${payload.language === 'zh' ? '消防演练通知' : 'Fire Drill Notification'}`,
+          drillMessage: message,
+          drillDate: formattedDate,
+          drillTime: payload.drillTime,
+          estimatedDuration: payload.estimatedDuration,
+          assemblyPoint: payload.assemblyPoint,
+          evacuationRoute: payload.evacuationRoute,
+          beforeDrillInstructions: instructions.length > 0 ? instructions : undefined,
+          duringDrillInstructions: safetyGuidelines,
+          buildingDetails: { ...eventDetails, ...additionalDetails },
+          evacuationMapUrl: controls.includeEvacuationMap && payload.evacuationMapUrl 
+            ? payload.evacuationMapUrl 
+            : undefined,
+          acknowledgmentUrl: controls.requireAcknowledgment && payload.acknowledgmentUrl 
+            ? `${payload.acknowledgmentUrl}?drillId=${payload.drillId}` 
+            : undefined,
+          footerNote: `${payload.language === 'zh' ? '演练编号' : 'Drill ID'}: ${payload.drillId}\n${payload.language === 'zh' ? '此为自动生成的消防演练通知' : 'This is an automated fire drill notification'}`
+        })
 
         return {
-          subject: getSubjectLine(),
-          body: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>${getSubjectLine()}</title>
-            </head>
-            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-              <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                
-                <!-- Header -->
-                <div style="text-align: center; padding: 20px 0; border-bottom: 3px solid ${controls.brandColor};">
-                  ${controls.logoUrl ? `<img src="${controls.logoUrl}" alt="${controls.organizationName}" style="max-height: 50px; margin-bottom: 10px;">` : ''}
-                  <h1 style="margin: 10px 0 0 0; color: ${controls.brandColor};">${controls.organizationName}</h1>
-                </div>
-                
-                <!-- Drill Header -->
-                <div style="text-align: center; padding: 20px 0; background: linear-gradient(135deg, ${controls.brandColor}15, ${controls.brandColor}05); margin: 20px -30px; border-radius: 8px;">
-                  <h2 style="margin: 0; color: ${controls.brandColor}; font-size: 24px;">
-                    ${drillConfig.icon} ${payload.language === 'zh' ? '消防演练通知' : 'Fire Drill Notification'}
-                  </h2>
-                  <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">${drillConfig.description}</p>
-                </div>
-                
-                <!-- Main Content -->
-                <div style="padding: 20px 0;">
-                  ${payload.recipientName ? `<p style="margin-bottom: 20px; font-size: 16px;">${payload.language === 'zh' ? '您好' : 'Dear'} ${payload.recipientName},</p>` : ''}
-                  
-                  <!-- Drill Details -->
-                  <div style="background: #fff3e0; border-left: 4px solid ${controls.brandColor}; padding: 15px; margin: 20px 0;">
-                    <h3 style="margin: 0 0 15px 0; color: ${controls.brandColor};">${payload.language === 'zh' ? '演练详情' : 'Drill Details'}</h3>
-                    <table style="width: 100%; border-collapse: collapse;">
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '演练名称' : 'Drill Name'}:</td><td style="padding: 5px 0;">${payload.drillName}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '建筑' : 'Building'}:</td><td style="padding: 5px 0;">${payload.buildingName}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '日期' : 'Date'}:</td><td style="padding: 5px 0;">${formattedDate}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '时间' : 'Time'}:</td><td style="padding: 5px 0;">${formattedTime}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${content.duration}:</td><td style="padding: 5px 0;">${payload.estimatedDuration}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '涉及楼层' : 'Floors'}:</td><td style="padding: 5px 0;">${payload.floorsCovered.join(', ')}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${content.assemblyPoint}:</td><td style="padding: 5px 0;">${payload.assemblyPoints.join(', ')}</td></tr>
-                    </table>
-                  </div>
-                  
-                  ${payload.notificationType !== 'results' ? `
-                    <!-- Instructions -->
-                    <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0;">
-                      <h3 style="margin: 0 0 10px 0; color: #1976d2;">${payload.language === 'zh' ? '演练说明' : 'Drill Instructions'}</h3>
-                      <div style="color: #555; line-height: 1.6; white-space: pre-wrap;">${payload.drillInstructions}</div>
-                      ${payload.specialInstructions ? `<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #90caf9;"><strong>${payload.language === 'zh' ? '特殊说明' : 'Special Instructions'}:</strong><br><span style="color: #555; white-space: pre-wrap;">${payload.specialInstructions}</span></div>` : ''}
-                    </div>
-                    
-                    <!-- Safety Guidelines -->
-                    <div style="background: #e8f5e8; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
-                      <h3 style="margin: 0 0 10px 0; color: #388e3c;">${payload.language === 'zh' ? '安全指引' : 'Safety Guidelines'}</h3>
-                      <ul style="margin: 0; padding-left: 20px; color: #555;">
-                        <li>${content.bringNothing}</li>
-                        <li>${content.useStairs}</li>
-                        <li>${content.awaitInstructions}</li>
-                        <li>${content.returnAfterClearance}</li>
-                        ${payload.accessibilityNotes ? `<li><strong>${payload.language === 'zh' ? '无障碍说明' : 'Accessibility'}:</strong> ${payload.accessibilityNotes}</li>` : ''}
-                        ${payload.weatherBackupPlan ? `<li><strong>${payload.language === 'zh' ? '天气预案' : 'Weather Backup'}:</strong> ${payload.weatherBackupPlan}</li>` : ''}
-                      </ul>
-                    </div>
-                  ` : ''}
-                  
-                  ${resultsHtml}
-                  ${participantInfoHtml}
-                  ${coordinatorContactHtml}
-                  ${evacuationMapHtml}
-                  ${complianceInfoHtml}
-                  
-                  <!-- Additional Information -->
-                  ${payload.previousDrillDate || payload.nextDrillDate ? `
-                    <div style="margin: 30px 0; padding: 15px; background: #fafafa; border-radius: 4px; font-size: 12px; color: #666;">
-                      ${payload.previousDrillDate ? `<p style="margin: 5px 0;"><strong>${content.previousDrill}:</strong> ${new Date(payload.previousDrillDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>` : ''}
-                      ${payload.nextDrillDate ? `<p style="margin: 5px 0;"><strong>${content.nextDrill}:</strong> ${new Date(payload.nextDrillDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>` : ''}
-                      <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '演练编号' : 'Drill ID'}:</strong> ${payload.drillId}</p>
-                    </div>
-                  ` : ''}
-                </div>
-                
-                <!-- Footer -->
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; font-size: 12px; color: #666;">
-                  <p>&copy; ${new Date().getFullYear()} ${controls.organizationName}. ${payload.language === 'zh' ? '版权所有' : 'All rights reserved'}.</p>
-                  <p style="margin-top: 10px; color: ${controls.brandColor};">
-                    ${payload.language === 'zh' ? '此为自动生成的消防演练通知' : 'This is an automated fire drill notification'}
-                  </p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `
+          subject: subjectLine,
+          body
         }
       },
       { controlSchema }

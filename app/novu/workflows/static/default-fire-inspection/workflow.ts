@@ -9,6 +9,7 @@ import type {
   InspectionStatusConfig,
   ComplianceStatusConfig
 } from './types'
+import { renderFireInspectionEmail } from '../../../emails/workflows'
 
 const notificationTypeConfig: InspectionNotificationTypeConfig = {
   assignment: { icon: '📋', urgency: 'normal', subject_prefix: 'Fire Inspection Assigned', tone: 'professional' },
@@ -324,86 +325,53 @@ export const defaultFireInspectionWorkflow = workflow(
           </div>
         `
 
+        // Prepare location details
+        const locationDetails: Record<string, string> = {
+          'Building': payload.buildingName,
+          'Date': `${formattedDate} ${formattedTime}`,
+          'Duration': payload.estimatedDuration,
+          'Floors': payload.floorsToInspect.join(', '),
+          'Areas': payload.inspectionAreas.join(', ')
+        }
+        if (payload.deadlineDate) {
+          locationDetails['Deadline'] = new Date(payload.deadlineDate).toLocaleDateString(
+            payload.language === 'zh' ? 'zh-CN' : 'en-US'
+          )
+        }
+
+        // Prepare inspection areas and requirements
+        const inspectionAreas = payload.inspectionAreas || []
+        const requirements = payload.accessRequirements ? [payload.accessRequirements] : undefined
+
+        const body = renderFireInspectionEmail({
+          subject: getSubjectLine(),
+          recipientName: payload.recipientName,
+          organizationName: controls.organizationName,
+          logoUrl: controls.logoUrl,
+          primaryColor: controls.brandColor,
+          inspectionTitle: payload.inspectionTitle,
+          inspectionMessage: payload.inspectionPurpose || 'Fire safety inspection scheduled for your building.',
+          inspectionDate: formattedDate,
+          inspectionTime: formattedTime,
+          inspectorName: payload.inspectorName,
+          inspectorContact: payload.inspectorContact,
+          inspectionAreas,
+          requirements,
+          locationDetails,
+          scheduleUrl: controls.enableScheduling && payload.schedulingUrl 
+            ? `${payload.schedulingUrl}?inspectionId=${payload.inspectionId}` 
+            : undefined,
+          checklistUrl: controls.enableChecklistAccess && payload.checklistUrl 
+            ? `${payload.checklistUrl}?inspectionId=${payload.inspectionId}` 
+            : undefined,
+          footerNote: payload.language === 'zh' 
+            ? '此为自动生成的消防检查通知' 
+            : 'This is an automated fire inspection notification'
+        })
+
         return {
           subject: getSubjectLine(),
-          body: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>${getSubjectLine()}</title>
-            </head>
-            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-              <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                
-                <!-- Header -->
-                <div style="text-align: center; padding: 20px 0; border-bottom: 3px solid ${controls.brandColor};">
-                  ${controls.logoUrl ? `<img src="${controls.logoUrl}" alt="${controls.organizationName}" style="max-height: 50px; margin-bottom: 10px;">` : ''}
-                  <h1 style="margin: 10px 0 0 0; color: ${controls.brandColor};">${controls.organizationName}</h1>
-                </div>
-                
-                <!-- Inspection Header -->
-                <div style="text-align: center; padding: 20px 0; background: linear-gradient(135deg, ${controls.brandColor}15, ${controls.brandColor}05); margin: 20px -30px; border-radius: 8px;">
-                  <h2 style="margin: 0; color: ${controls.brandColor}; font-size: 24px;">
-                    ${inspectionConfig.icon} ${payload.language === 'zh' ? '消防检查通知' : 'Fire Inspection Notification'}
-                  </h2>
-                  <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">${inspectionConfig.description}</p>
-                </div>
-                
-                <!-- Main Content -->
-                <div style="padding: 20px 0;">
-                  ${payload.recipientName ? `<p style="margin-bottom: 20px; font-size: 16px;">${payload.language === 'zh' ? '您好' : 'Dear'} ${payload.recipientName},</p>` : ''}
-                  
-                  <!-- Inspection Details -->
-                  <div style="background: #fff3e0; border-left: 4px solid ${controls.brandColor}; padding: 15px; margin: 20px 0;">
-                    <h3 style="margin: 0 0 15px 0; color: ${controls.brandColor};">${payload.language === 'zh' ? '检查详情' : 'Inspection Details'}</h3>
-                    <table style="width: 100%; border-collapse: collapse;">
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '检查名称' : 'Inspection Title'}:</td><td style="padding: 5px 0;">${payload.inspectionTitle}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '建筑' : 'Building'}:</td><td style="padding: 5px 0;">${payload.buildingName}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${content.scheduled}:</td><td style="padding: 5px 0;">${formattedDate} ${formattedTime}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${content.duration}:</td><td style="padding: 5px 0;">${payload.estimatedDuration}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${payload.language === 'zh' ? '楼层' : 'Floors'}:</td><td style="padding: 5px 0;">${payload.floorsToInspect.join(', ')}</td></tr>
-                      <tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${content.areas}:</td><td style="padding: 5px 0;">${payload.inspectionAreas.join(', ')}</td></tr>
-                      ${payload.deadlineDate ? `<tr><td style="padding: 5px 0; font-weight: bold; color: #555;">${content.deadline}:</td><td style="padding: 5px 0;">${new Date(payload.deadlineDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</td></tr>` : ''}
-                    </table>
-                  </div>
-                  
-                  ${payload.notificationType !== 'results' ? `
-                    <!-- Purpose and Instructions -->
-                    <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0;">
-                      <h3 style="margin: 0 0 10px 0; color: #1976d2;">${payload.language === 'zh' ? '检查目的' : 'Inspection Purpose'}</h3>
-                      <div style="color: #555; line-height: 1.6; white-space: pre-wrap;">${payload.inspectionPurpose}</div>
-                      ${payload.accessRequirements ? `<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #90caf9;"><strong>${content.access}:</strong><br><span style="color: #555; white-space: pre-wrap;">${payload.accessRequirements}</span></div>` : ''}
-                    </div>
-                  ` : ''}
-                  
-                  ${resultsHtml}
-                  ${preparationTasksHtml}
-                  ${inspectorContactHtml}
-                  ${checklistHtml}
-                  ${complianceInfoHtml}
-                  ${actionButtonsHtml}
-                  
-                  <!-- Additional Information -->
-                  <div style="margin: 30px 0; padding: 15px; background: #fafafa; border-radius: 4px; font-size: 12px; color: #666;">
-                    <p style="margin: 5px 0;"><strong>${payload.language === 'zh' ? '检查编号' : 'Inspection ID'}:</strong> ${payload.inspectionId}</p>
-                    ${payload.previousInspectionDate ? `<p style="margin: 5px 0;"><strong>${content.previousInspection}:</strong> ${new Date(payload.previousInspectionDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>` : ''}
-                    ${payload.nextInspectionDue ? `<p style="margin: 5px 0;"><strong>${content.nextInspection}:</strong> ${new Date(payload.nextInspectionDue).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>` : ''}
-                  </div>
-                </div>
-                
-                <!-- Footer -->
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; font-size: 12px; color: #666;">
-                  <p>&copy; ${new Date().getFullYear()} ${controls.organizationName}. ${payload.language === 'zh' ? '版权所有' : 'All rights reserved'}.</p>
-                  <p style="margin-top: 10px; color: ${controls.brandColor};">
-                    ${payload.language === 'zh' ? '此为自动生成的消防检查通知' : 'This is an automated fire inspection notification'}
-                  </p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `
+          body
         }
       },
       { controlSchema }

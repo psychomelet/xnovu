@@ -1,6 +1,7 @@
 import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 import type { FireAssessmentPayload, FireAssessmentControls, AssessmentTypeConfig, LocalizedAssessmentContent } from './types'
+import { renderFireAssessmentEmail } from '../../../emails/workflows'
 
 const assessmentTypeConfig: AssessmentTypeConfig = {
   risk_assessment: { icon: '⚠️', description: 'Comprehensive risk assessment and analysis' },
@@ -54,83 +55,52 @@ export const defaultFireAssessmentWorkflow = workflow(
           ? `📊 消防安全评估: ${payload.assessmentTitle} - ${payload.buildingName}`
           : `📊 Fire Safety Assessment: ${payload.assessmentTitle} - ${payload.buildingName}`
         
+        // Prepare assessment details
+        const assessmentDetails: Record<string, string> = {
+          'Building': payload.buildingName,
+          'Date': `${formattedDate} ${payload.scheduledTime}`,
+          'Duration': payload.estimatedDuration,
+          'Areas': payload.areasToAssess.join(', ')
+        }
+        if (payload.deadlineDate) {
+          assessmentDetails['Deadline'] = new Date(payload.deadlineDate).toLocaleDateString(
+            payload.language === 'zh' ? 'zh-CN' : 'en-US'
+          )
+        }
+
+        const body = renderFireAssessmentEmail({
+          subject,
+          recipientName: payload.recipientName,
+          organizationName: controls.organizationName,
+          logoUrl: controls.logoUrl,
+          primaryColor: controls.brandColor,
+          assessmentTitle: payload.assessmentTitle,
+          assessmentMessage: payload.assessmentDescription,
+          assessmentType: assessmentConfig.description,
+          dueDate: payload.deadlineDate ? new Date(payload.deadlineDate).toLocaleDateString(
+            payload.language === 'zh' ? 'zh-CN' : 'en-US'
+          ) : undefined,
+          assessor: controls.includeAssessorContact ? payload.assessorName : undefined,
+          riskLevel: payload.assessmentResults?.riskLevel,
+          riskFindings: payload.assessmentResults?.criticalFindings,
+          recommendations: payload.requiredDocuments,
+          areasAssessed: payload.areasToAssess,
+          complianceStatus: assessmentDetails,
+          immediateActions: payload.assessmentCriteria,
+          reportUrl: controls.enableReportAccess && payload.reportUrl 
+            ? `${payload.reportUrl}?assessmentId=${payload.assessmentId}` 
+            : undefined,
+          actionPlanUrl: controls.enableActionPlan && payload.actionPlanUrl 
+            ? `${payload.actionPlanUrl}?assessmentId=${payload.assessmentId}` 
+            : undefined,
+          footerNote: payload.language === 'zh' 
+            ? '此为自动生成的消防安全评估通知' 
+            : 'This is an automated fire safety assessment notification'
+        })
+
         return {
           subject,
-          body: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: ${controls.brandColor};">📊 ${payload.language === 'zh' ? '消防安全评估通知' : 'Fire Safety Assessment Notification'}</h2>
-              
-              <div style="background: #e8f5e8; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                <h3>${payload.language === 'zh' ? '评估详情' : 'Assessment Details'}</h3>
-                <p><strong>${payload.language === 'zh' ? '评估名称' : 'Assessment'}:</strong> ${payload.assessmentTitle}</p>
-                <p><strong>${payload.language === 'zh' ? '类型' : 'Type'}:</strong> ${assessmentConfig.icon} ${assessmentConfig.description}</p>
-                <p><strong>${payload.language === 'zh' ? '建筑' : 'Building'}:</strong> ${payload.buildingName}</p>
-                <p><strong>${content.scheduled}:</strong> ${formattedDate} ${payload.scheduledTime}</p>
-                <p><strong>${content.duration}:</strong> ${payload.estimatedDuration}</p>
-                ${payload.deadlineDate ? `<p><strong>${content.deadline}:</strong> ${new Date(payload.deadlineDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>` : ''}
-              </div>
-              
-              <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                <h3>${payload.language === 'zh' ? '评估描述' : 'Assessment Description'}</h3>
-                <p>${payload.assessmentDescription}</p>
-                <p><strong>${content.areas}:</strong> ${payload.areasToAssess.join(', ')}</p>
-              </div>
-              
-              ${controls.includeCriteria && payload.assessmentCriteria.length > 0 ? `
-                <div style="background: #e3f2fd; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                  <h3>${content.criteria}</h3>
-                  <ul>
-                    ${payload.assessmentCriteria.map(criteria => `<li>${criteria}</li>`).join('')}
-                  </ul>
-                </div>
-              ` : ''}
-              
-              ${controls.includeAssessorContact ? `
-                <div style="background: #f3e5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                  <h3>${content.assessor}</h3>
-                  <p><strong>${payload.language === 'zh' ? '姓名' : 'Name'}:</strong> ${payload.assessorName}</p>
-                  <p><strong>${payload.language === 'zh' ? '组织' : 'Organization'}:</strong> ${payload.assessorOrganization}</p>
-                  <p><strong>${payload.language === 'zh' ? '电话' : 'Phone'}:</strong> <a href="tel:${payload.assessorPhone}">${payload.assessorPhone}</a></p>
-                  <p><strong>${payload.language === 'zh' ? '邮箱' : 'Email'}:</strong> <a href="mailto:${payload.assessorEmail}">${payload.assessorEmail}</a></p>
-                </div>
-              ` : ''}
-              
-              ${payload.requiredDocuments && payload.requiredDocuments.length > 0 ? `
-                <div style="background: #fff8e1; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                  <h3>${content.documents}</h3>
-                  <ul>
-                    ${payload.requiredDocuments.map(doc => `<li>${doc}</li>`).join('')}
-                  </ul>
-                </div>
-              ` : ''}
-              
-              ${payload.assessmentResults ? `
-                <div style="background: #e8f5e8; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
-                  <h3>${content.results}</h3>
-                  <p><strong>${payload.language === 'zh' ? '完成日期' : 'Completed'}:</strong> ${new Date(payload.assessmentResults.completedDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>
-                  ${payload.assessmentResults.overallScore ? `<p><strong>${content.overallScore}:</strong> ${payload.assessmentResults.overallScore}/100</p>` : ''}
-                  ${payload.assessmentResults.riskLevel ? `<p><strong>${content.riskLevel}:</strong> ${content[payload.assessmentResults.riskLevel]}</p>` : ''}
-                  ${payload.assessmentResults.complianceStatus ? `<p><strong>${content.complianceStatus}:</strong> ${content[payload.assessmentResults.complianceStatus.replace('_', 'C') === 'nonCompliant' ? 'nonCompliant' : payload.assessmentResults.complianceStatus.replace('_', 'C') === 'partiallyCompliant' ? 'partiallyCompliant' : 'compliant']}</p>` : ''}
-                  ${payload.assessmentResults.recommendationsCount ? `<p><strong>${content.recommendations}:</strong> ${payload.assessmentResults.recommendationsCount}</p>` : ''}
-                  ${payload.assessmentResults.followUpRequired ? `<p><strong>${content.followUpRequired}:</strong> ${payload.language === 'zh' ? '是' : 'Yes'}</p>` : ''}
-                </div>
-              ` : ''}
-              
-              ${payload.assessmentResults?.criticalFindings && payload.assessmentResults.criticalFindings.length > 0 ? `
-                <div style="background: #ffebee; border-left: 4px solid #f44336; padding: 15px; margin: 20px 0;">
-                  <h3>${content.criticalFindings}</h3>
-                  <ul>
-                    ${payload.assessmentResults.criticalFindings.map(finding => `<li style="color: #d32f2f;">${finding}</li>`).join('')}
-                  </ul>
-                </div>
-              ` : ''}
-              
-              <p style="margin-top: 30px; font-size: 12px; color: #666;">
-                ${payload.language === 'zh' ? '评估编号' : 'Assessment ID'}: ${payload.assessmentId}<br>
-                ${payload.regulatoryFramework ? `${content.framework}: ${payload.regulatoryFramework}` : ''}
-              </p>
-            </div>
-          `
+          body
         }
       },
       { controlSchema }

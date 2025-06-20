@@ -1,6 +1,7 @@
 import { workflow } from '@novu/framework'
 import { payloadSchema, controlSchema } from './schemas'
 import type { FireTrainingPayload, FireTrainingControls, TrainingTypeConfig, LocalizedTrainingContent } from './types'
+import { renderFireTrainingEmail } from '../../../emails/workflows'
 
 const trainingTypeConfig: TrainingTypeConfig = {
   fire_safety_basics: { icon: '🔥', description: 'Basic fire safety principles and procedures' },
@@ -53,93 +54,104 @@ export const defaultFireTrainingWorkflow = workflow(
           ? `🎓 消防安全培训: ${payload.trainingTitle} - ${payload.buildingName}`
           : `🎓 Fire Safety Training: ${payload.trainingTitle} - ${payload.buildingName}`
         
+        // Build event details
+        const eventDetails: Record<string, string> = {
+          [content.scheduled]: `${formattedDate} ${payload.scheduledTime}`,
+          [content.duration]: payload.duration,
+          [content.location]: `${payload.buildingName} - ${payload.roomLocation}`,
+          [content.maxParticipants]: payload.maxParticipants.toString()
+        }
+        if (payload.courseCode) {
+          eventDetails[content.courseCode] = payload.courseCode
+        }
+        
+        // Build objectives and prerequisites
+        const instructions: string[] = []
+        if (payload.objectives && payload.objectives.length > 0) {
+          instructions.push(`${content.objectives}:\n${payload.objectives.map(obj => `• ${obj}`).join('\n')}`)
+        }
+        if (payload.prerequisites && payload.prerequisites.length > 0) {
+          instructions.push(`${content.prerequisites}:\n${payload.prerequisites.map(pre => `• ${pre}`).join('\n')}`)
+        }
+        
+        // Build materials list
+        const checklist = payload.requiredMaterials?.map(material => ({ task: material, completed: false })) || []
+        
+        // Add instructor info to event details
+        if (controls.includeInstructorInfo) {
+          eventDetails[content.instructor] = payload.instructorName
+          eventDetails[payload.language === 'zh' ? '讲师单位' : 'Instructor Organization'] = payload.instructorOrganization
+          eventDetails[payload.language === 'zh' ? '讲师电话' : 'Instructor Phone'] = payload.instructorPhone
+          eventDetails[payload.language === 'zh' ? '讲师邮箱' : 'Instructor Email'] = payload.instructorEmail
+        }
+        
+        // Add completion details if available
+        if (payload.completionDetails) {
+          eventDetails[payload.language === 'zh' ? '完成日期' : 'Completed'] = new Date(payload.completionDetails.completedDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')
+          eventDetails[content.participants] = payload.completionDetails.participantCount.toString()
+          if (payload.completionDetails.passRate) {
+            eventDetails[content.passRate] = `${payload.completionDetails.passRate}%`
+          }
+          if (payload.completionDetails.certificatesIssued) {
+            eventDetails[content.certificates] = payload.completionDetails.certificatesIssued.toString()
+          }
+          if (payload.completionDetails.feedback) {
+            eventDetails[content.feedback] = payload.completionDetails.feedback
+          }
+        }
+        
+        // Add certification info
+        if (payload.certificationType) {
+          eventDetails[content.certificationType] = payload.certificationType
+        }
+        if (payload.validityPeriod) {
+          eventDetails[content.validityPeriod] = payload.validityPeriod
+        }
+        if (payload.complianceRequirement) {
+          eventDetails[content.compliance] = payload.complianceRequirement
+        }
+        
+        // Build message
+        const message = payload.completionDetails
+          ? (payload.language === 'zh' ? '消防安全培训已成功完成。' : 'Fire safety training has been successfully completed.')
+          : (payload.language === 'zh' ? `${trainingConfig.description}。请查看以下培训详情。` : `${trainingConfig.description}. Please review the training details below.`)
+        
+        // Build primary action
+        const primaryAction = controls.enableEnrollment && payload.enrollmentUrl && !payload.completionDetails
+          ? {
+              text: content.registerNow,
+              url: `${payload.enrollmentUrl}?trainingId=${payload.trainingId}`
+            }
+          : undefined
+        
+        const body = renderFireTrainingEmail({
+          subject,
+          recipientName: payload.recipientName,
+          organizationName: controls.organizationName,
+          logoUrl: controls.logoUrl,
+          primaryColor: controls.brandColor,
+          trainingTitle: payload.trainingTitle,
+          trainingMessage: message,
+          trainingDate: formattedDate,
+          trainingTime: payload.scheduledTime,
+          trainingDuration: payload.duration,
+          instructions: instructions.length > 0 ? instructions.join('\n\n') : undefined,
+          requirements: payload.requiredMaterials,
+          trainerInfo: controls.includeInstructorInfo ? {
+            'Name': payload.instructorName,
+            'Organization': payload.instructorOrganization,
+            'Phone': payload.instructorPhone,
+            'Email': payload.instructorEmail
+          } : undefined,
+          registrationUrl: controls.enableEnrollment && payload.enrollmentUrl && !payload.completionDetails 
+            ? `${payload.enrollmentUrl}?trainingId=${payload.trainingId}` 
+            : undefined,
+          footerNote: `${payload.language === 'zh' ? '培训编号' : 'Training ID'}: ${payload.trainingId}`
+        })
+        
         return {
           subject,
-          body: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <h2 style="color: ${controls.brandColor};">🎓 ${payload.language === 'zh' ? '消防安全培训通知' : 'Fire Safety Training Notification'}</h2>
-              
-              <div style="background: #e3f2fd; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                <h3>${payload.language === 'zh' ? '培训详情' : 'Training Details'}</h3>
-                <p><strong>${payload.language === 'zh' ? '培训名称' : 'Training'}:</strong> ${payload.trainingTitle}</p>
-                <p><strong>${payload.language === 'zh' ? '类型' : 'Type'}:</strong> ${trainingConfig.icon} ${trainingConfig.description}</p>
-                <p><strong>${payload.language === 'zh' ? '日期' : 'Date'}:</strong> ${formattedDate}</p>
-                <p><strong>${payload.language === 'zh' ? '时间' : 'Time'}:</strong> ${payload.scheduledTime}</p>
-                <p><strong>${content.duration}:</strong> ${payload.duration}</p>
-                <p><strong>${content.location}:</strong> ${payload.buildingName} - ${payload.locationDescription}</p>
-                ${payload.roomNumber ? `<p><strong>${payload.language === 'zh' ? '房间' : 'Room'}:</strong> ${payload.roomNumber}</p>` : ''}
-                ${payload.maxParticipants ? `<p><strong>${content.maxParticipants}:</strong> ${payload.maxParticipants}</p>` : ''}
-              </div>
-              
-              <div style="background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                <h3>${payload.language === 'zh' ? '培训描述' : 'Training Description'}</h3>
-                <p>${payload.trainingDescription}</p>
-                ${payload.prerequisites ? `<p><strong>${content.prerequisites}:</strong> ${payload.prerequisites}</p>` : ''}
-              </div>
-              
-              ${controls.includeObjectives && payload.trainingObjectives.length > 0 ? `
-                <div style="background: #e8f5e8; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                  <h3>${content.objectives}</h3>
-                  <ul>
-                    ${payload.trainingObjectives.map(obj => `<li>${obj}</li>`).join('')}
-                  </ul>
-                </div>
-              ` : ''}
-              
-              ${controls.includeInstructorContact ? `
-                <div style="background: #f3e5f5; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                  <h3>${content.instructor} ${payload.language === 'zh' ? '联系方式' : 'Contact'}</h3>
-                  <p><strong>${payload.language === 'zh' ? '姓名' : 'Name'}:</strong> ${payload.instructorName}</p>
-                  <p><strong>${payload.language === 'zh' ? '组织' : 'Organization'}:</strong> ${payload.instructorOrganization}</p>
-                  <p><strong>${payload.language === 'zh' ? '电话' : 'Phone'}:</strong> <a href="tel:${payload.instructorPhone}">${payload.instructorPhone}</a></p>
-                  <p><strong>${payload.language === 'zh' ? '邮箱' : 'Email'}:</strong> <a href="mailto:${payload.instructorEmail}">${payload.instructorEmail}</a></p>
-                </div>
-              ` : ''}
-              
-              ${payload.requiredMaterials && payload.requiredMaterials.length > 0 ? `
-                <div style="background: #fff8e1; padding: 15px; border-radius: 4px; margin: 20px 0;">
-                  <h3>${content.materials}</h3>
-                  <ul>
-                    ${payload.requiredMaterials.map(material => `<li>${material}</li>`).join('')}
-                  </ul>
-                </div>
-              ` : ''}
-              
-              ${controls.enableEnrollment && payload.enrollmentUrl ? `
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${payload.enrollmentUrl}?trainingId=${payload.trainingId}" 
-                     style="display: inline-block; padding: 12px 24px; background-color: ${controls.brandColor}; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                    ${content.registerNow}
-                  </a>
-                </div>
-              ` : ''}
-              
-              ${payload.completionDetails ? `
-                <div style="background: #e8f5e8; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0;">
-                  <h3>${content.completion}</h3>
-                  <p><strong>${payload.language === 'zh' ? '完成日期' : 'Completed'}:</strong> ${new Date(payload.completionDetails.completedDate).toLocaleDateString(payload.language === 'zh' ? 'zh-CN' : 'en-US')}</p>
-                  <p><strong>${content.participants}:</strong> ${payload.completionDetails.participantCount}</p>
-                  ${payload.completionDetails.passRate ? `<p><strong>${content.passRate}:</strong> ${payload.completionDetails.passRate}%</p>` : ''}
-                  ${payload.completionDetails.certificatesIssued ? `<p><strong>${content.certificates}:</strong> ${payload.completionDetails.certificatesIssued}</p>` : ''}
-                  ${payload.completionDetails.feedback ? `<p><strong>${content.feedback}:</strong> ${payload.completionDetails.feedback}</p>` : ''}
-                </div>
-              ` : ''}
-              
-              ${payload.certificationType || payload.validityPeriod || payload.complianceRequirement ? `
-                <div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0;">
-                  <h3>${payload.language === 'zh' ? '认证信息' : 'Certification Information'}</h3>
-                  ${payload.certificationType ? `<p><strong>${content.certificationType}:</strong> ${payload.certificationType}</p>` : ''}
-                  ${payload.validityPeriod ? `<p><strong>${content.validityPeriod}:</strong> ${payload.validityPeriod}</p>` : ''}
-                  ${payload.complianceRequirement ? `<p><strong>${content.compliance}:</strong> ${payload.complianceRequirement}</p>` : ''}
-                </div>
-              ` : ''}
-              
-              <p style="margin-top: 30px; font-size: 12px; color: #666;">
-                ${payload.language === 'zh' ? '培训编号' : 'Training ID'}: ${payload.trainingId}<br>
-                ${payload.courseCode ? `${content.courseCode}: ${payload.courseCode}` : ''}
-              </p>
-            </div>
-          `
+          body
         }
       },
       { controlSchema }
