@@ -93,48 +93,38 @@ export const defaultFireDrillWorkflow = workflow(
         : (payload.language === 'zh' ? content.participationOptional : content.participationOptional)
     }
 
-    // Conditional SMS step for reminders and day-of notifications
-    if (payload.notificationType === 'reminder' || payload.notificationType === 'day_of') {
-      await step.sms(
-        'send-drill-sms',
-        async (controls: FireDrillControls) => {
-          if (!controls.enableSMS) return { body: '' }
-          if (payload.notificationType === 'reminder' && !controls.reminderChannels.includes('sms')) return { body: '' }
-          if (payload.notificationType === 'day_of' && !controls.dayOfChannels.includes('sms')) return { body: '' }
-          
-          const urgencyText = payload.notificationType === 'day_of' ? 
-            (payload.language === 'zh' ? '🚨 今日消防演练' : '🚨 Fire Drill Today') :
-            (payload.language === 'zh' ? '⏰ 消防演练提醒' : '⏰ Fire Drill Reminder')
-          
-          const smsBody = payload.language === 'zh' 
-            ? `${urgencyText}\n演练: ${payload.drillName}\n建筑: ${payload.buildingName}\n时间: ${formattedDate} ${formattedTime}\n集合点: ${payload.assemblyPoints.join(', ')}\n协调员: ${payload.drillCoordinator} ${payload.coordinatorPhone}`
-            : `${urgencyText}\nDrill: ${payload.drillName}\nBuilding: ${payload.buildingName}\nTime: ${formattedDate} ${formattedTime}\nAssembly: ${payload.assemblyPoints.join(', ')}\nCoordinator: ${payload.drillCoordinator} ${payload.coordinatorPhone}`
+    // SMS step for reminders and day-of notifications
+    await step.sms(
+      'send-drill-sms',
+      async (controls: FireDrillControls) => {
+        const urgencyText = payload.notificationType === 'day_of' ? 
+          (payload.language === 'zh' ? '🚨 今日消防演练' : '🚨 Fire Drill Today') :
+          (payload.language === 'zh' ? '⏰ 消防演练提醒' : '⏰ Fire Drill Reminder')
+        
+        const smsBody = payload.language === 'zh' 
+          ? `${urgencyText}\n演练: ${payload.drillName}\n建筑: ${payload.buildingName}\n时间: ${formattedDate} ${formattedTime}\n集合点: ${payload.assemblyPoints.join(', ')}\n协调员: ${payload.drillCoordinator} ${payload.coordinatorPhone}`
+          : `${urgencyText}\nDrill: ${payload.drillName}\nBuilding: ${payload.buildingName}\nTime: ${formattedDate} ${formattedTime}\nAssembly: ${payload.assemblyPoints.join(', ')}\nCoordinator: ${payload.drillCoordinator} ${payload.coordinatorPhone}`
 
-          return {
-            body: smsBody.substring(0, 160) // SMS length limit
-          }
-        },
-        { controlSchema }
-      )
-    }
+        return {
+          body: smsBody.substring(0, 160) // SMS length limit
+        }
+      },
+      { 
+        controlSchema,
+        skip: (controls) => {
+          if (!controls.enableSMS) return true
+          if (!(payload.notificationType === 'reminder' || payload.notificationType === 'day_of')) return true
+          if (payload.notificationType === 'reminder' && !controls.reminderChannels.includes('sms')) return true
+          if (payload.notificationType === 'day_of' && !controls.dayOfChannels.includes('sms')) return true
+          return false
+        }
+      }
+    )
 
     // Push notification step
     await step.push(
       'send-drill-push',
       async (controls) => {
-        if (!controls.enablePush) return { subject: '', body: '' }
-        
-        // Check if push is enabled for this notification type
-        const enabledForType = (
-          (payload.notificationType === 'advance_notice' && controls.advanceNoticeChannels.includes('push')) ||
-          (payload.notificationType === 'reminder' && controls.reminderChannels.includes('push')) ||
-          (payload.notificationType === 'day_of' && controls.dayOfChannels.includes('push')) ||
-          (payload.notificationType === 'results' && false) || // Results typically not via push
-          (payload.notificationType === 'cancellation')
-        )
-        
-        if (!enabledForType) return { subject: '', body: '' }
-        
         return {
           subject: getSubjectLine(),
           body: payload.language === 'zh'
@@ -149,15 +139,26 @@ export const defaultFireDrillWorkflow = workflow(
           }
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => {
+          if (!controls.enablePush) return true
+          const enabledForType = (
+            (payload.notificationType === 'advance_notice' && controls.advanceNoticeChannels.includes('push')) ||
+            (payload.notificationType === 'reminder' && controls.reminderChannels.includes('push')) ||
+            (payload.notificationType === 'day_of' && controls.dayOfChannels.includes('push')) ||
+            (payload.notificationType === 'results' && false) || // Results typically not via push
+            (payload.notificationType === 'cancellation')
+          )
+          return !enabledForType
+        }
+      }
     )
 
     // In-App notification step
     await step.inApp(
       'send-drill-inapp',
       async (controls) => {
-        if (!controls.enableInApp) return { subject: '', body: '' }
-        
         return {
           subject: getSubjectLine(),
           body: payload.language === 'zh'
@@ -173,14 +174,16 @@ export const defaultFireDrillWorkflow = workflow(
           }
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableInApp
+      }
     )
 
     // Email step - Primary detailed notification
     await step.email(
       'send-drill-email',
       async (controls) => {
-        if (!controls.enableEmail) return { subject: '', body: '' }
         
         const subjectLine = getSubjectLine()
         
@@ -320,16 +323,16 @@ export const defaultFireDrillWorkflow = workflow(
           body
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableEmail
+      }
     )
 
     // Chat/Teams step for coordination
     await step.chat(
       'send-drill-chat',
       async (controls) => {
-        if (!controls.enableChat) return { body: '' }
-        if (payload.notificationType === 'day_of' && !controls.dayOfChannels.includes('chat')) return { body: '' }
-        
         const chatMessage = payload.language === 'zh'
           ? `${notificationConfig.icon} **消防演练通知** ${drillConfig.icon}
 **演练名称**: ${payload.drillName}
@@ -362,7 +365,14 @@ ${payload.procedureDocumentUrl ? `**Procedure Document**: ${payload.procedureDoc
           body: chatMessage
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => {
+          if (!controls.enableChat) return true
+          if (payload.notificationType === 'day_of' && !controls.dayOfChannels.includes('chat')) return true
+          return false
+        }
+      }
     )
   },
   {

@@ -124,25 +124,26 @@ export const defaultFireMaintenanceWorkflow = workflow(
     )
 
     // SMS for critical issues
-    if (payload.urgencyLevel === 'critical' || payload.notificationType === 'fault_detected') {
-      await step.sms(
-        'send-maintenance-sms',
-        async (controls: FireMaintenanceControls) => {
-          const urgencyText = payload.urgencyLevel === 'critical' 
-            ? (payload.language === 'zh' ? '🚨 严重' : '🚨 CRITICAL')
-            : (payload.language === 'zh' ? '⚠️ 紧急' : '⚠️ URGENT')
-          
-          const smsBody = payload.language === 'zh'
-            ? `${urgencyText} 消防设备维护\n${payload.equipmentName} - ${payload.buildingName}\n${payload.maintenanceDescription}\n技术员: ${payload.technicianName} ${payload.technicianPhone}`
-            : `${urgencyText} Fire Equipment Maintenance\n${payload.equipmentName} - ${payload.buildingName}\n${payload.maintenanceDescription}\nTech: ${payload.technicianName} ${payload.technicianPhone}`
-          
-          return {
-            body: smsBody.substring(0, 160)
-          }
-        },
-        { controlSchema }
-      )
-    }
+    await step.sms(
+      'send-maintenance-sms',
+      async (controls: FireMaintenanceControls) => {
+        const urgencyText = payload.urgencyLevel === 'critical' 
+          ? (payload.language === 'zh' ? '🚨 严重' : '🚨 CRITICAL')
+          : (payload.language === 'zh' ? '⚠️ 紧急' : '⚠️ URGENT')
+        
+        const smsBody = payload.language === 'zh'
+          ? `${urgencyText} 消防设备维护\n${payload.equipmentName} - ${payload.buildingName}\n${payload.maintenanceDescription}\n技术员: ${payload.technicianName} ${payload.technicianPhone}`
+          : `${urgencyText} Fire Equipment Maintenance\n${payload.equipmentName} - ${payload.buildingName}\n${payload.maintenanceDescription}\nTech: ${payload.technicianName} ${payload.technicianPhone}`
+        
+        return {
+          body: smsBody.substring(0, 160)
+        }
+      },
+      { 
+        controlSchema,
+        skip: () => !(payload.urgencyLevel === 'critical' || payload.notificationType === 'fault_detected')
+      }
+    )
 
     // In-app notification
     await step.inApp(

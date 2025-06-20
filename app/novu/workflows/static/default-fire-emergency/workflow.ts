@@ -54,8 +54,6 @@ export const defaultFireEmergencyWorkflow = workflow(
     await step.sms(
       'send-emergency-sms',
       async (controls) => {
-        if (!controls.enableSMS) return { body: '' }
-        
         const location = getLocationString()
         const urgentText = `${controls.smsUrgencyPrefix} ${emergencyConfig.icon}`
         
@@ -67,15 +65,16 @@ export const defaultFireEmergencyWorkflow = workflow(
           body: smsBody.substring(0, 160) // SMS length limit
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableSMS
+      }
     )
 
     // Push Notification Step - Immediate mobile alert
     await step.push(
       'send-emergency-push',
       async (controls) => {
-        if (!controls.enablePush) return { subject: '', body: '' }
-        
         const location = getLocationString()
         
         return {
@@ -92,15 +91,16 @@ export const defaultFireEmergencyWorkflow = workflow(
           }
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enablePush
+      }
     )
 
     // In-App Notification Step - Persistent dashboard alert
     await step.inApp(
       'send-emergency-inapp',
       async (controls) => {
-        if (!controls.enableInApp) return { subject: '', body: '' }
-        
         const location = getLocationString()
         
         return {
@@ -117,15 +117,16 @@ export const defaultFireEmergencyWorkflow = workflow(
           }
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableInApp
+      }
     )
 
     // Email Step - Detailed emergency information
     await step.email(
       'send-emergency-email',
       async (controls) => {
-        if (!controls.enableEmail) return { subject: '', body: '' }
-        
         const location = getLocationString()
         const urgencyBadge = `<span style="background: ${emergencyConfig.color}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px;">${emergencyConfig.icon} ${content.urgentPrefix}</span>`
         
@@ -190,15 +191,16 @@ export const defaultFireEmergencyWorkflow = workflow(
           body
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableEmail
+      }
     )
 
     // Chat/Teams Step - For coordination teams
     await step.chat(
       'send-emergency-chat',
       async (controls) => {
-        if (!controls.enableChat) return { body: '' }
-        
         const location = getLocationString()
         
         const chatMessage = payload.language === 'zh'
@@ -233,7 +235,10 @@ ${payload.buildingMapUrl ? `**Evacuation Map**: ${payload.buildingMapUrl}` : ''}
           body: chatMessage
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableChat
+      }
     )
   },
   {

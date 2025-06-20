@@ -98,48 +98,37 @@ export const defaultFireInspectionWorkflow = workflow(
              payload.inspectionType === 'emergency'
     }
 
-    // Conditional SMS step for urgent notifications
-    if (isUrgentNotification()) {
-      await step.sms(
-        'send-inspection-sms',
-        async (controls) => {
-          if (!controls.enableSMS) return { body: '' }
-          if (payload.notificationType === 'overdue' && !controls.overdueChannels.includes('sms')) return { body: '' }
-          
-          const urgencyText = payload.notificationType === 'overdue' ? 
-            (payload.language === 'zh' ? '⚠️ 消防检查逾期' : '⚠️ Fire Inspection Overdue') :
-            (payload.language === 'zh' ? '🚨 消防检查紧急' : '🚨 Fire Inspection Urgent')
-          
-          const smsBody = payload.language === 'zh' 
-            ? `${urgencyText}\n检查: ${payload.inspectionTitle}\n建筑: ${payload.buildingName}\n日期: ${formattedDate}\n检查员: ${payload.inspectorName} ${payload.inspectorPhone}`
-            : `${urgencyText}\nInspection: ${payload.inspectionTitle}\nBuilding: ${payload.buildingName}\nDate: ${formattedDate}\nInspector: ${payload.inspectorName} ${payload.inspectorPhone}`
+    // SMS step for urgent notifications
+    await step.sms(
+      'send-inspection-sms',
+      async (controls) => {
+        const urgencyText = payload.notificationType === 'overdue' ? 
+          (payload.language === 'zh' ? '⚠️ 消防检查逾期' : '⚠️ Fire Inspection Overdue') :
+          (payload.language === 'zh' ? '🚨 消防检查紧急' : '🚨 Fire Inspection Urgent')
+        
+        const smsBody = payload.language === 'zh' 
+          ? `${urgencyText}\n检查: ${payload.inspectionTitle}\n建筑: ${payload.buildingName}\n日期: ${formattedDate}\n检查员: ${payload.inspectorName} ${payload.inspectorPhone}`
+          : `${urgencyText}\nInspection: ${payload.inspectionTitle}\nBuilding: ${payload.buildingName}\nDate: ${formattedDate}\nInspector: ${payload.inspectorName} ${payload.inspectorPhone}`
 
-          return {
-            body: smsBody.substring(0, 160) // SMS length limit
-          }
-        },
-        { controlSchema }
-      )
-    }
+        return {
+          body: smsBody.substring(0, 160) // SMS length limit
+        }
+      },
+      { 
+        controlSchema,
+        skip: (controls) => {
+          if (!controls.enableSMS) return true
+          if (!isUrgentNotification()) return true
+          if (payload.notificationType === 'overdue' && !controls.overdueChannels.includes('sms')) return true
+          return false
+        }
+      }
+    )
 
     // Push notification step
     await step.push(
       'send-inspection-push',
       async (controls) => {
-        if (!controls.enablePush) return { subject: '', body: '' }
-        
-        // Check if push is enabled for this notification type
-        const enabledForType = (
-          (payload.notificationType === 'assignment' && controls.assignmentChannels.includes('push')) ||
-          (payload.notificationType === 'reminder' && controls.reminderChannels.includes('push')) ||
-          (payload.notificationType === 'overdue' && controls.overdueChannels.includes('push')) ||
-          (payload.notificationType === 'completion' && false) || // Completion typically not via push
-          (payload.notificationType === 'results' && false) || // Results typically not via push
-          (payload.notificationType === 'follow_up_required')
-        )
-        
-        if (!enabledForType) return { subject: '', body: '' }
-        
         return {
           subject: getSubjectLine(),
           body: payload.language === 'zh'
@@ -154,14 +143,27 @@ export const defaultFireInspectionWorkflow = workflow(
           }
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => {
+          if (!controls.enablePush) return true
+          const enabledForType = (
+            (payload.notificationType === 'assignment' && controls.assignmentChannels.includes('push')) ||
+            (payload.notificationType === 'reminder' && controls.reminderChannels.includes('push')) ||
+            (payload.notificationType === 'overdue' && controls.overdueChannels.includes('push')) ||
+            (payload.notificationType === 'completion' && false) || // Completion typically not via push
+            (payload.notificationType === 'results' && false) || // Results typically not via push
+            (payload.notificationType === 'follow_up_required')
+          )
+          return !enabledForType
+        }
+      }
     )
 
     // In-App notification step
     await step.inApp(
       'send-inspection-inapp',
       async (controls) => {
-        if (!controls.enableInApp) return { subject: '', body: '' }
         
         let bodyText = ''
         if (payload.notificationType === 'results' && payload.inspectionResults) {
@@ -188,14 +190,16 @@ export const defaultFireInspectionWorkflow = workflow(
           }
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableInApp
+      }
     )
 
     // Email step - Primary detailed notification
     await step.email(
       'send-inspection-email',
       async (controls) => {
-        if (!controls.enableEmail) return { subject: '', body: '' }
         
         // Build checklist HTML
         const checklistHtml = controls.includeChecklist && payload.checklistItems.length > 0
@@ -370,15 +374,16 @@ export const defaultFireInspectionWorkflow = workflow(
           body
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableEmail
+      }
     )
 
     // Chat/Teams step for coordination
     await step.chat(
       'send-inspection-chat',
       async (controls) => {
-        if (!controls.enableChat) return { body: '' }
-        
         const chatMessage = payload.language === 'zh'
           ? `${notificationConfig.icon} **消防检查通知** ${inspectionConfig.icon}
 **检查标题**: ${payload.inspectionTitle}
@@ -411,7 +416,10 @@ ${payload.procedureDocumentUrl ? `**Procedure Document**: ${payload.procedureDoc
           body: chatMessage
         }
       },
-      { controlSchema }
+      { 
+        controlSchema,
+        skip: (controls) => !controls.enableChat
+      }
     )
   },
   {
