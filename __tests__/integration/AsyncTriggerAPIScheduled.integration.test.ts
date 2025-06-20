@@ -112,9 +112,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(200);
+      expect(response!.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.async).toBe(true);
       expect(data.workflowId).toBeDefined();
@@ -141,9 +142,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(200);
+      expect(response!.status).toBe(200);
       expect(data.success).toBe(true);
       expect(new Date(data.scheduledFor).toISOString()).toBe(pastDate.toISOString());
       expect(data.startDelay).toBeUndefined();
@@ -167,9 +169,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(200);
+      expect(response!.status).toBe(200);
       expect(data.success).toBe(true);
       expect(new Date(data.scheduledFor).toISOString()).toBe(futureDate.toISOString());
       expect(data.startDelay).toBeDefined();
@@ -196,9 +199,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(200);
+      expect(response!.status).toBe(200);
       expect(data.async).toBe(false);
       expect(data.success).toBe(false);
       expect(data.error).toContain('Notification scheduled for');
@@ -222,9 +226,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(200);
+      expect(response!.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.startDelay).toBeGreaterThan(0);
       expect(data.startDelay).toBeLessThanOrEqual(10 * 1000);
@@ -240,9 +245,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(400);
+      expect(response!.status).toBe(400);
       expect(data.error).toContain('notificationId or notificationIds is required');
     });
 
@@ -257,9 +263,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await POST(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(500);
+      expect(response!.status).toBe(500);
       expect(data.error).toBeDefined();
     });
   });
@@ -280,7 +287,8 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const triggerResponse = await POST(triggerRequest);
-      const triggerData = await triggerResponse.json();
+      expect(triggerResponse).toBeDefined();
+      const triggerData = await triggerResponse!.json();
 
       expect(triggerData.workflowId).toBeDefined();
 
@@ -306,9 +314,10 @@ describe('Async Trigger API Scheduled Notification Integration Tests', () => {
       });
 
       const response = await GET(request);
-      const data = await response.json();
+      expect(response).toBeDefined();
+      const data = await response!.json();
 
-      expect(response.status).toBe(400);
+      expect(response!.status).toBe(400);
       expect(data.error).toContain('workflowId is required');
     });
   });

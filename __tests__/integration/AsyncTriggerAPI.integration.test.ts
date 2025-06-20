@@ -92,9 +92,10 @@ describe('/api/trigger-async Integration Tests', () => {
       })
 
       const response = await POST(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
-      expect(response.status).toBe(200)
+      expect(response!.status).toBe(200)
       expect(data.success).toBe(true)
       expect(data.async).toBe(true)
       expect(data.workflowId).toBeDefined()
@@ -117,9 +118,10 @@ describe('/api/trigger-async Integration Tests', () => {
       })
 
       const response = await POST(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
-      expect(response.status).toBe(200)
+      expect(response!.status).toBe(200)
       expect(data.async).toBe(false)
       expect(data.success).toBeDefined()
       expect(data.notificationId).toBe(notification.id)
@@ -145,9 +147,10 @@ describe('/api/trigger-async Integration Tests', () => {
       })
 
       const response = await POST(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
-      expect(response.status).toBe(200)
+      expect(response!.status).toBe(200)
       expect(data.success).toBe(true)
       expect(data.async).toBe(true)
       expect(data.workflowId).toBeDefined()
@@ -174,9 +177,10 @@ describe('/api/trigger-async Integration Tests', () => {
       })
 
       const response = await POST(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
-      expect(response.status).toBe(200)
+      expect(response!.status).toBe(200)
       expect(data.async).toBe(false)
       expect(data.totalCount).toBe(3)
       expect(data.successCount).toBeGreaterThanOrEqual(0)
@@ -192,9 +196,10 @@ describe('/api/trigger-async Integration Tests', () => {
       })
 
       const response = await POST(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
-      expect(response.status).toBe(400)
+      expect(response!.status).toBe(400)
       expect(data.error).toContain('Either notificationId or notificationIds is required')
     })
 
@@ -209,11 +214,12 @@ describe('/api/trigger-async Integration Tests', () => {
       })
 
       const response = await POST(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
       // Should handle gracefully - API may return 200 with error or proper error status
-      expect([200, 400, 404, 500]).toContain(response.status)
-      if (response.status === 200) {
+      expect([200, 400, 404, 500]).toContain(response!.status)
+      if (response!.status === 200) {
         // If 200, should contain success: false or similar indication of failure
         expect(data.success === false || data.error).toBeTruthy()
       } else {
@@ -227,9 +233,10 @@ describe('/api/trigger-async Integration Tests', () => {
       const req = new NextRequest('http://localhost:3000/api/trigger-async')
 
       const response = await GET(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
-      expect(response.status).toBe(400)
+      expect(response!.status).toBe(400)
       expect(data.error).toContain('workflowId is required')
     })
 
@@ -237,10 +244,11 @@ describe('/api/trigger-async Integration Tests', () => {
       const req = new NextRequest('http://localhost:3000/api/trigger-async?workflowId=trigger-notification-nonexistent-workflow-999')
 
       const response = await GET(req)
-      const data = await response.json()
+      expect(response).toBeDefined()
+      const data = await response!.json()
 
       // Should handle gracefully - workflow not found
-      expect([404, 500]).toContain(response.status)
+      expect([404, 500]).toContain(response!.status)
       expect(data.error).toBeDefined()
     })
 
@@ -260,9 +268,10 @@ describe('/api/trigger-async Integration Tests', () => {
       })
 
       const triggerResponse = await POST(triggerReq)
-      const triggerData = await triggerResponse.json()
+      expect(triggerResponse).toBeDefined()
+      const triggerData = await triggerResponse!.json()
       
-      expect(triggerResponse.status).toBe(200)
+      expect(triggerResponse!.status).toBe(200)
       expect(triggerData.workflowId).toBeDefined()
 
       // Now check the status of the triggered workflow

@@ -186,16 +186,25 @@ export class NotificationPollingLoop {
     const promises = notifications.map(async (notification) => {
       try {
         // Handle both real WorkflowClient and TestWorkflowEnvironment client
-        const startWorkflow = this.temporalClient!.start || this.temporalClient!.workflow?.start
-        if (!startWorkflow) {
+        const client = this.temporalClient as any
+        
+        if (client.start) {
+          // Real WorkflowClient
+          await client.start(notificationTriggerWorkflow, {
+            taskQueue: this.config.temporal.taskQueue,
+            workflowId: `notification-${notification.id}`,
+            args: [{ notificationId: notification.id }],
+          })
+        } else if (client.workflow?.start) {
+          // TestWorkflowEnvironment client
+          await client.workflow.start(notificationTriggerWorkflow, {
+            taskQueue: this.config.temporal.taskQueue,
+            workflowId: `notification-${notification.id}`,
+            args: [{ notificationId: notification.id }],
+          })
+        } else {
           throw new Error('No start method available on temporal client')
         }
-
-        await startWorkflow.call(this.temporalClient!.workflow || this.temporalClient!, notificationTriggerWorkflow, {
-          taskQueue: this.config.temporal.taskQueue,
-          workflowId: `notification-${notification.id}`,
-          args: [{ notificationId: notification.id }],
-        })
 
         logger.info('Started workflow for notification', {
           notificationId: notification.id

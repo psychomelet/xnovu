@@ -195,7 +195,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: 0, // Will be set dynamically
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-transaction-123'
       })
       
@@ -227,7 +227,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: notification!.id,
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-transaction-123'
       })
       
@@ -238,7 +238,7 @@ describe('NotificationPollingLoop', () => {
       await new Promise(resolve => setTimeout(resolve, 200))
       
       // Check if polling found anything
-      const pollingCalls = mockLogger.info.mock.calls.filter(call => 
+      const pollingCalls = mockLogger.info.mock.calls.filter((call: any) => 
         call[0].includes('Found new notifications') || 
         call[0].includes('Starting notification polling')
       )
@@ -262,10 +262,10 @@ describe('NotificationPollingLoop', () => {
 
     it('should process multiple notifications in parallel', async () => {
       // Setup mock activity to return success for all calls
-      mockTriggerNotificationByIdActivity.mockImplementation(async (params) => ({
+      mockTriggerNotificationByIdActivity.mockImplementation(async (params: any) => ({
         success: true,
         notificationId: params.notificationId,
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: `test-transaction-${params.notificationId}`
       }))
       
@@ -433,7 +433,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: 0, // Will be set dynamically
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-scheduled-123'
       })
       
@@ -474,7 +474,7 @@ describe('NotificationPollingLoop', () => {
       mockTriggerNotificationByIdActivity.mockResolvedValue({
         success: true,
         notificationId: notification.id,
-        status: 'completed',
+        status: 'SENT',
         novuTransactionId: 'test-scheduled-123'
       })
       
